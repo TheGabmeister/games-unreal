@@ -10,7 +10,9 @@ UCLASS()
 class GALAXIAN_API ABaseActor2D : public AActor
 {
 	GENERATED_BODY()
-	
+
+protected:
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
 	UPaperSpriteComponent* SpriteComp;
 

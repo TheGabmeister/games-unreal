@@ -7,4 +7,11 @@ ABaseActor2D::ABaseActor2D()
 
 	SpriteComp = CreateDefaultSubobject<UPaperSpriteComponent>(TEXT("SpriteComp"));
 	SpriteComp->SetupAttachment(RootComponent);
+
+	SpriteComp->PrimaryComponentTick.bStartWithTickEnabled = false;
+	SpriteComp->bEnableAutoLODGeneration = 0;
+	SpriteComp->SetEnableGravity(false);
+	SpriteComp->SetGenerateOverlapEvents(false);
+	SpriteComp->CanCharacterStepUpOn = ECB_No; 
+	SpriteComp->SetCollisionProfileName(TEXT("NoCollision"));
 }

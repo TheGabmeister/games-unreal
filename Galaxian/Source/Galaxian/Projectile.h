@@ -4,13 +4,19 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "BaseActor2D.h"
 #include "Projectile.generated.h"
 
+class UBoxComponent;
+
 UCLASS()
-class GALAXIAN_API AProjectile : public AActor
+class GALAXIAN_API AProjectile : public ABaseActor2D
 {
 	GENERATED_BODY()
 	
+	UPROPERTY(VisibleAnywhere)
+	class UBoxComponent* BoxComp;
+
 public:	
 	// Sets default values for this actor's properties
 	AProjectile();

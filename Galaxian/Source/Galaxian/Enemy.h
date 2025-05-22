@@ -7,13 +7,18 @@
 #include "BaseActor2D.h"
 #include "Enemy.generated.h"
 
-UCLASS()
+class UBoxComponent;
+
+UCLASS(abstract)
 class GALAXIAN_API AEnemy : public ABaseActor2D
 {
 	GENERATED_BODY()
 	
 	UPROPERTY(EditAnywhere)
 	float Score = 0;
+
+	UPROPERTY(VisibleAnywhere)
+	class UBoxComponent* BoxComp;
 
 public:	
 	// Sets default values for this actor's properties
