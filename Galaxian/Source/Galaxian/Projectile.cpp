@@ -23,9 +23,6 @@ void AProjectile::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	// Move the projectile forward in its local space
-	FVector Forward = GetActorForwardVector();
-	FVector NewLocation = GetActorLocation() + Forward * Speed * DeltaTime;
-	SetActorLocation(NewLocation);
+	AddActorWorldOffset(Velocity * DeltaTime, true);
 }
 

@@ -9,7 +9,6 @@
 class UInputMappingContext;
 class UInputAction;
 struct FInputActionValue;
-class UArrowComponent;
 class UPaperSpriteComponent;
 
 UCLASS()
@@ -33,9 +32,6 @@ class GALAXIAN_API AGalaxianPlayerPawn : public APawn
     UPROPERTY(EditAnywhere)
 	TSubclassOf<AActor> BulletBlueprint;
 
-	// Arrow component to indicate forward direction
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
-	UArrowComponent* ArrowComp;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
 	UPaperSpriteComponent* SpriteComp;

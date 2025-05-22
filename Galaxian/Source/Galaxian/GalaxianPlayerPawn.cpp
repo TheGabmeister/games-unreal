@@ -7,20 +7,15 @@
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "InputActionValue.h"
-#include "Components/ArrowComponent.h"
 #include "PaperSpriteComponent.h"
 
 // Sets default values
 AGalaxianPlayerPawn::AGalaxianPlayerPawn()
 {
-		// Set this pawn to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = false;
 
 	SpriteComp = CreateDefaultSubobject<UPaperSpriteComponent>(TEXT("SpriteComp"));
 	SpriteComp->SetupAttachment(RootComponent);
-
-	ArrowComp = CreateDefaultSubobject<UArrowComponent>(TEXT("ArrowComp"));
-	ArrowComp->SetRelativeRotation(FRotator(90.f, 0.f, 0.f)); // Arrow faces +Z
 }
 
 // Called when the game starts or when spawned
@@ -57,14 +52,11 @@ void AGalaxianPlayerPawn::Shoot()
 {
     if (BulletBlueprint)
     {
-        FVector SpawnLocation = GetActorLocation() + FVector(0, 0, 100); // Adjust as needed
-        FRotator SpawnRotation = GetActorRotation();
-
         FActorSpawnParameters SpawnParams;
         SpawnParams.Owner = this;
         SpawnParams.Instigator = GetInstigator();
 
-        GetWorld()->SpawnActor<AActor>(BulletBlueprint, SpawnLocation, SpawnRotation, SpawnParams);
+        GetWorld()->SpawnActor<AActor>(BulletBlueprint, GetActorLocation(), GetActorRotation(), SpawnParams);
     }
 }
 
@@ -84,11 +76,10 @@ void AGalaxianPlayerPawn::NotifyControllerChanged()
 
 void AGalaxianPlayerPawn::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
-	if (UEnhancedInputComponent* EnhancedInputComponent = Cast<UEnhancedInputComponent>(PlayerInputComponent)) {
-
+	if (UEnhancedInputComponent* EnhancedInputComponent = Cast<UEnhancedInputComponent>(PlayerInputComponent)) 
+	{
 		EnhancedInputComponent->BindAction(ShootAction, ETriggerEvent::Started, this, &AGalaxianPlayerPawn::Shoot);
 		EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Triggered, this, &AGalaxianPlayerPawn::Move);
-
 	}
 	else
 	{

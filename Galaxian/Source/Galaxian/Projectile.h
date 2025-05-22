@@ -25,5 +25,5 @@ public:
 
 	// Projectile speed, editable in the editor
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Projectile")
-	float Speed = 10.0f;
+	FVector Velocity{ 0.f, 0.f, 1000.0f };
 };
