@@ -14,4 +14,9 @@ class GALAXIAN_API AGalaxianPlayerController : public APlayerController
 {
 	GENERATED_BODY()
 	
+public:
+	AGalaxianPlayerController();
+
+protected:
+	virtual void BeginPlay() override;
 };

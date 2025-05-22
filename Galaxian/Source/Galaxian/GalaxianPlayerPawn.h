@@ -25,6 +25,9 @@ class GALAXIAN_API AGalaxianPlayerPawn : public APawn
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	UInputAction* MoveAction;
 
+    UPROPERTY(EditAnywhere)
+	TSubclassOf<AActor> BulletBlueprint;
+
 protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;

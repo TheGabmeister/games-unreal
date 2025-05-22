@@ -54,9 +54,22 @@ void AGalaxianPlayerPawn::Move(const FInputActionValue& Value)
 	}
 }
 
+
+
+// In your .cpp file, implement Shoot:
 void AGalaxianPlayerPawn::Shoot()
 {
-	
+    if (BulletBlueprint)
+    {
+        FVector SpawnLocation = GetActorLocation() + FVector(0, 0, 100); // Adjust as needed
+        FRotator SpawnRotation = GetActorRotation();
+
+        FActorSpawnParameters SpawnParams;
+        SpawnParams.Owner = this;
+        SpawnParams.Instigator = GetInstigator();
+
+        GetWorld()->SpawnActor<AActor>(BulletBlueprint, SpawnLocation, SpawnRotation, SpawnParams);
+    }
 }
 
 void AGalaxianPlayerPawn::NotifyControllerChanged()
