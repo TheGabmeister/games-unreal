@@ -9,11 +9,9 @@ AProjectile::AProjectile()
 	SpriteComp->PrimaryComponentTick.bStartWithTickEnabled = true;
 	SpriteComp->SetGenerateOverlapEvents(true);
 	SpriteComp->CanCharacterStepUpOn = ECB_No;
-	SpriteComp->SetCollisionProfileName(TEXT("Custom"));
-	SpriteComp->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
-	SpriteComp->SetCollisionResponseToAllChannels(ECollisionResponse::ECR_Ignore);
-	SpriteComp->SetCollisionResponseToChannel(ECC_Pawn, ECollisionResponse::ECR_Overlap);
+	SpriteComp->SetCollisionProfileName(TEXT("NoCollision"));
 
+	SpriteComp->OnComponentBeginOverlap.AddDynamic(this, &AProjectile::OnOverlap);
 }
 
 // Called when the game starts or when spawned
@@ -31,3 +29,8 @@ void AProjectile::Tick(float DeltaTime)
 	AddActorWorldOffset(Velocity * DeltaTime, true);
 }
 
+void AProjectile::OnOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp,
+	int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
+{
+	Destroy();
+}

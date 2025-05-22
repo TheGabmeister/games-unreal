@@ -7,7 +7,7 @@
 #include "BaseActor2D.h"
 #include "Projectile.generated.h"
 
-UCLASS()
+UCLASS(abstract)
 class GALAXIAN_API AProjectile : public ABaseActor2D
 {
 	GENERATED_BODY()
@@ -19,6 +19,16 @@ public:
 protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
+
+	UFUNCTION()
+	void OnOverlap(
+		UPrimitiveComponent* OverlappedComponent,
+		AActor* OtherActor,
+		UPrimitiveComponent* OtherComp,
+		int32 OtherBodyIndex,
+		bool bFromSweep,
+		const FHitResult& SweepResult
+	);
 
 public:	
 	// Called every frame

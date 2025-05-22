@@ -15,8 +15,21 @@ class GALAXIAN_API AEnemy : public ABaseActor2D
 	UPROPERTY(EditAnywhere)
 	float Score = 0;
 
+protected:
+
+	UFUNCTION()
+	void OnOverlap(
+		UPrimitiveComponent* OverlappedComponent,
+		AActor* OtherActor,
+		UPrimitiveComponent* OtherComp,
+		int32 OtherBodyIndex,
+		bool bFromSweep,
+		const FHitResult& SweepResult
+	);
+
 public:	
 	// Sets default values for this actor's properties
 	AEnemy();
 
+	
 };
