@@ -1,13 +1,13 @@
 #include "Enemy.h"
-#include "Components/BoxComponent.h"
 #include "PaperSpriteComponent.h"
 
 // Sets default values
 AEnemy::AEnemy()
 {
-	//Super::ABaseActor2D();
-	PrimaryActorTick.bCanEverTick = false;
+	PrimaryActorTick.bCanEverTick = true;
 
-	BoxComp = CreateDefaultSubobject<UBoxComponent>(TEXT("BoxComp"));
-    BoxComp->SetupAttachment(SpriteComp);
+	SpriteComp->PrimaryComponentTick.bStartWithTickEnabled = true;
+	SpriteComp->SetGenerateOverlapEvents(true);
+	SpriteComp->CanCharacterStepUpOn = ECB_No;
+	SpriteComp->SetCollisionProfileName(TEXT("OverlapAll"));
 }
