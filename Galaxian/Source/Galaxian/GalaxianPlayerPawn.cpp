@@ -7,14 +7,20 @@
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "InputActionValue.h"
-
+#include "Components/ArrowComponent.h"
+#include "PaperSpriteComponent.h"
 
 // Sets default values
 AGalaxianPlayerPawn::AGalaxianPlayerPawn()
 {
- 	// Set this pawn to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
-	PrimaryActorTick.bCanEverTick = true;
+		// Set this pawn to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
+	PrimaryActorTick.bCanEverTick = false;
 
+	SpriteComp = CreateDefaultSubobject<UPaperSpriteComponent>(TEXT("SpriteComp"));
+	SpriteComp->SetupAttachment(RootComponent);
+
+	ArrowComp = CreateDefaultSubobject<UArrowComponent>(TEXT("ArrowComp"));
+	ArrowComp->SetRelativeRotation(FRotator(90.f, 0.f, 0.f)); // Arrow faces +Z
 }
 
 // Called when the game starts or when spawned
@@ -38,19 +44,9 @@ void AGalaxianPlayerPawn::Move(const FInputActionValue& Value)
 
 	if (Controller != nullptr)
 	{
-		//// find out which way is forward
-		//const FRotator Rotation = Controller->GetControlRotation();
-		//const FRotator YawRotation(0, Rotation.Yaw, 0);
-
-		//// get forward vector
-		//const FVector ForwardDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
-
-		//// get right vector 
-		//const FVector RightDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
-
-		//// add movement 
-		//AddMovementInput(ForwardDirection, MovementVector.Y);
-		//AddMovementInput(RightDirection, MovementVector.X);
+		// Only move along the X axis (left/right)
+		FVector DeltaLocation = FVector(MovementVector.X, 0.f, 0.f);
+		AddActorWorldOffset(DeltaLocation * Speed, true);
 	}
 }
 

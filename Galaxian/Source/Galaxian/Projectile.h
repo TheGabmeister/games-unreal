@@ -25,5 +25,5 @@ public:
 
 	// Projectile speed, editable in the editor
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Projectile")
-	float Speed;
+	float Speed = 10.0f;
 };
