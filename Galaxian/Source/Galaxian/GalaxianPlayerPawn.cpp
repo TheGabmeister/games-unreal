@@ -54,6 +54,11 @@ void AGalaxianPlayerPawn::Move(const FInputActionValue& Value)
 	}
 }
 
+void AGalaxianPlayerPawn::Shoot()
+{
+	
+}
+
 void AGalaxianPlayerPawn::NotifyControllerChanged()
 {
 	Super::NotifyControllerChanged();
@@ -70,19 +75,14 @@ void AGalaxianPlayerPawn::NotifyControllerChanged()
 
 void AGalaxianPlayerPawn::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
-	// Set up action bindings
 	if (UEnhancedInputComponent* EnhancedInputComponent = Cast<UEnhancedInputComponent>(PlayerInputComponent)) {
 
-		// Jumping
-		//EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Started, this, &ACharacter::Jump);
-		//EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Completed, this, &ACharacter::StopJumping);
-
-		// Moving
+		EnhancedInputComponent->BindAction(ShootAction, ETriggerEvent::Started, this, &AGalaxianPlayerPawn::Shoot);
 		EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Triggered, this, &AGalaxianPlayerPawn::Move);
 
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("'%s' Failed to find an Enhanced Input component! This template is built to use the Enhanced Input system. If you intend to use the legacy system, then you will need to update this C++ file."), *GetNameSafe(this));
+		UE_LOG(LogTemp, Error, TEXT("'%s' Failed to find an Enhanced Input component! This template is built to use the Enhanced Input system. "), *GetNameSafe(this));
 	}
 }
