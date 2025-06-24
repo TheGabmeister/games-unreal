@@ -1,34 +1,26 @@
-// Fill out your copyright notice in the Description page of Project Settings.
 
 #include "MusicPlayer.h"
+#include "Components/AudioComponent.h"
 #include "Kismet/GameplayStatics.h"
 
 void UMusicPlayer::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
-	
-	// Create audio component for music playback
-	AudioComponent = NewObject<UAudioComponent>(this);
-	AudioComponent->bAutoActivate = false;
-	AudioComponent->bAutoDestroy = false;
-	AudioComponent->SetVolumeMultiplier(1.0f);
-
-	if (GetWorld())
-	{
-		AudioComponent->RegisterComponent();
-	}
-
+	AudioComponent = nullptr;
+	CurrentSound = nullptr;
 }
 
 void UMusicPlayer::Deinitialize()
 {
-	// Clean up the audio component if needed
+	// Clean up
 	if (AudioComponent)
 	{
 		AudioComponent->Stop();
 		AudioComponent = nullptr;
 	}
-	
+    
+	CurrentSound = nullptr;
+    
 	Super::Deinitialize();
 }
 
@@ -39,14 +31,27 @@ void UMusicPlayer::PlayMusic(USoundBase* Sound, float Volume, float StartTime)
 		UE_LOG(LogTemp, Warning, TEXT("UMusicPlayer::PlayMusic called with null Sound"));
 		return;
 	}
-	
+    
 	// Stop any currently playing music first
+	StopMusic();
+    
+	// Store the current sound
+	CurrentSound = Sound;
+    
+	// Create a new audio component using UGameplayStatics
+	// This ensures proper registration with the audio system
+	AudioComponent = UGameplayStatics::CreateSound2D(this, Sound, Volume);
+    
 	if (AudioComponent)
 	{
-		AudioComponent->Stop();
-		AudioComponent->SetSound(Sound);
-		AudioComponent->SetVolumeMultiplier(Volume);
-		AudioComponent->Play(StartTime);
+		if (StartTime > 0.0f)
+		{
+			AudioComponent->Play(StartTime);
+		}
+		else
+		{
+			AudioComponent->Play();
+		}
 	}
 }
 
@@ -71,6 +76,7 @@ void UMusicPlayer::StopMusic()
 	if (AudioComponent)
 	{
 		AudioComponent->Stop();
+		AudioComponent = nullptr;
 	}
 }
 
