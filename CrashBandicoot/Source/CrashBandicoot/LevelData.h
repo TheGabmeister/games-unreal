@@ -5,7 +5,7 @@
 #include "CoreMinimal.h"
 #include "LevelData.generated.h"
 
-USTRUCT()
+USTRUCT(BlueprintType)
 struct FLevelData : public FTableRowBase
 {
 	GENERATED_BODY()
