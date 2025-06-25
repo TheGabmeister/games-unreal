@@ -31,17 +31,12 @@ void UMusicPlayer::PlayMusic(USoundBase* Sound, float Volume, float StartTime)
 		UE_LOG(LogTemp, Warning, TEXT("UMusicPlayer::PlayMusic called with null Sound"));
 		return;
 	}
-    
-	// Stop any currently playing music first
+	
 	StopMusic();
-    
-	// Store the current sound
 	CurrentSound = Sound;
-    
-	// Create a new audio component using UGameplayStatics
-	// This ensures proper registration with the audio system
-	AudioComponent = UGameplayStatics::CreateSound2D(this, Sound, Volume);
-    
+
+	// This ensures proper registration with the audio system and also the sound persists between levels
+    AudioComponent = UGameplayStatics::CreateSound2D(this, Sound, Volume, 1.f, 0.f, nullptr, true);
 	if (AudioComponent)
 	{
 		if (StartTime > 0.0f)
