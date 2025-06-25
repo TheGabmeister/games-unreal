@@ -9,10 +9,12 @@ USTRUCT()
 struct FLevelData : public FTableRowBase
 {
 	GENERATED_BODY()
-				 
+
+	FLevelData() : Level(nullptr), Music(nullptr) { }
+	
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	TSoftObjectPtr<UWorld> Level;
 				 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
-	USoundBase* Music;
+	TSoftObjectPtr<USoundBase> Music;
 };
