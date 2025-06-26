@@ -1,8 +1,8 @@
 // Fill out your copyright notice in the Description page of Project Settings.
-#include "CrashBandicootGameInstance.h"
+#include "CBGameInstance.h"
 #include "GameFramework/GameUserSettings.h"
 
-void UCrashBandicootGameInstance::Init()
+void UCBGameInstance::Init()
 {
 	Super::Init();
 	

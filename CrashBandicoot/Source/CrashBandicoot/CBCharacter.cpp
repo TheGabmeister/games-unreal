@@ -1,6 +1,6 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
-#include "CrashBandicootCharacter.h"
+#include "CBCharacter.h"
 #include "Engine/LocalPlayer.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
@@ -14,9 +14,9 @@
 DEFINE_LOG_CATEGORY(LogTemplateCharacter);
 
 //////////////////////////////////////////////////////////////////////////
-// ACrashBandicootCharacter
+// ACBCharacter
 
-ACrashBandicootCharacter::ACrashBandicootCharacter()
+ACBCharacter::ACBCharacter()
 {
 	// Set size for collision capsule
 	GetCapsuleComponent()->InitCapsuleSize(42.f, 96.0f);
@@ -57,7 +57,7 @@ ACrashBandicootCharacter::ACrashBandicootCharacter()
 //////////////////////////////////////////////////////////////////////////
 // Input
 
-void ACrashBandicootCharacter::NotifyControllerChanged()
+void ACBCharacter::NotifyControllerChanged()
 {
 	Super::NotifyControllerChanged();
 
@@ -71,7 +71,7 @@ void ACrashBandicootCharacter::NotifyControllerChanged()
 	}
 }
 
-void ACrashBandicootCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
+void ACBCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
 	// Set up action bindings
 	if (UEnhancedInputComponent* EnhancedInputComponent = Cast<UEnhancedInputComponent>(PlayerInputComponent)) {
@@ -81,10 +81,10 @@ void ACrashBandicootCharacter::SetupPlayerInputComponent(UInputComponent* Player
 		EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Completed, this, &ACharacter::StopJumping);
 
 		// Moving
-		EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Triggered, this, &ACrashBandicootCharacter::Move);
+		EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Triggered, this, &ACBCharacter::Move);
 
 		// Looking
-		EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &ACrashBandicootCharacter::Look);
+		EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &ACBCharacter::Look);
 	}
 	else
 	{
@@ -92,7 +92,7 @@ void ACrashBandicootCharacter::SetupPlayerInputComponent(UInputComponent* Player
 	}
 }
 
-void ACrashBandicootCharacter::Move(const FInputActionValue& Value)
+void ACBCharacter::Move(const FInputActionValue& Value)
 {
 	// input is a Vector2D
 	FVector2D MovementVector = Value.Get<FVector2D>();
@@ -115,7 +115,7 @@ void ACrashBandicootCharacter::Move(const FInputActionValue& Value)
 	}
 }
 
-void ACrashBandicootCharacter::Look(const FInputActionValue& Value)
+void ACBCharacter::Look(const FInputActionValue& Value)
 {
 	// input is a Vector2D
 	FVector2D LookAxisVector = Value.Get<FVector2D>();

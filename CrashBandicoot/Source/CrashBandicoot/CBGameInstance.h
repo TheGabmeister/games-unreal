@@ -4,13 +4,13 @@
 
 #include "CoreMinimal.h"
 #include "Engine/GameInstance.h"
-#include "CrashBandicootGameInstance.generated.h"
+#include "CBGameInstance.generated.h"
 
 /**
  * 
  */
 UCLASS()
-class CRASHBANDICOOT_API UCrashBandicootGameInstance : public UGameInstance
+class CRASHBANDICOOT_API UCBGameInstance : public UGameInstance
 {
 	GENERATED_BODY()
 

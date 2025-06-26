@@ -4,15 +4,15 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/GameModeBase.h"
-#include "CrashBandicootGameMode.generated.h"
+#include "CBGameMode.generated.h"
 
 UCLASS(minimalapi)
-class ACrashBandicootGameMode : public AGameModeBase
+class ACBGameMode : public AGameModeBase
 {
 	GENERATED_BODY()
 
 public:
-	ACrashBandicootGameMode();
+	ACBGameMode();
 };
 
 
