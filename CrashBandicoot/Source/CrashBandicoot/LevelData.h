@@ -11,6 +11,9 @@ struct FLevelData : public FTableRowBase
 	GENERATED_BODY()
 
 	FLevelData() : Level(nullptr), Music(nullptr) { }
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	FString DisplayName;
 	
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	TSoftObjectPtr<UWorld> Level;
