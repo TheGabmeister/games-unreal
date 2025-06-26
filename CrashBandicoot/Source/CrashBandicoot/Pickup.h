@@ -3,11 +3,11 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "GameFramework/Actor.h"
+#include "Engine/StaticMeshActor.h"
 #include "Pickup.generated.h"
 
 UCLASS()
-class CRASHBANDICOOT_API APickup : public AActor
+class CRASHBANDICOOT_API APickup : public AStaticMeshActor
 {
 	GENERATED_BODY()
 	
