@@ -46,6 +46,7 @@ class ACBCharacter : public ACharacter
 public:
 	ACBCharacter();
 	
+	virtual void Tick(float DeltaTime) override;
 
 protected:
 

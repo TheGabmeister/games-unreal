@@ -20,6 +20,7 @@ DEFINE_LOG_CATEGORY(LogTemplateCharacter);
 
 ACBCharacter::ACBCharacter()
 {
+	PrimaryActorTick.bCanEverTick = true;
 	// Set size for collision capsule
 	GetCapsuleComponent()->InitCapsuleSize(42.f, 96.0f);
 		
@@ -54,6 +55,13 @@ ACBCharacter::ACBCharacter()
 
 	// Note: The skeletal mesh and anim blueprint references on the Mesh component (inherited from Character) 
 	// are set in the derived blueprint asset named ThirdPersonCharacter (to avoid direct content references in C++)
+}
+
+void ACBCharacter::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+
+	// Add your per-frame logic here
 }
 
 //////////////////////////////////////////////////////////////////////////
