@@ -2,4 +2,18 @@
 
 
 #include "CBPlayerController.h"
+#include "Blueprint/UserWidget.h"
 
+void ACBPlayerController::BeginPlay()
+{
+	Super::BeginPlay();
+
+	if (GameplayWidget)
+	{
+		WidgetInstance = CreateWidget<UUserWidget>(this, GameplayWidget);
+		if (WidgetInstance)
+		{
+			WidgetInstance->AddToViewport();
+		}
+	}
+}
