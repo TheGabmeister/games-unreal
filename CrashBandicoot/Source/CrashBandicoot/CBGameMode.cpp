@@ -5,6 +5,8 @@
 #include "UObject/ConstructorHelpers.h"
 #include "CBEvents.h"
 #include "GameFramework/GameplayMessageSubsystem.h"
+#include "GameplayTagContainer.h"
+#include "GameFramework/AsyncAction_ListenForGameplayMessage.h"
 
 ACBGameMode::ACBGameMode()
 {
@@ -18,24 +20,27 @@ void ACBGameMode::BeginPlay()
 	// Get the Gameplay Message Subsystem
 	UGameplayMessageSubsystem& MessageSubsystem = UGameplayMessageSubsystem::Get(this);
     
-	// Subscribe to the WumpaFruit pickup event using the correct delegate type
-	WumpaFruitMessageHandle = MessageSubsystem.RegisterListener(
-		Events_OnPickedUp_WumpaFruit, 
-		UE::GameplayMessageSubsystem::FHandlerDelegate<FGameplayMessageInt>::CreateUObject(
-			this, 
-			&ACBGameMode::HandleWumpaFruitPickup
-		)
+	UAsyncAction_ListenForGameplayMessage* Listener = UAsyncAction_ListenForGameplayMessage::ListenForGameplayMessages(
+		this,
+		Events_OnPickedUp_WumpaFruit,
+		FGameplayMessageInt::StaticStruct(),
+		EGameplayMessageMatch::ExactMatch
 	);
+	if (Listener)
+	{
+		Listener->OnMessageReceived.AddDynamic(this, &ThisClass::OnGameplayMessageReceived);
+		Listener->Activate();
+	}
 
     
 	UE_LOG(LogTemp, Log, TEXT("CBGameMode: Registered listener for WumpaFruit pickup events"));
 }
 
-void ACBGameMode::HandleWumpaFruitPickup(FGameplayTag MessageTag, const FGameplayMessageInt& Message)
+void ACBGameMode::OnGameplayMessageReceived(UAsyncAction_ListenForGameplayMessage* Proxy, FGameplayTag ActualChannel)
 {
-	// Handle the WumpaFruit pickup event
-	UE_LOG(LogTemp, Log, TEXT("WumpaFruit picked up! Value: %d"), Message.Value);
-    
-	// Add your game logic here for when a WumpaFruit is picked up
-	// For example, update score, play sounds, etc.
+	//FGameplayMessageInt Payload;
+	//if (Proxy->GetPayload(Payload))
+	//{
+	//	UE_LOG(LogTemp, Log, TEXT("CBGameMode: Payload WumpaFruit pickup events: %d"), Payload.Value);
+	//}
 }
