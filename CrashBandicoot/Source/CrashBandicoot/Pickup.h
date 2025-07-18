@@ -1,10 +1,11 @@
-// Fill out your copyright notice in the Description page of Project Settings.
-
 #pragma once
 
 #include "CoreMinimal.h"
 #include "Engine/StaticMeshActor.h"
+#include "GameplayTagContainer.h"
 #include "Pickup.generated.h"
+
+struct FGameplayTag;
 
 UCLASS()
 class CRASHBANDICOOT_API APickup : public AStaticMeshActor
@@ -22,6 +23,9 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "Default", meta = (AllowPrivateAccess = "true"))
 	USoundWave* PickupSound;
 
+	UPROPERTY(EditAnywhere, Category = "Default", meta = (AllowPrivateAccess = "true"))
+	FGameplayTag TriggerEventChannelOnCollision;
+	
 	UFUNCTION()
 	void OnMeshBeginOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
 							UPrimitiveComponent* OtherComp, int32 OtherBodyIndex,

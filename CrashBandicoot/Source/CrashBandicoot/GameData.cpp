@@ -1,7 +1,15 @@
-// Fill out your copyright notice in the Description page of Project Settings.
-
-
 #include "GameData.h"
+
+void UGameData::Initialize(FSubsystemCollectionBase& Collection)
+{
+	Super::Initialize(Collection);
+}
+
+void UGameData::Deinitialize()
+{
+	Super::Deinitialize();
+}
+
 
 void UGameData::UpdateWumpaFruit(int32 Amount)
 {
@@ -13,4 +21,10 @@ void UGameData::UpdateLives(int32 Amount)
 {
 	Lives += Amount;
 	OnLivesChanged.Broadcast(Lives);
+}
+
+void UGameData::UpdateAkuAkuCount(int32 Amount)
+{
+	AkuAkuCount += Amount;
+	OnAkuAkuCountChanged.Broadcast(AkuAkuCount);
 }

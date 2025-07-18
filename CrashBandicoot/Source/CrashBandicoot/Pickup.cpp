@@ -1,10 +1,8 @@
 #include "Pickup.h"
 
-#include "CBGameplayTags.h"
-#include "CBStructs.h"
+#include "CBEvents.h"
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/GameplayMessageSubsystem.h"
-#include "GameplayTagContainer.h"
 
 // Sets default values
 APickup::APickup()
@@ -35,10 +33,8 @@ void APickup::OnMeshBeginOverlap(UPrimitiveComponent* OverlappedComponent, AActo
 		UGameplayStatics::PlaySoundAtLocation(this, PickupSound, GetActorLocation());
 	}
 	
-	FGameplayMessageInt Message;
-	Message.Value = 10;
-	UGameplayMessageSubsystem::Get(this).BroadcastMessage(Events_OnPickedUp_WumpaFruit, Message);
-
+	FGameplayMessageInt Message {10};
+	UGameplayMessageSubsystem::Get(this).BroadcastMessage(TriggerEventChannelOnCollision, Message);
 	
 	Destroy();
 	
