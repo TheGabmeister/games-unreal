@@ -1,13 +1,12 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
-
 #pragma once
 
 #include "CoreMinimal.h"
 #include "GameFramework/GameModeBase.h"
+#include "GameFramework/GameplayMessageSubsystem.h"
 #include "CBGameMode.generated.h"
 
-class UAsyncAction_ListenForGameplayMessage;
 struct FGameplayTag;
+struct FGameplayMessageInt;
 
 UCLASS(minimalapi)
 class ACBGameMode : public AGameModeBase
@@ -18,9 +17,10 @@ public:
 	ACBGameMode();
 
 protected:
-	// Called when the game starts
 	virtual void BeginPlay() override;
-	
-	UFUNCTION()
-	void OnGameplayMessageReceived(UAsyncAction_ListenForGameplayMessage* Proxy, FGameplayTag ActualChannel);
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+
+private:
+	FGameplayMessageListenerHandle ListenerHandle;
+	void OnWumpaFruitPickedUp(FGameplayTag Channel, const FGameplayMessageInt& Message);
 };

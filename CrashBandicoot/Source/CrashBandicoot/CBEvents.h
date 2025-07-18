@@ -3,21 +3,9 @@
 #include "CoreMinimal.h"
 #include "CBEvents.generated.h"
 
-UE_DECLARE_GAMEPLAY_TAG_EXTERN(Events_OnPickedUp_WumpaFruit);
-UE_DECLARE_GAMEPLAY_TAG_EXTERN(Events_OnPickedUp_ExtraLife);
-UE_DECLARE_GAMEPLAY_TAG_EXTERN(Events_OnPickedUp_AkuAku);
-
-// Example usage:
-// FGameplayTag Channel = FGameplayTag::RequestGameplayTag(TEXT("Pickup.Collected"));
-// OR
-// UPROPERTY(EditAnywhere, Category = "Default", meta = (AllowPrivateAccess = "true"))
-// FGameplayTag Channel;
-
-// Example usage of broadcasting a message
-// FGameplayMessageInt Message {10};
-// UGameplayMessageSubsystem::Get(this).BroadcastMessage(Channel, Message);
-// OR
-// UGameplayMessageSubsystem::Get(this).BroadcastMessage(Events_OnPickedUp_WumpaFruit, Message);
+UE_DECLARE_GAMEPLAY_TAG_EXTERN(EV_OnPickedUp_WumpaFruit);
+UE_DECLARE_GAMEPLAY_TAG_EXTERN(EV_OnPickedUp_ExtraLife);
+UE_DECLARE_GAMEPLAY_TAG_EXTERN(EV_OnPickedUp_AkuAku);
 
 USTRUCT(BlueprintType)
 struct FGameplayMessageBool
@@ -25,7 +13,7 @@ struct FGameplayMessageBool
 	GENERATED_BODY()
     
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Gameplay Message Structs")
-	bool Value;
+	bool Value = false;
 };
 
 USTRUCT(BlueprintType)
@@ -34,7 +22,7 @@ struct FGameplayMessageInt
 	GENERATED_BODY()
     
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Gameplay Message Structs")
-	int32 Value;
+	int32 Value = 0;
 };
 
 USTRUCT(BlueprintType)
@@ -43,7 +31,7 @@ struct FGameplayMessageFloat
 	GENERATED_BODY()
     
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Gameplay Message Structs")
-	float Value;
+	float Value = 0.0f;
 };
 
 USTRUCT(BlueprintType)
@@ -52,5 +40,5 @@ struct FGameplayMessageString
 	GENERATED_BODY()
     
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Gameplay Message Structs")
-	FString Value;
+	FString Value = TEXT("");
 };
