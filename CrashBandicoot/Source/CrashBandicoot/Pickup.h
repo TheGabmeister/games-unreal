@@ -22,9 +22,6 @@ protected:
 
 	UPROPERTY(EditAnywhere, Category = "Default", meta = (AllowPrivateAccess = "true"))
 	USoundWave* PickupSound;
-
-	UPROPERTY(EditAnywhere, Category = "Default", meta = (AllowPrivateAccess = "true"))
-	FGameplayTag TriggerEventChannelOnCollision;
 	
 	UFUNCTION()
 	void OnMeshBeginOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,

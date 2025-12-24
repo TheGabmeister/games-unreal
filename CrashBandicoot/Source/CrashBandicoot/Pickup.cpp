@@ -33,11 +33,11 @@ void APickup::OnMeshBeginOverlap(UPrimitiveComponent* OverlappedComponent, AActo
 		UGameplayStatics::PlaySoundAtLocation(this, PickupSound, GetActorLocation());
 	}
 	
-	FGameplayMessageInt Message;
-	Message.Value = 1;
-	UGameplayMessageSubsystem::Get(this).BroadcastMessage(TriggerEventChannelOnCollision, Message);
+	//FGameplayMessageInt Message;
+	//Message.Value = 1;
+	//UGameplayMessageSubsystem::Get(this).BroadcastMessage(TriggerEventChannelOnCollision, Message);
 	
-	Destroy();
+	//Destroy();
 	
 }
 
