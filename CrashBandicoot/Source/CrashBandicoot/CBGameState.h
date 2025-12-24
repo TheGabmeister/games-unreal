@@ -6,6 +6,17 @@
 #include "GameFramework/GameStateBase.h"
 #include "CBGameState.generated.h"
 
+UENUM(BlueprintType)
+enum class ELevelState : uint8
+{
+	Preload,
+	Ready,
+	Running,
+	Paused,
+	GameOver,
+	Victory
+};
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnPlayerDied);
 
 UCLASS()
@@ -16,7 +27,10 @@ public:
 
 	UPROPERTY(BlueprintAssignable, Category = "Events")
 	FOnPlayerDied OnPlayerDied;
+
 	UFUNCTION(BlueprintCallable, Category = "Events")
 	void CallPlayerDied() { OnPlayerDied.Broadcast(); }
 	
+	UFUNCTION(BlueprintCallable)
+	void PauseGame();
 };
