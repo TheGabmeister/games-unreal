@@ -14,7 +14,7 @@ APickup::APickup()
 void APickup::BeginPlay()
 {
 	Super::BeginPlay();
-	GetStaticMeshComponent()->OnComponentBeginOverlap.AddDynamic(this, &APickup::OnMeshBeginOverlap);
+	OnActorBeginOverlap.AddDynamic(this, &APickup::OnPickup);
 }
 
 // Called every frame
@@ -24,7 +24,7 @@ void APickup::Tick(float DeltaTime)
 
 }
 
-void APickup::OnMeshBeginOverlap_Implementation(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
+void APickup::OnPickup_Implementation(AActor* OverlappedActor, AActor* OtherActor)
 {
 	if (PickupSound)
 	{

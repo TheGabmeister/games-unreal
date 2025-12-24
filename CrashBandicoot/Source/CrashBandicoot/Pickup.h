@@ -24,11 +24,9 @@ protected:
 	USoundWave* PickupSound;
 	
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
-	void OnMeshBeginOverlap();
+	void OnPickup(AActor* OverlappedActor, AActor* OtherActor);
 
-	void OnMeshBeginOverlap_Implementation(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
-							UPrimitiveComponent* OtherComp, int32 OtherBodyIndex,
-							bool bFromSweep, const FHitResult& SweepResult);
+	void OnPickup_Implementation(AActor* OverlappedActor, AActor* OtherActor);
 
 public:	
 	// Called every frame
