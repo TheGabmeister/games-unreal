@@ -24,20 +24,17 @@ void APickup::Tick(float DeltaTime)
 
 }
 
-void APickup::OnMeshBeginOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
-								 UPrimitiveComponent* OtherComp, int32 OtherBodyIndex,
-								 bool bFromSweep, const FHitResult& SweepResult)
+void APickup::OnMeshBeginOverlap_Implementation(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
 {
 	if (PickupSound)
 	{
 		UGameplayStatics::PlaySoundAtLocation(this, PickupSound, GetActorLocation());
 	}
-	
+
 	//FGameplayMessageInt Message;
 	//Message.Value = 1;
 	//UGameplayMessageSubsystem::Get(this).BroadcastMessage(TriggerEventChannelOnCollision, Message);
-	
+
 	//Destroy();
-	
 }
 
