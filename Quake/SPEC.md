@@ -1440,7 +1440,7 @@ This is what v1 ships, regardless of phasing:
 **Automated tests:**
 - Functional test: spawn target dummy with 100 HP, fire Axe at it, assert HP = 80.
 - Functional test: fire Axe 5 times (with frame delays for cooldown), assert dummy is dead.
-- Unit test: armor absorption math. 100 HP + 100 green armor (30%), take 50 damage → assert HP = 85, armor = 65.
+- Unit test: armor absorption math. 100 HP + 100 green armor (30%), take 50 damage → assert HP = 65, armor = 85. (Quake formula: `save = ceil(0.3 * 50) = 15` taken by armor, `take = 50 - 15 = 35` taken by HP.)
 - Unit test: shared-base CDO cast. Construct an `FDamageEvent` with `UQuakeDamageType_Melee::StaticClass()`, run the cast pattern from [section 1.5](SPEC.md#L155), assert the returned `UQuakeDamageType*` is non-null and has the expected default field values.
 
 **Manual verification:**

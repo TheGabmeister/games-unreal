@@ -1,10 +1,60 @@
 #include "QuakeHUD.h"
 
+#include "QuakeCharacter.h"
+#include "SQuakeHUDOverlay.h"
+
 #include "Engine/Engine.h"
 #include "Engine/Font.h"
+#include "Engine/GameViewportClient.h"
+#include "Engine/LocalPlayer.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
+#include "Widgets/SWidget.h"
+
+void AQuakeHUD::BeginPlay()
+{
+	Super::BeginPlay();
+
+	APlayerController* PC = GetOwningPlayerController();
+	if (!PC || !GEngine || !GEngine->GameViewport)
+	{
+		return;
+	}
+
+	ULocalPlayer* LocalPlayer = PC->GetLocalPlayer();
+	if (!LocalPlayer)
+	{
+		return;
+	}
+
+	OverlayWidget = SNew(SQuakeHUDOverlay)
+		.PlayerCharacter(Cast<AQuakeCharacter>(PC->GetPawn()));
+
+	GEngine->GameViewport->AddViewportWidgetForPlayer(
+		LocalPlayer,
+		OverlayWidget.ToSharedRef(),
+		/*ZOrder=*/10);
+}
+
+void AQuakeHUD::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	if (OverlayWidget.IsValid() && GEngine && GEngine->GameViewport)
+	{
+		if (APlayerController* PC = GetOwningPlayerController())
+		{
+			if (ULocalPlayer* LocalPlayer = PC->GetLocalPlayer())
+			{
+				GEngine->GameViewport->RemoveViewportWidgetForPlayer(
+					LocalPlayer,
+					OverlayWidget.ToSharedRef());
+			}
+		}
+		OverlayWidget.Reset();
+	}
+	Super::EndPlay(EndPlayReason);
+}
 
 void AQuakeHUD::DrawHUD()
 {
