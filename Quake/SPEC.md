@@ -82,13 +82,15 @@ The player has a persistent inventory across levels within an episode, with thes
 
 **Starting loadout** (new game / hub return): Axe, 25 shells (no shotgun yet — first Shotgun pickup grants the weapon), 100 health, no armor, no other weapons.
 
-**Storage location: `UQuakeGameInstance`.** Inventory data lives on the GameInstance, not on `AQuakeCharacter`. This is required because:
+**Storage location: `UQuakeGameInstance`** for **weapons, ammo, and armor only.** This data lives on the GameInstance, not on `AQuakeCharacter`, because:
 
 - `OpenLevel` destroys and recreates the Character on every level transition.
 - Player death also destroys and respawns the Character.
 - The level-entry snapshot must survive both events.
 
 `AQuakeCharacter::BeginPlay` reads the current inventory from `UQuakeGameInstance` and applies it to the spawned pawn (via `AQuakeWeaponBase` actors attached to the character). On weapon pickup or ammo change, the character writes back to the GameInstance immediately.
+
+**Storage location: `AQuakePlayerState`** for **keys.** Although keys are colloquially "inventory," their lifecycle (reset on level transition, reset on death, reset on hub return) is identical to powerups, not to weapons/ammo/armor. PlayerState is destroyed automatically on `OpenLevel` and on death-respawn, so storing keys there gives the correct lifecycle for free with no explicit cleanup code. Powerups already live on PlayerState for the same reason (see 4.3). See section 4.4 for the full key rules.
 
 **Level-entry snapshot:** when the player crosses a level boundary, `UQuakeGameInstance` snapshots the inventory state immediately after the transition (i.e., after weapons/ammo carried over but health was topped up to 100). This snapshot is what death restores to. The snapshot is a separate `FQuakeInventorySnapshot` struct field on the GameInstance, distinct from the live inventory.
 
@@ -162,6 +164,53 @@ const UQuakeDamageType* DT = Cast<UQuakeDamageType>(
 
 `AQuakeCharacter::TakeDamage` and `AQuakeEnemyBase::TakeDamage` are the only places where health is decremented. All weapons, projectiles, and hazard volumes call `ApplyPointDamage` / `ApplyRadialDamage` and let the targets handle the result.
 
+### 1.6 Collision Model
+
+Collision configuration is shared between several systems (projectiles, hitscan, pickups, hazards, doors, triggers) and easier to get right once than to rediscover per system. This section defines the channels, the response matrix, and the per-actor rules. All channels are added to `Config/DefaultEngine.ini` and version-controlled.
+
+**Player capsule dimensions:** radius 35, half-height 90. NavMesh agent radius 35 / height 180 matches (see [CLAUDE.md](CLAUDE.md)).
+
+**Custom object channels** (added on top of the engine defaults `WorldStatic`, `WorldDynamic`, `Pawn`, `PhysicsBody`, `Vehicle`, `Destructible`, `Visibility`, `Camera`):
+
+| Channel      | Used by                                                                 |
+|--------------|-------------------------------------------------------------------------|
+| `Pickup`     | `AQuakePickupBase`'s `USphereComponent` (overlap-only)                  |
+| `Projectile` | `AQuakeProjectile_*` actors' `USphereComponent`                         |
+| `Corpse`     | `AQuakeEnemyBase` capsule **after** the 2 s post-death channel flip     |
+
+**Custom trace channel:** `Weapon` — used by hitscan weapons (Shotgun, SSG, Thunderbolt) and the Axe melee trace.
+
+**Object response matrix.** Rows are the *source* (this object's `CollisionObjectType`); columns are the *target* (the response on this object to that other object's channel). `B` = Block, `O` = Overlap, `I` = Ignore.
+
+|                | WorldStatic | WorldDynamic | Pawn | Pickup | Projectile | Corpse | Visibility (trace) | Weapon (trace) |
+|----------------|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+| **Player capsule** (`Pawn`)        | B | B | B | O | B | I | B | B |
+| **Enemy capsule** (`Pawn`)         | B | B | B | I | B | I | B | B |
+| **Corpse capsule** (`Corpse`)      | B | B | I | I | I | I | B | I |
+| **Projectile sphere** (`Projectile`)| B | B | B | I | I | B | I | I |
+| **Pickup sphere** (`Pickup`)       | I | I | O | I | I | I | I | I |
+| **Hazard volume** (`WorldDynamic`)  | I | I | O | I | I | O | I | I |
+| **Water volume** (`WorldDynamic`)   | I | I | O | I | I | I | I | I |
+| **Trigger – player-only** (`WorldDynamic`) | I | I | O (player only — see notes) | I | I | I | I | I |
+| **Trigger – any pawn** (`WorldDynamic`)    | I | I | O | I | I | O | I | I |
+| **Door (closed)** (`WorldDynamic`)  | B | B | B | I | B | I | B | B |
+| **Door (open / opening)** (`WorldDynamic`) | B | B | I | I | I | I | B | I |
+
+**Per-system rules** (the parts the matrix can't express):
+
+1. **Projectile spawn-out distance.** Projectile actors spawn 60 units in front of the firing pawn's muzzle, not at the muzzle itself. This prevents the muzzle-flash-frame self-detonation that breaks the Rocket Launcher otherwise. The first frame the projectile also calls `IgnoreActorWhenMoving(Instigator, true)` as a belt-and-braces second guard; this ignore is left in place for the projectile's lifetime since rockets shouldn't bounce off the firer mid-flight either.
+2. **Corpse channel flip.** When `AQuakeEnemyBase::Die()` runs, the capsule keeps its `Pawn` channel for 2 seconds (so a freshly-dead body still blocks the player and reads as a hit target during gib chains). After 2 s, a timer flips the capsule to the `Corpse` channel. The `Corpse` channel ignores `Projectile`, `Weapon` (hitscan), and `Pawn` — meaning rockets, hitscan, and the player all pass straight through corpses. Corpses still block `WorldStatic` so they don't fall through floors.
+3. **Gibbed enemies.** On gib, the capsule is destroyed entirely along with the actor; the scattered primitive pieces are physics objects on the `PhysicsBody` channel and don't participate in damage at all.
+4. **Pickup overlap is player-only.** The pickup's sphere overlaps the `Pawn` channel, but the C++ overlap handler casts the overlapping actor to `AQuakeCharacter` and bails on null. Enemies *trigger* the overlap (no harm) but never *consume* the pickup. This is simpler than adding a "PlayerPawn" sub-channel and produces the same end behavior.
+5. **Player-only triggers.** `AQuakeTrigger_Teleport`, `AQuakeTrigger_Message`, and the level `ExitTrigger` use the same player-only filter pattern as pickups: overlap on `Pawn`, cast to `AQuakeCharacter` in the handler, bail on null. Listed as "player only" in the matrix above for documentation but mechanically it's a C++-side filter, not a channel difference.
+6. **Hazard volumes** (`AQuakeHazardVolume`) overlap any pawn (player and enemies) and apply damage on the tick interval defined in [section 5.2](SPEC.md#L411). Pushing enemies into hazards is a valid tactic, so the matrix overlaps both `Pawn` and `Corpse` (lava can still cook a fresh corpse during the 2 s window before it goes non-collidable, which is fine and looks correct).
+7. **Doors block projectiles when closed.** A closed door is a solid `WorldDynamic` actor and blocks the `Projectile` channel — rockets explode on it, not through it. While opening or open, the door's collision is set to `Ignore` for `Pawn`, `Projectile`, and `Weapon` so pawns and shots pass through unobstructed. The "door won't close while a pawn is inside" check from [section 5.4](SPEC.md#L469) uses a sweep against the `Pawn` channel.
+8. **Water volume detection.** `AQuakeWaterVolume` overlaps `Pawn`. The "submerged" / "partially in water" distinction in [section 5.3](SPEC.md#L437) is computed in C++ from the camera position relative to the volume bounds, not from a separate channel.
+9. **Hitscan trace channel.** Shotgun, SSG, and Thunderbolt all trace on the `Weapon` channel. `Weapon` traces block on walls (`WorldStatic`/`WorldDynamic`), pawns, and closed doors; ignore everything else. They specifically ignore `Pickup` (you can't shoot a Quad cube to detonate it) and `Corpse` (so wall-of-bodies doesn't block your shots — same end result as the channel flip but redundant for safety). The Axe melee trace uses the same `Weapon` channel.
+10. **Splash damage queries.** `ApplyRadialDamageWithFalloff` uses the `Visibility` channel by default for the line-of-sight checks that determine which actors inside the radius actually take damage. This is the engine default and what we want — explosions don't penetrate walls.
+
+**Where this is configured.** All channels and the default object responses live in `Config/DefaultEngine.ini` under the `[/Script/Engine.CollisionProfile]` section. Per-actor overrides happen in C++ constructors (`Capsule->SetCollisionResponseToChannel(...)`, `Sphere->SetCollisionProfileName(...)`). No collision profile assets are created in the Editor — the C++ constructors are the source of truth, matching the project's "C++ first" rule.
+
 ---
 
 ## 2. Weapons
@@ -169,6 +218,8 @@ const UQuakeDamageType* DT = Cast<UQuakeDamageType>(
 All weapons are represented by primitive shapes attached to the camera (viewmodel). Projectiles are also primitive shapes.
 
 The player always carries the Axe. Other weapons are found as pickups. Switching weapons is instant via number keys (1-8) or scroll wheel.
+
+**Class layout.** Each weapon is a C++ subclass of `AQuakeWeaponBase` (`AQuakeWeapon_Shotgun`, `AQuakeWeapon_Nailgun`, etc.) that sets all stats from the table below as `UPROPERTY` defaults in its constructor. Each C++ subclass has a thin BP subclass (`BP_Weapon_Shotgun`, etc.) that holds **only** the asset slot assignments — viewmodel `UStaticMesh*`, `UMaterialInstance*` of `M_QuakeBase`, fire/empty `USoundBase*` slots, and the `TSubclassOf<AQuakeProjectile>` for projectile weapons. **Zero nodes in the BP event graph.** See section 9.2 for the underlying convention.
 
 ### 2.0 Weapon Table
 
@@ -226,6 +277,8 @@ If the player fires the Thunderbolt while at least partially submerged in a `AQu
 ## 3. Enemies
 
 All enemies are built from primitive shapes (capsules for bodies, spheres for heads, boxes for limbs). Enemy "animation" is represented by simple transforms — bobbing, rotation, scaling — rather than skeletal animation.
+
+**Class layout.** Each enemy is a C++ subclass of `AQuakeEnemyBase` (`AQuakeEnemy_Grunt`, `AQuakeEnemy_Knight`, etc.) that sets all stats from the table below — HP, Speed, Sight, Hearing, attack damage, cooldown — as `UPROPERTY` defaults in its constructor, along with `AIControllerClass = AQuakeAIController_<Type>::StaticClass()`. Each C++ pawn subclass has a thin BP subclass (`BP_Enemy_Grunt`, etc.) that holds **only** the asset slot assignments — body/head/limb `UStaticMesh*` primitives, body color `UMaterialInstance*`, pain/death `USoundBase*` slots, and the drop table's `TSubclassOf<AQuakePickupBase>` entries (see 3.2). **Zero nodes in the BP event graph.** AIController subclasses are pure C++ with no BP layer (no asset slots). See section 9.2 for the underlying convention.
 
 ### 3.1 Enemy Types
 
@@ -385,6 +438,8 @@ All pickups are simple floating/rotating primitive shapes with a colored glow (p
 - Keys reset on level transition — they do not carry between levels.
 - Visual: rotating metallic box (gray for Silver, gold for Gold).
 - Picking up a key the player already holds is a no-op (no message, no effect).
+
+**Storage: `AQuakePlayerState`.** Keys live on the PlayerState, not on `UQuakeGameInstance`, because their lifecycle (reset on level transition, reset on death, reset on hub return) matches PlayerState's destruction lifecycle exactly — same reasoning as powerups in 4.3. PlayerState is destroyed by `OpenLevel` and by death-respawn, so the reset rules in section 1.4 are automatic with no cleanup code. Door key checks call `Player->GetPlayerState<AQuakePlayerState>()->HasKey(Color)`. Key pickups call `Player->GiveKey(Color)` which forwards to the PlayerState, matching the Character-as-facade pattern used elsewhere for state writes.
 
 ---
 
@@ -590,9 +645,9 @@ The HUD is implemented as an `AQuakeHUD : public AHUD` (Actor) owned by the Play
 
 **Data sources** — the HUD reads from three places, in order of update frequency:
 
-- **`AQuakePlayerState`** — kills, secrets, time, deaths, active powerups (with remaining duration). The HUD's powerup-timer widget polls PlayerState every frame.
+- **`AQuakePlayerState`** — kills, secrets, time, deaths, active powerups (with remaining duration), keys held. The HUD's powerup-timer widget polls PlayerState every frame.
 - **`AQuakeCharacter`** — live health, current weapon, weapon viewmodel state.
-- **`UQuakeGameInstance`** — owned weapons (for the weapon bar), ammo per type, armor type and value, keys held.
+- **`UQuakeGameInstance`** — owned weapons (for the weapon bar), ammo per type, armor type and value.
 
 The Slate widget caches a weak pointer to each source on construction and reads them in its paint callback.
 

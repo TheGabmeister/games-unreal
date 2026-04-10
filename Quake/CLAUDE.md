@@ -47,8 +47,8 @@ Blueprints contain **no nodes in event graphs** — only property defaults. Do n
 
 Data lives in a specific place depending on its lifecycle. Putting it in the wrong place breaks respawn, level transitions, or the HUD. From SPEC.md's ownership summary:
 
-- **`UQuakeGameInstance`** — inventory (weapons owned, ammo, armor, keys), level-entry snapshot, save-game reference, player profile, difficulty. Survives `OpenLevel` and Character respawn.
-- **`AQuakePlayerState`** — current-level stats (kills, secrets, deaths, time) and active powerups (`TArray<FQuakeActivePowerup>`). Destroyed on level transition, which matches "reset per level" and "clear on death" semantics automatically.
+- **`UQuakeGameInstance`** — inventory (weapons owned, ammo, armor), level-entry snapshot, save-game reference, player profile, difficulty. Survives `OpenLevel` and Character respawn. **Note:** keys are *not* here despite being colloquially "inventory" — see PlayerState below.
+- **`AQuakePlayerState`** — current-level stats (kills, secrets, deaths, time), active powerups (`TArray<FQuakeActivePowerup>`), and keys held. Destroyed on level transition, which matches "reset per level" and "clear on death" semantics automatically — keys live here because their lifecycle matches powerups, not weapons/ammo/armor.
 - **`AQuakeCharacter`** — live health, currently-equipped weapon actor. Tied to the body; destroyed on death and respawn.
 - **`AQuakeGameMode`** — level totals (`KillsTotal`, `SecretsTotal`), spawn rules, win conditions. Server-authoritative (prepared for future multiplayer).
 - **`AQuakeHUD`** — reads from all of the above; caches weak pointers in the Slate widget and reads them on paint.
