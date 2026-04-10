@@ -38,7 +38,12 @@ IntelliSense errors like `cannot open source file "InputModifiers.h"` are usuall
 
 ## Running Tests
 
-Automation tests live under `Source/Quake/Tests/` and use `IMPLEMENT_SIMPLE_AUTOMATION_TEST` with `EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter`, guarded by `#if WITH_DEV_AUTOMATION_TESTS`. Run them from the editor via **Session Frontend → Automation tab → filter `Quake.*`**. Tests are grouped by subsystem: `Quake.Foundation.*` is the smoke test proving the runner is wired up, `Quake.Movement.AirAccel.*` is the dot-product clamp regression suite.
+Automation tests live under `Source/Quake/Tests/` and use `IMPLEMENT_SIMPLE_AUTOMATION_TEST` with `EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter`, guarded by `#if WITH_DEV_AUTOMATION_TESTS`. Run them from the editor via **Session Frontend → Automation tab → filter `Quake.*`**. Tests are grouped by subsystem:
+
+- `Quake.Foundation.*` — smoke test proving the runner is wired up.
+- `Quake.Movement.AirAccel.*` — dot-product clamp regression suite for the CMC.
+- `Quake.Damage.ArmorAbsorption.*` — armor formula regression suite (Green / Yellow / Underflow / NoArmor).
+- `Quake.Damage.DamageType.*` — shared-base CDO cast pattern from SPEC section 1.5.
 
 A test `.cpp` in `Source/Quake/Tests/` cannot `#include` headers from the module root unless the module adds its source directory to `PrivateIncludePaths`. [Source/Quake/Quake.Build.cs](Source/Quake/Quake.Build.cs) does this via `PrivateIncludePaths.Add(ModuleDirectory)` — leave it; removing it breaks every test file in the subdirectory.
 
@@ -78,6 +83,20 @@ All damage flows through UE's built-in pipeline:
 Damage metadata (self-damage scale, armor bypass, pain suppression, knockback strength) lives on `UDamageType` subclasses defined in SPEC section 1.5 — not on the attacker, not on the target. All Quake damage types inherit from a single abstract base `UQuakeDamageType` that owns every Quake-specific `UPROPERTY`; leaf subclasses add no new properties and only override defaults in their constructor. `TakeDamage` reads these via the CDO of the shared base — never branch on leaf class identity. Adding a new damage source means adding a ~10-line subclass that overrides defaults in its constructor and calling the appropriate `ApplyXDamage` helper with its `StaticClass()`. Splash radius lives on the weapon, not the damage type.
 
 Attribution uses UE's built-in `EventInstigator` (the controller) and `DamageCauser` (the projectile/weapon). Self-damage detection, infighting, and kill credit all derive from `EventInstigator` — no custom event bus needed.
+
+**Armor absorption is a pure static helper** `AQuakeCharacter::ApplyArmorAbsorption` — extracted from `TakeDamage` so the Quake formula (`save = ceil(absorption * damage)`) can be unit-tested without a world. **Float-precision gotcha:** because `0.3f` is not exactly representable in IEEE 754, `0.3f * 50.0f` evaluates to `15.000000596...`, which `FMath::CeilToFloat` rounds up to 16 instead of 15. The helper subtracts `UE_KINDA_SMALL_NUMBER` before the ceil to snap "essentially integer" results back — any rewrite must preserve this epsilon or the Green/Yellow armor tests go off by one. SPEC section 1.2 prose + the Quake-canonical formula give HP=65, armor=85 for 100 HP + 100 green armor + 50 damage; an earlier draft of the SPEC had these swapped and was corrected during Phase 2.
+
+**Knockback uses Quake's damage-scaled formula** (`ScaledDamage * 30 * DT->KnockbackScale`), NOT UE's stock `ACharacter::ApplyDamageMomentum` + `DamageImpulse` (which is a fixed magnitude per damage type and would lose the damage scaling — rocket-jump height depends on the damage the rocket dealt, not a constant). The override reuses the engine's `FDamageEvent::GetBestHitInfo` helper to unify point and radial damage directions in one call, so there is no manual `FPointDamageEvent` / `FRadialDamageEvent` branching — copy that pattern for any future `TakeDamage` override.
+
+**`AQuakeCharacter::Health` is `protected`**; external code reads it via `GetHealth()`. This is compile-time enforcement of the "no code outside `TakeDamage` mutates health directly" rule.
+
+## Architecture: Weapons
+
+`AQuakeWeaponBase` is the `UCLASS(Abstract)` base for every weapon. The public entry point is `TryFire(InInstigator)`, which enforces `RateOfFire` cooldown via a `LastFireWorldTime` timestamp and then calls the subclass-implemented `Fire`. Subclasses only override `Fire`; cooldown tracking lives on the base so no subclass re-implements it. Concrete weapons ([AQuakeWeapon_Axe](Source/Quake/QuakeWeapon_Axe.h) and onward) set all stats (`Damage`, `Range`, `RateOfFire`, …) as `UPROPERTY` defaults in their C++ constructor per the "C++ first" rule — the thin `BP_Weapon_*` subclass only fills in asset slots.
+
+**`Fire` is declared with `PURE_VIRTUAL`, not C++ `= 0`.** UE's reflection system constructs a Class Default Object for every `UCLASS`, including `UCLASS(Abstract)` ones, and a C++-pure-virtual method (`virtual void Foo() = 0;`) makes the CDO non-instantiable with `error C2259: cannot instantiate abstract class`. The fix is the engine's `PURE_VIRTUAL(AQuakeWeaponBase::Fire, )` macro, which emits a crashing stub body that satisfies the CDO constructor while still firing at runtime if anything calls the base directly. **Any future abstract `UCLASS` virtual needs the same treatment** — this bit us once during Phase 2 and will bite again.
+
+`SpawnActor` for a weapon uses the `(UClass*, FActorSpawnParameters)` overload followed by `AttachToComponent`, not the `(UClass*, FTransform, FActorSpawnParameters)` overload. On UE 5.7 the latter fails template argument deduction when the first argument is a `TSubclassOf<T>` (the compiler can't decide between the `FTransform` and `(FVector, FRotator)` overloads), so spawn at origin and let the attach set the transform. See [QuakeCharacter.cpp SpawnAndEquipDefaultWeapon](Source/Quake/QuakeCharacter.cpp) for the canonical pattern.
 
 ## Architecture: AI Split
 
@@ -124,7 +143,7 @@ The following must exist in the Editor; they cannot be created from C++ alone (p
 - **Enemy placements** — always `AQuakeEnemySpawnPoint` actors with `EnemyClass` set to a `BP_Enemy_*` class. Direct `BP_Enemy_*` placements in a level are decoration and **do not count** toward `KillsTotal` or gate the level-clear scan. This is the canonical authoring path for counted enemies; see SPEC section 5.1.
 - **One master material** `M_QuakeBase` with `BaseColor` / `Emissive` / `Metallic` / `Roughness` parameters; everything else is a `MaterialInstance` of it. Runtime tinting (damage flash, powerup overlays) uses `UMaterialInstanceDynamic` from C++.
 - **NavMesh** — `NavMeshBoundsVolume` per level, agent radius 35 / height 180 / step height 45 to match the player capsule and movement params (step height MUST equal the player's value or AI cannot path through geometry the player can walk over).
-- **Collision channels** — four custom channels (`Pickup`, `Projectile`, `Corpse` object channels + `Weapon` trace channel) defined in `Config/DefaultEngine.ini`. Per-actor responses are set in C++ constructors (`SetCollisionResponseToChannel` / `SetCollisionProfileName`), not via editor profile assets. See SPEC section 1.6 for the full response matrix and per-system rules.
+- **Collision channels** — four custom channels (`Pickup`, `Projectile`, `Corpse` object channels + `Weapon` trace channel) defined in `Config/DefaultEngine.ini`. Per-actor responses are set in C++ constructors (`SetCollisionResponseToChannel` / `SetCollisionProfileName`), not via editor profile assets. C++ code references the channels via the named constexpr mirror in [QuakeCollisionChannels.h](Source/Quake/QuakeCollisionChannels.h) (`QuakeCollision::ECC_Weapon`, etc.) — never use raw `ECC_GameTraceChannelN` literals, because the channel→index binding lives in the INI and the mirror is the single source of truth on the C++ side. See SPEC section 1.6 for the full response matrix and per-system rules.
 - **Project Settings** in `Config/Default*.ini` — version-controlled.
 
 The per-level checklist in `SPEC.md` section 10.5 is the authoritative reference when creating new maps.

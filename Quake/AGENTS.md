@@ -39,6 +39,7 @@ This file gives repo-specific guidance to coding agents working in this project.
 
 - Treat `SPEC.md` as the design source of truth. When `SPEC.md`, `AGENTS.md`, and `CLAUDE.md` disagree, follow `SPEC.md` and then update the secondary docs to match.
 - Respect the phase plan in `SPEC.md` section 11. Do not quietly pull Phase N work into Phase N-1 just because you are nearby in the code.
+- For Phase 2 damage-validation work, keep the "target dummy returns fire" check as a test-only/sandbox behavior that calls `ApplyPointDamage` on the player. Do not pull Phase 3 enemy AI or combat behavior forward just to verify pain flash or HUD health loss.
 - Do not assume `AQuakePlayerState` is recreated on death. UE keeps `PlayerController` and `PlayerState` across pawn respawn, so Quake's death-restart flow must explicitly call `AQuakePlayerState::ClearPerLifeState()` to clear keys and active powerups while preserving cumulative level-attempt stats.
 - Keep live health on `AQuakeCharacter` or a shared health component tied to the pawn. Inventory lives on `UQuakeGameInstance`, but save/load and level-entry restore must serialize and restore health explicitly.
 - Counted enemies are authored through `AQuakeEnemySpawnPoint`, not by dragging `BP_Enemy_*` actors directly into a map. Direct enemy placements are decoration/scripted display unless the user explicitly changes that rule.
