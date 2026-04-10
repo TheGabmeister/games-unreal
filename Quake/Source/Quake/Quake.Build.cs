@@ -17,8 +17,7 @@ public class Quake : ModuleRules
 			"NavigationSystem",
 			"AIModule",
 			"Slate",
-			"SlateCore",
-			"GameplayTags"
+			"SlateCore"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] {  });

@@ -96,25 +96,69 @@ The player has a persistent inventory across levels within an episode, with thes
 
 All damage flows through UE's built-in `AActor::TakeDamage` interface. Custom code never reads health directly on a target; it calls `UGameplayStatics::ApplyPointDamage`, `ApplyRadialDamage`, or `ApplyDamage` and lets the target's `TakeDamage` override decide what happens.
 
-**`UDamageType` subclasses** carry per-source metadata. Each subclass is a stateless `UCLASS()` defined in C++:
+**`UDamageType` subclasses** carry per-source metadata. They are stateless tag classes (the engine itself documents `UDamageType` as "immutable data holders... never stateful"); each one is a `UCLASS()` defined in C++ whose constructor sets default values.
 
-| DamageType                        | Notes                                                                 |
-|-----------------------------------|-----------------------------------------------------------------------|
-| `UQuakeDamageType_Melee`          | Used by Axe, Knight, Ogre chainsaw                                    |
-| `UQuakeDamageType_Bullet`         | Hitscan (Shotgun, Grunt rifle)                                        |
-| `UQuakeDamageType_Nail`           | Nailgun projectiles                                                   |
-| `UQuakeDamageType_Explosive`      | Rockets, grenades, Ogre grenades. Marks splash + self-damage scale 0.5 |
-| `UQuakeDamageType_Lightning`      | Thunderbolt, Shambler lightning. Ignores armor                        |
-| `UQuakeDamageType_Lava`           | Lava hazard volumes. Suppresses pain flinch                           |
-| `UQuakeDamageType_Slime`          | Slime hazard volumes                                                  |
-| `UQuakeDamageType_Drown`          | Drowning damage in water. Bypasses armor and Biosuit                  |
-| `UQuakeDamageType_Telefrag`       | Door crush, kill volumes. 10000 damage, no pain                       |
+**Shared base.** All Quake damage types inherit from a single abstract base, `UQuakeDamageType : public UDamageType`, which declares **every** Quake-specific field as a `UPROPERTY(EditDefaultsOnly)`. Leaf subclasses add no new properties — they only override defaults in their constructor. This is the consolidation that keeps `TakeDamage` free of `if (IsA<Lightning>) ... else if (IsA<Drown>) ...` ladders: the override does one cast to `UQuakeDamageType` and reads fields uniformly.
+
+```cpp
+// QuakeDamageType.h
+UCLASS(Abstract)
+class UQuakeDamageType : public UDamageType
+{
+    GENERATED_BODY()
+public:
+    UPROPERTY(EditDefaultsOnly) bool  bIgnoresArmor    = false;
+    UPROPERTY(EditDefaultsOnly) bool  bSuppressesPain  = false;
+    UPROPERTY(EditDefaultsOnly) bool  bBypassesBiosuit = false;
+    UPROPERTY(EditDefaultsOnly) bool  bSelfDamage      = true;
+    UPROPERTY(EditDefaultsOnly) float SelfDamageScale  = 1.0f;
+    UPROPERTY(EditDefaultsOnly) float KnockbackScale   = 1.0f;
+};
+
+// QuakeDamageType_Explosive.h
+UCLASS()
+class UQuakeDamageType_Explosive : public UQuakeDamageType
+{
+    GENERATED_BODY()
+public:
+    UQuakeDamageType_Explosive()
+    {
+        SelfDamageScale = 0.5f;
+        KnockbackScale  = 4.0f;
+    }
+};
+```
+
+Reuse the engine's existing `UDamageType` fields where they fit instead of inventing parallel ones — `bCausedByWorld` (set true on Lava/Slime/Drown), `bScaleMomentumByMass`, `DamageImpulse`, and `DamageFalloff` are already provided by the base.
+
+| DamageType                        | Constructor overrides (delta from `UQuakeDamageType` defaults)                                  |
+|-----------------------------------|-------------------------------------------------------------------------------------------------|
+| `UQuakeDamageType_Melee`          | (defaults)                                                                                      |
+| `UQuakeDamageType_Bullet`         | (defaults)                                                                                      |
+| `UQuakeDamageType_Nail`           | (defaults)                                                                                      |
+| `UQuakeDamageType_Explosive`      | `SelfDamageScale = 0.5`, `KnockbackScale = 4.0`. Splash radius lives on the weapon, not here.   |
+| `UQuakeDamageType_Lightning`      | `bIgnoresArmor = true`                                                                          |
+| `UQuakeDamageType_Lava`           | `bSuppressesPain = true`, `bCausedByWorld = true`                                               |
+| `UQuakeDamageType_Slime`          | `bCausedByWorld = true`                                                                         |
+| `UQuakeDamageType_Drown`          | `bIgnoresArmor = true`, `bBypassesBiosuit = true`, `bCausedByWorld = true`                      |
+| `UQuakeDamageType_Telefrag`       | `bSuppressesPain = true`. Damage amount (10000) is passed by the caller, not stored here.       |
+
+Adding a new damage source = adding one ~10-line subclass that overrides defaults in its constructor and calling `ApplyXDamage(..., UMyType::StaticClass(), ...)`. Nothing else changes.
 
 **Standard damage parameters** (`Instigator`, `DamageCauser`) are used to attribute hits:
 
 - **Self-damage** is detected when `DamagedActor == EventInstigator->GetPawn()` and the damage type's `bSelfDamage` flag is true. The damage type also provides the self-damage scalar (0.5 for explosives, 1.0 otherwise).
 - **Knockback** is computed in `TakeDamage` from the hit normal (point damage) or the explosion origin (radial damage), using the damage type's `KnockbackScale`.
 - **Infighting attribution** uses `EventInstigator` to identify the attacker. When an enemy's `TakeDamage` runs and the instigator is another enemy, target switching kicks in (see 3.3).
+
+In `TakeDamage`, read damage-type fields via the CDO of the shared base — never branch on leaf class identity:
+
+```cpp
+const UQuakeDamageType* DT = Cast<UQuakeDamageType>(
+    DamageEvent.DamageTypeClass
+        ? DamageEvent.DamageTypeClass->GetDefaultObject()
+        : UQuakeDamageType::StaticClass()->GetDefaultObject());
+```
 
 `AQuakeCharacter::TakeDamage` and `AQuakeEnemyBase::TakeDamage` are the only places where health is decremented. All weapons, projectiles, and hazard volumes call `ApplyPointDamage` / `ApplyRadialDamage` and let the targets handle the result.
 
@@ -208,6 +252,34 @@ When an enemy dies and is not gibbed, it has a chance to drop items:
 | Zombie   | None                         | 0%     |
 
 Backpacks despawn after 60 seconds if not picked up.
+
+**Representation.** Drops live as a `UPROPERTY` array on `AQuakeEnemyBase`, not in a `UDataTable`. The roster is small and fixed, the data has no balance interplay across enemies, and keeping it next to the rest of the per-enemy stats matches the project's broader pattern (enemies, weapons, and damage types are all subclass-per-type with `UPROPERTY` defaults — the only `UDataTable` in the project is `DT_SoundEvents` in section 8).
+
+```cpp
+// QuakeEnemyBase.h
+USTRUCT(BlueprintType)
+struct FQuakeDropEntry
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditDefaultsOnly) TSubclassOf<AQuakePickupBase> PickupClass;
+    UPROPERTY(EditDefaultsOnly) int32 Quantity = 1;
+    UPROPERTY(EditDefaultsOnly, meta=(ClampMin="0.0", ClampMax="1.0")) float Chance = 1.0f;
+};
+
+UCLASS(Abstract)
+class AQuakeEnemyBase : public ACharacter
+{
+    GENERATED_BODY()
+protected:
+    UPROPERTY(EditDefaultsOnly, Category="Drops")
+    TArray<FQuakeDropEntry> DropTable;
+};
+```
+
+Each leaf enemy subclass (`AQuakeEnemy_Grunt`, `AQuakeEnemy_Ogre`, etc.) sets its `DropTable` defaults in its C++ constructor. The `TSubclassOf<AQuakePickupBase>` slots are assigned in the thin BP subclass (`BP_Grunt`, `BP_Ogre`) — the same asset-slot pattern used elsewhere in the project. Enemies with no drops leave the array empty.
+
+**Evaluation.** On death (non-gibbed only — see section 3.4), `AQuakeEnemyBase` iterates `DropTable`, rolls `FMath::FRand()` once per entry against `Chance`, and for each entry that passes spawns `PickupClass` at the pawn's location with `SetQuantity(Entry.Quantity)`. Multiple drop entries on one enemy are independent rolls. Gibbed enemies skip drops entirely.
 
 ### 3.3 AI Behavior
 
@@ -663,14 +735,14 @@ The following classes already exist and should be extended:
 ### 9.4 Build Configuration
 
 - Module: `Quake`
-- Public dependencies: `Core`, `CoreUObject`, `Engine`, `InputCore`, `EnhancedInput`, `NavigationSystem`, `AIModule`, `Slate`, `SlateCore`, `GameplayTags`
+- Public dependencies: `Core`, `CoreUObject`, `Engine`, `InputCore`, `EnhancedInput`, `NavigationSystem`, `AIModule`, `Slate`, `SlateCore`
 - Target: Win64 (Development/Shipping)
 
 Notes:
 - `NavigationSystem` and `AIModule` are required for `AAIController`, `UAIPerceptionComponent`, and the sight/hearing senses.
 - `Slate` and `SlateCore` are required for the C++ Slate HUD (no UMG).
-- `GameplayTags` is used to tag damage types and actor categories without string lookups.
 - UMG is intentionally **not** a dependency — the HUD is pure Slate.
+- `GameplayTags` is intentionally **not** a dependency — damage discrimination uses `UDamageType` subclasses (see section 1.5), and the project has no other concrete tag use case. Add it back when there is one (faction tags, resistances, status effects).
 
 ---
 

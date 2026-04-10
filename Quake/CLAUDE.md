@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Unreal Engine 5.7 single-player FPS recreating original Quake gameplay with primitive shapes. The full design is in [SPEC.md](SPEC.md) — read it before making non-trivial gameplay changes. Module name: `Quake`. The current scope is the v1 milestone defined in `SPEC.md` section 11.
 
+**SPEC.md is the design source of truth.** When the SPEC and this file disagree about gameplay or data ownership, the SPEC wins — update CLAUDE.md to match. CLAUDE.md is a working-notes file for build/tooling/conventions, not a design doc.
+
 ## Build Commands
 
 Build the editor target (the most common command during development):
@@ -40,6 +42,51 @@ Per [SPEC.md](SPEC.md) section "Constraints", **all gameplay logic lives in C++*
 2. **Per-instance parameter tuning** — tweaking values like enemy health or weapon damage without recompiling.
 
 Blueprints contain **no nodes in event graphs** — only property defaults. Do not propose adding gameplay logic to Blueprints. If a feature requires runtime behavior, add it to the C++ base class.
+
+## Architecture: State Ownership
+
+Data lives in a specific place depending on its lifecycle. Putting it in the wrong place breaks respawn, level transitions, or the HUD. From SPEC.md's ownership summary:
+
+- **`UQuakeGameInstance`** — inventory (weapons owned, ammo, armor, keys), level-entry snapshot, save-game reference, player profile, difficulty. Survives `OpenLevel` and Character respawn.
+- **`AQuakePlayerState`** — current-level stats (kills, secrets, deaths, time) and active powerups (`TArray<FQuakeActivePowerup>`). Destroyed on level transition, which matches "reset per level" and "clear on death" semantics automatically.
+- **`AQuakeCharacter`** — live health, currently-equipped weapon actor. Tied to the body; destroyed on death and respawn.
+- **`AQuakeGameMode`** — level totals (`KillsTotal`, `SecretsTotal`), spawn rules, win conditions. Server-authoritative (prepared for future multiplayer).
+- **`AQuakeHUD`** — reads from all of the above; caches weak pointers in the Slate widget and reads them on paint.
+
+Do not put inventory on the Character. Do not put per-level stats on the Character or the GameMode. Do not put settings (sensitivity, volume) in the PlayerState.
+
+## Architecture: Damage Pipeline
+
+All damage flows through UE's built-in pipeline:
+
+1. Attackers call `UGameplayStatics::ApplyPointDamage` / `ApplyRadialDamage` / `ApplyDamage`.
+2. Targets override `AActor::TakeDamage` to actually decrement health, apply armor, knockback, etc.
+3. **No code outside `TakeDamage` mutates health directly.** If you see `Target->Health -= X` anywhere else, it's a bug.
+
+Damage metadata (self-damage scale, armor bypass, pain suppression, knockback strength) lives on `UDamageType` subclasses defined in SPEC section 1.5 — not on the attacker, not on the target. All Quake damage types inherit from a single abstract base `UQuakeDamageType` that owns every Quake-specific `UPROPERTY`; leaf subclasses add no new properties and only override defaults in their constructor. `TakeDamage` reads these via the CDO of the shared base — never branch on leaf class identity. Adding a new damage source means adding a ~10-line subclass that overrides defaults in its constructor and calling the appropriate `ApplyXDamage` helper with its `StaticClass()`. Splash radius lives on the weapon, not the damage type.
+
+Attribution uses UE's built-in `EventInstigator` (the controller) and `DamageCauser` (the projectile/weapon). Self-damage detection, infighting, and kill credit all derive from `EventInstigator` — no custom event bus needed.
+
+## Architecture: AI Split
+
+AI is split between the body and the brain per standard UE convention:
+
+- **`AQuakeEnemyBase : public ACharacter`** (the pawn / body) — capsule, mesh primitives, movement, health, `TakeDamage` override. Exposes action methods like `MoveToTarget`, `FireAtTarget`, `PlayPainReaction`, `PlayDeathReaction`. **No decision-making code lives on the pawn.**
+- **`AQuakeEnemyAIController : public AAIController`** (the brain) — state machine (`Idle → Alert → Chase → Attack → Pain → Dead`), target tracking, owns a `UAIPerceptionComponent` with sight (`UAISenseConfig_Sight`) and hearing (`UAISenseConfig_Hearing`, with `bUseLoSHearing = false` for Quake-style hearing through walls). Calls the pawn's action methods to drive behavior.
+
+Per-enemy behavior variations (Fiend leap, Ogre grenade arc, Zombie revive) live on per-enemy AIController subclasses, not on pawn subclasses. This is what makes the AI debugger (`'` key in PIE) work and keeps "what I am" separate from "what I'm doing."
+
+## Risk Note: Strafe-Jumping CMC
+
+The custom `UQuakeCharacterMovementComponent` is **the single biggest risk in the project**. Quake-style strafe jumping requires overriding `PhysFalling` (or `CalcVelocity`) to implement the Quake air-acceleration formula: clamp the **dot product** of current velocity and wishdir, not the velocity magnitude. Stock UE `UCharacterMovementComponent` clamps air velocity to `MaxWalkSpeed`, which breaks strafe jumping fundamentally.
+
+If asked to tune movement:
+
+- Do **not** rewrite `PhysFalling` without first understanding the current formula and testing circle-strafe speed gain on a reference map.
+- Feel is binary: either the dot-product clamp is right and the player can gain speed by air-strafing, or the whole game stops feeling like Quake. There is no "70% strafe-jumping."
+- Build a movement sandbox (flat plane, ramps, gap) first. Do not integrate CMC work with other systems until the sandbox passes the feel test.
+
+Multiplayer would additionally require `FSavedMove_Character` / `FNetworkPredictionData_Client_Character` overrides for client-side prediction. This is famously the part where "I added Quake movement to UE" projects break, and it's why this project is single-player only (SPEC constraint).
 
 ## Architecture: Input Configuration
 

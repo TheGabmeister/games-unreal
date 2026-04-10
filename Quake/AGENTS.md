@@ -23,7 +23,6 @@ This file gives repo-specific guidance to coding agents working in this project.
 - `Config/` - version-controlled Unreal project settings.
 - `Content/` - editor-authored assets and maps.
 - `SPEC.md` - gameplay and systems spec.
-- `CLAUDE.md` - existing project guidance that is still useful context.
 
 ## Existing Gameplay Architecture
 
