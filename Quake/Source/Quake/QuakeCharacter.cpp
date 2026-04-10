@@ -5,6 +5,8 @@
 #include "QuakePlayerController.h"
 #include "QuakeWeaponBase.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogQuakeCharacter, Log, All);
+
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/PostProcessComponent.h"
@@ -77,6 +79,12 @@ void AQuakeCharacter::SpawnAndEquipDefaultWeapon()
 		CurrentWeapon->AttachToComponent(
 			FirstPersonCamera,
 			FAttachmentTransformRules::SnapToTargetNotIncludingScale);
+		UE_LOG(LogQuakeCharacter, Log, TEXT("Spawned default weapon: %s"), *CurrentWeapon->GetName());
+	}
+	else
+	{
+		UE_LOG(LogQuakeCharacter, Warning, TEXT("Failed to spawn DefaultWeaponClass=%s"),
+			*GetNameSafe(DefaultWeaponClass));
 	}
 }
 
@@ -97,6 +105,13 @@ void AQuakeCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComp
 	if (PC->FireAction)
 	{
 		EnhancedInput->BindAction(PC->FireAction, ETriggerEvent::Triggered, this, &AQuakeCharacter::OnFirePressed);
+		UE_LOG(LogQuakeCharacter, Log, TEXT("FireAction bound to %s"), *PC->FireAction->GetName());
+	}
+	else
+	{
+		UE_LOG(LogQuakeCharacter, Warning,
+			TEXT("AQuakePlayerController::FireAction is null — assign IA_Fire in BP_QuakePlayerController defaults, "
+			     "and make sure IA_Fire is mapped to LMB in IMC_Default."));
 	}
 }
 
@@ -125,6 +140,9 @@ void AQuakeCharacter::OnFirePressed(const FInputActionValue& /*Value*/)
 	// Bound to ETriggerEvent::Triggered so a "Hold" trigger on the IA can
 	// auto-repeat. Cooldown enforcement lives in AQuakeWeaponBase::TryFire,
 	// which gates the per-tick spam to the weapon's RoF.
+	UE_LOG(LogQuakeCharacter, Verbose, TEXT("OnFirePressed (CurrentWeapon=%s)"),
+		CurrentWeapon ? *CurrentWeapon->GetName() : TEXT("none"));
+
 	if (CurrentWeapon)
 	{
 		CurrentWeapon->TryFire(this);
