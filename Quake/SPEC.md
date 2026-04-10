@@ -450,7 +450,7 @@ All pickups are simple floating/rotating primitive shapes with a colored glow (p
 Levels are built in the Unreal Editor using BSP brushes and/or simple static meshes. Each level contains:
 
 - A **Player Start** point.
-- Enemy **spawn points** (placed as actors in the editor).
+- Enemy **spawn points** — `AQuakeEnemySpawnPoint` actors (see below).
 - **Pickup placements** (placed as actors).
 - **Doors** — triggered by proximity, keys, or buttons (see 5.4).
 - **Buttons** — interactable actors that fire trigger events (see 5.5).
@@ -458,6 +458,39 @@ Levels are built in the Unreal Editor using BSP brushes and/or simple static mes
 - **Exit trigger** — ends the level and loads the next.
 - **Hazards** — slime (damage over time) and lava (heavy damage over time) volumes.
 - **Water volumes** — swimmable, with drowning timer (see 5.3).
+
+**`AQuakeEnemySpawnPoint`.** A passive marker actor placed in the level that defines where an enemy should appear. Each spawn point holds the enemy class to spawn, the lowest difficulty at which it activates, and a flag controlling whether it spawns automatically at level start or waits to be fired by a trigger. Spawn points implement `IQuakeActivatable` so they can also be targets of generic buttons / `AQuakeTrigger_Relay` chains, in addition to the typed `AQuakeTrigger_Spawn` (see 5.6).
+
+```cpp
+UCLASS()
+class AQuakeEnemySpawnPoint : public AActor, public IQuakeActivatable
+{
+    GENERATED_BODY()
+public:
+    /** What to spawn at this point. */
+    UPROPERTY(EditAnywhere, Category="Spawn")
+    TSubclassOf<AQuakeEnemyBase> EnemyClass;
+
+    /** Lowest difficulty at which this spawn point activates. Easy = always; Nightmare = nightmare-only. */
+    UPROPERTY(EditAnywhere, Category="Spawn")
+    EQuakeDifficulty MinDifficulty = EQuakeDifficulty::Easy;
+
+    /** If true, waits for an external Activate() / AQuakeTrigger_Spawn call. If false, spawns in BeginPlay. */
+    UPROPERTY(EditAnywhere, Category="Spawn")
+    bool bDeferredSpawn = false;
+
+    virtual void BeginPlay() override;
+    virtual void Activate_Implementation(AActor* Instigator) override;  // IQuakeActivatable
+
+protected:
+    UPROPERTY() TObjectPtr<AQuakeEnemyBase> SpawnedEnemy;  // null until spawned; ensures one-shot
+    bool TrySpawn();  // checks MinDifficulty + SpawnedEnemy, then spawns
+};
+```
+
+**Behavior:** `BeginPlay` calls `TrySpawn()` if `bDeferredSpawn == false`. `Activate(Instigator)` calls `TrySpawn()` regardless. `TrySpawn` checks the current difficulty against `MinDifficulty` (via `GameMode->GetDifficulty()`), bails if too low, bails if already spawned, otherwise spawns `EnemyClass` at the actor's transform and stores the result in `SpawnedEnemy`. Each spawn point spawns at most once per level attempt.
+
+**Why a flag instead of two subclasses:** the level-start vs deferred behaviors share 90% of the code (difficulty check, one-shot guard, actual spawn call). A boolean is simpler than `AQuakeEnemySpawnPoint_LevelStart` / `AQuakeEnemySpawnPoint_Deferred` subclasses, and a designer can flip the flag in the editor without re-placing the actor.
 
 ### 5.2 Hazards and Water
 
@@ -710,7 +743,87 @@ Difficulty is selected at new-game time from the main menu and persists for the 
 | Hard       | ×1.5         | ×1.25    | ×1.25       | Extra enemies in marked spawn slots    |
 | Nightmare  | ×2.0         | ×1.5     | ×1.5        | Zombies revive 2× faster; pain immunity for all enemies |
 
-**Enemy count scaling** is achieved by marking certain spawn placements as "Hard+" or "Nightmare-only" in the Editor. The game mode skips disabled spawns at level load.
+**Storage and accessor.** `EQuakeDifficulty` is an enum (`Easy`, `Normal`, `Hard`, `Nightmare`) stored on `UQuakeGameInstance` as the source of truth — it must outlive both `OpenLevel` and Character respawn, which is GameInstance's role per [section 1.4](SPEC.md#L70). `AQuakeGameMode` reads it on `BeginPlay` and exposes:
+
+- `EQuakeDifficulty GetDifficulty() const`
+- `const FQuakeDifficultyMultipliers& GetDifficultyMultipliers() const`
+
+Gameplay code goes through the **GameMode**, never directly to GameInstance. `GetWorld()->GetAuthGameMode<AQuakeGameMode>()` is the standard one-call lookup the rest of the SPEC already uses.
+
+**Multiplier struct, BP-tunable.** The numbers in the table above live in a `UPROPERTY` `TMap` on `AQuakeGameMode`, marked `EditDefaultsOnly` so values can be tuned without recompiling C++:
+
+```cpp
+USTRUCT(BlueprintType)
+struct FQuakeDifficultyMultipliers
+{
+    GENERATED_BODY()
+    UPROPERTY(EditDefaultsOnly) float EnemyHP     = 1.0f;
+    UPROPERTY(EditDefaultsOnly) float EnemyDamage = 1.0f;
+};
+
+UCLASS()
+class AQuakeGameMode : public AGameModeBase
+{
+    GENERATED_BODY()
+protected:
+    UPROPERTY(EditDefaultsOnly, Category="Difficulty")
+    TMap<EQuakeDifficulty, FQuakeDifficultyMultipliers> DifficultyTable;
+};
+```
+
+`BP_QuakeGameMode` (the existing thin BP subclass per [section 9.2](SPEC.md#L744)) fills in the four entries. Editing the BP to retune Hard from ×1.5 to ×1.4 requires no recompile. `EnemyCount` is intentionally **not** in the struct because count scaling is handled by spawn-point filtering, not a runtime multiplier (see "Enemy count scaling" below).
+
+**Application — enemies bake the scaling in `BeginPlay`.** Each `AQuakeEnemyBase` holds its base values in C++ defaults (`BaseMaxHealth`, `BaseAttackDamage`) and computes the runtime values from the GameMode multipliers in `BeginPlay`. Enemies do **not** store a member reference to the GameMode — they look it up once per spawn:
+
+```cpp
+void AQuakeEnemyBase::BeginPlay()
+{
+    Super::BeginPlay();
+    ApplyDifficultyScaling();
+    Health = MaxHealth;
+}
+
+void AQuakeEnemyBase::ApplyDifficultyScaling()
+{
+    if (auto* GM = GetWorld()->GetAuthGameMode<AQuakeGameMode>())
+    {
+        const FQuakeDifficultyMultipliers& M = GM->GetDifficultyMultipliers();
+        MaxHealth              = BaseMaxHealth   * M.EnemyHP;
+        AttackDamageMultiplier = M.EnemyDamage;
+    }
+}
+```
+
+`AttackDamageMultiplier` is multiplied into the per-attack damage at fire time inside `FireAtTarget` (or wherever the enemy calls `ApplyPointDamage`). HP is baked in once. Both work for the lifetime of the enemy because difficulty cannot change mid-playthrough.
+
+`ApplyDifficultyScaling` is **virtual** — subclasses (or AIController subclasses) override it for per-difficulty quirks. The base only handles the simple stat scaling.
+
+**Per-difficulty quirks.** Things that aren't a flat multiplier go in the quirk slots:
+
+- **Zombie revive timing on Nightmare.** `AQuakeAIController_Zombie::ApplyDifficultyScaling()` overrides to halve `ReviveTimer` when difficulty is Nightmare. Calls `Super::ApplyDifficultyScaling()` first to get the base HP/damage scaling.
+- **Pain immunity on Nightmare.** Checked at the moment of the pain decision in `AQuakeEnemyAIController::OnDamaged`, not as a baked value: `if (GM->GetDifficulty() == EQuakeDifficulty::Nightmare) return;` skips the pain reaction. There's no "pain multiplier" because pain is binary — it either fires or it doesn't, and the difficulty rule is "never on Nightmare."
+
+**Enemy count scaling — handled by spawn-point filtering, not multipliers.** Each `AQuakeEnemySpawnPoint` declares a `MinDifficulty` ([section 5.1](SPEC.md#L446)). The check happens in the spawn point's `TrySpawn()` helper:
+
+```cpp
+bool AQuakeEnemySpawnPoint::TrySpawn()
+{
+    if (SpawnedEnemy) return false;  // one-shot
+    const auto* GM = GetWorld()->GetAuthGameMode<AQuakeGameMode>();
+    if (!GM || GM->GetDifficulty() < MinDifficulty) return false;  // gated
+    // ... spawn EnemyClass at GetActorTransform(), store in SpawnedEnemy
+    return true;
+}
+```
+
+Easy and Normal spawn only `MinDifficulty = Easy` placements. Hard adds the `MinDifficulty = Hard` ones. Nightmare adds the `MinDifficulty = Nightmare` ones. The check is local to each spawn point — no central GameMode iteration, no pre-filter pass at level load. The "extra enemies" entries in the multiplier table are advisory only; the actual enemy count is whatever the spawn points add up to per difficulty, which level designers tune by sprinkling Hard+/Nightmare-only placements.
+
+**Why this shape:**
+
+- **GameInstance owns the choice, GameMode owns the application.** Same split as inventory (GameInstance owns the data, Character/PlayerState read it). Difficulty doesn't break the ownership rules.
+- **Enemies query, don't subscribe.** Pull-based, consistent with the rest of the codebase (HUD polling, AI perception polling on tick) — no event subscription, no notification delegate, no need for the enemy to react to difficulty *changes* because there are none.
+- **Virtual `ApplyDifficultyScaling` is the extension point.** New enemies that need quirky scaling (e.g., a future boss with custom resistance rules) override one method. No central `if (enemy is X) { ... }` ladder in the GameMode.
+- **Spawn-point filtering decentralizes the count rule.** The count scaling lives where it's authored (the spawn point in the editor), not in a GameMode pre-pass. This matches the SPEC's preference for derived/local state over cached/central state ([section 5.9 stat counting](SPEC.md#L660) does the same with the level-clear scan).
 
 ### 6.2 Saves
 
@@ -862,6 +975,8 @@ AQuakeEnemyAIController : public AAIController  — enemy brain: FSM, perception
 
 AQuakePickupBase                     — base pickup (USphereComponent overlap detection)
   AQuakePickup_Health, _Armor, _Ammo, _Weapon, _Key, _Powerup (subclasses)
+
+AQuakeEnemySpawnPoint                — passive level marker; spawns EnemyClass at level start (or on Activate); MinDifficulty gates; implements IQuakeActivatable
 
 AQuakeDoor                           — UStaticMeshComponent + UTimelineComponent; implements IQuakeActivatable
 AQuakeButton                         — touch/shoot interactable; fires IQuakeActivatable targets via direct reference (no name lookup)

@@ -23,6 +23,7 @@ This file gives repo-specific guidance to coding agents working in this project.
 - `Config/` - version-controlled Unreal project settings.
 - `Content/` - editor-authored assets and maps.
 - `SPEC.md` - gameplay and systems spec.
+- `CLAUDE.md` - additional architecture guidance and implementation notes.
 
 ## Existing Gameplay Architecture
 
@@ -30,6 +31,16 @@ This file gives repo-specific guidance to coding agents working in this project.
 - `AQuakePlayerController` owns Enhanced Input setup.
 - `AQuakeGameMode` sets core game classes and rules.
 - New shared input actions should be added in `AQuakePlayerController` rather than created as editor-only input assets.
+
+## Damage Guidance
+
+- Follow Unreal's built-in damage pipeline: attackers call `UGameplayStatics::ApplyPointDamage`, `ApplyRadialDamage`, or `ApplyDamage`; receivers own the final response in `TakeDamage`.
+- Use `UDamageType` subclasses as immutable metadata holders for semantic damage categories such as bullet, explosive, lightning, or world hazards.
+- Keep `UDamageType` subclasses lightweight. They should expose defaults and flags, not store runtime state or become a deep per-weapon class tree.
+- Do not branch on damage type leaf class identity when a shared base such as `UQuakeDamageType` can expose the needed fields uniformly.
+- Avoid duplicating health/armor resolution logic in both `AQuakeCharacter` and enemy classes. Prefer a shared resolver or `UQuakeHealthComponent` that handles armor absorption, self-damage scaling, knockback inputs, death checks, and related bookkeeping.
+- Actor-specific `TakeDamage` overrides should stay thin: gather context from `FDamageEvent`, hand the calculation to shared code, then perform actor-specific reactions such as HUD feedback, AI aggro, pain reactions, or death presentation.
+- Not every health change belongs in the damage pipeline. Timed effects like megahealth decay should use explicit health-management code rather than being faked as combat damage.
 
 ## Build And Tooling
 
