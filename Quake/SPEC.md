@@ -4,7 +4,11 @@ A single-player FPS inspired by the original Quake (1996), rebuilt in Unreal Eng
 
 ## Constraints
 
-- **C++ only.** No Blueprints for gameplay logic. Editor is used only for level design and assigning assets.
+- **C++ first, with thin Blueprint layer.** All gameplay logic lives in C++. Blueprints are used only as thin subclasses of C++ base classes for two purposes:
+  1. **Asset references** — assigning meshes, materials, and (future) sound assets to `UPROPERTY` slots on C++ classes.
+  2. **Per-instance parameter tuning** — tweaking values like enemy health, weapon damage, or fire rate without recompiling. Each enemy and weapon variant is a Blueprint subclass of its C++ base.
+
+  Blueprints contain **no logic** — only property values and asset references. All behavior is in C++.
 - **Primitive shapes.** All characters, enemies, weapons, and pickups are built from cubes, spheres, cylinders, and capsules. No skeletal meshes or animations.
 - **No audio assets.** An audio system will be implemented with placeholder hooks so sound effects and music can be plugged in later.
 - **Single player only.** No networking or multiplayer.
@@ -214,8 +218,8 @@ No audio assets exist yet. The system provides a clean interface for future inte
 - **`UQuakeSoundManager`** (Game Instance Subsystem) — central audio manager.
 - Exposes functions like `PlaySound(ESoundEvent, Location)`, `PlayMusic(EMusicTrack)`, `StopMusic()`.
 - `ESoundEvent` is an enum cataloging every game sound (weapon fire, pickup, enemy alert, door open, etc.).
-- Sounds are mapped to `USoundBase*` via a data table or map. When unmapped (nullptr), the call is a no-op.
-- This means all gameplay code calls the sound manager, and adding audio later is just filling in the asset mappings.
+- Sounds are mapped to `USoundBase*` via a `UDataTable` whose row asset is assigned in a Blueprint subclass of the manager (or referenced from the Game Instance). When a row is unmapped (nullptr), the call is a no-op.
+- This means all gameplay code calls the sound manager, and adding audio later is just filling in the data table rows in the Editor.
 
 ### 7.2 Sound Events (partial list)
 
@@ -261,7 +265,20 @@ UQuakeSoundManager      — audio subsystem
 UQuakeGameInstance       — persistent state across levels
 ```
 
-### 8.2 Existing Code
+### 8.2 Blueprint Layer
+
+For each C++ class that needs assets or per-variant tuning, create a Blueprint subclass under `Content/Blueprints/`:
+
+- **Weapons** — `BP_Weapon_Shotgun`, `BP_Weapon_Nailgun`, etc. Each holds the weapon's mesh, projectile class reference, muzzle effect, and tunable values (damage, fire rate, ammo cost).
+- **Enemies** — `BP_Enemy_Grunt`, `BP_Enemy_Knight`, etc. Each holds the body/head/limb meshes, materials, and stats (health, speed, attack damage, sight range).
+- **Pickups** — `BP_Pickup_Health25`, `BP_Pickup_GreenArmor`, etc. Hold mesh + material + value.
+- **Projectiles** — `BP_Projectile_Rocket`, `BP_Projectile_Grenade`, etc.
+
+Blueprints contain no nodes in the Event Graph — only property defaults and asset references. The C++ base class drives all behavior.
+
+The game mode references the Blueprint classes (not the C++ classes directly) when spawning, via `TSubclassOf<>` properties assigned in `BP_QuakeGameMode`.
+
+### 8.3 Existing Code
 
 The following classes already exist and should be extended:
 
@@ -269,7 +286,7 @@ The following classes already exist and should be extended:
 - `AQuakePlayerController` — Enhanced Input setup (Move, Look, Jump actions)
 - `AQuakeGameMode` — sets default pawn and controller classes
 
-### 8.3 Build Configuration
+### 8.4 Build Configuration
 
 - Module: `Quake`
 - Dependencies: Core, CoreUObject, Engine, InputCore, EnhancedInput, NavigationSystem, AIModule, SlateCore, Slate, UMG
