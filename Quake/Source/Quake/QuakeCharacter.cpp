@@ -1,15 +1,18 @@
 #include "QuakeCharacter.h"
+#include "QuakeCharacterMovementComponent.h"
 #include "QuakePlayerController.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
-#include "GameFramework/CharacterMovementComponent.h"
 #include "EnhancedInputComponent.h"
 #include "InputActionValue.h"
 
-AQuakeCharacter::AQuakeCharacter()
+AQuakeCharacter::AQuakeCharacter(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer.SetDefaultSubobjectClass<UQuakeCharacterMovementComponent>(
+		ACharacter::CharacterMovementComponentName))
 {
 	PrimaryActorTick.bCanEverTick = false;
 
+	// SPEC section 1.6: player capsule radius 35, half-height 90.
 	GetCapsuleComponent()->InitCapsuleSize(35.f, 90.f);
 
 	FirstPersonCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FirstPersonCamera"));
@@ -21,11 +24,8 @@ AQuakeCharacter::AQuakeCharacter()
 	bUseControllerRotationYaw = true;
 	bUseControllerRotationRoll = false;
 
-	UCharacterMovementComponent* Movement = GetCharacterMovement();
-	Movement->MaxWalkSpeed = 600.f;
-	Movement->BrakingDecelerationWalking = 1400.f;
-	Movement->JumpZVelocity = 420.f;
-	Movement->AirControl = 0.3f;
+	// All movement parameters are set in UQuakeCharacterMovementComponent's
+	// constructor — intentionally not duplicated here.
 }
 
 void AQuakeCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)

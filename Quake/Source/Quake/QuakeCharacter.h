@@ -12,7 +12,7 @@ class QUAKE_API AQuakeCharacter : public ACharacter
 	GENERATED_BODY()
 
 public:
-	AQuakeCharacter();
+	AQuakeCharacter(const FObjectInitializer& ObjectInitializer);
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")
 	TObjectPtr<UCameraComponent> FirstPersonCamera;

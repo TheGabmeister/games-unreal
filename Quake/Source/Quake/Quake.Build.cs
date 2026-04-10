@@ -1,5 +1,6 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
+using System.IO;
 using UnrealBuildTool;
 
 public class Quake : ModuleRules
@@ -7,7 +8,12 @@ public class Quake : ModuleRules
 	public Quake(ReadOnlyTargetRules Target) : base(Target)
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
-	
+
+		// The module uses a flat layout (no Public/Private split), so add the
+		// module root explicitly. Without this, files in subdirectories such
+		// as Tests/ cannot #include headers from the module root.
+		PrivateIncludePaths.Add(ModuleDirectory);
+
 		PublicDependencyModuleNames.AddRange(new string[] {
 			"Core",
 			"CoreUObject",
