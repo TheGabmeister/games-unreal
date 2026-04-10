@@ -36,6 +36,16 @@ The system installs only .NET 10; UnrealBuildTool requires .NET 8. The bundled S
 
 IntelliSense errors like `cannot open source file "InputModifiers.h"` are usually false positives from VS Code's C++ extension when `compileCommands_Quake.json` is stale. The compile-test of truth is a real `Build.bat` run, not the IDE squiggles. Regenerate project files (above) before assuming an include is wrong.
 
+## Running Tests
+
+Automation tests live under `Source/Quake/Tests/` and use `IMPLEMENT_SIMPLE_AUTOMATION_TEST` with `EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter`, guarded by `#if WITH_DEV_AUTOMATION_TESTS`. Run them from the editor via **Session Frontend → Automation tab → filter `Quake.*`**. Tests are grouped by subsystem: `Quake.Foundation.*` is the smoke test proving the runner is wired up, `Quake.Movement.AirAccel.*` is the dot-product clamp regression suite.
+
+A test `.cpp` in `Source/Quake/Tests/` cannot `#include` headers from the module root unless the module adds its source directory to `PrivateIncludePaths`. [Source/Quake/Quake.Build.cs](Source/Quake/Quake.Build.cs) does this via `PrivateIncludePaths.Add(ModuleDirectory)` — leave it; removing it breaks every test file in the subdirectory.
+
+**LWC gotcha in numeric asserts.** UE 5.5+ makes `FVector` components `double` (Large World Coordinates). `TestEqual(TEXT("..."), Vec.X, 30.f, KINDA_SMALL_NUMBER)` is an ambiguous-overload compile error because `Vec.X` is `double` and the literals are `float`. Use double literals (`30.0`) and `UE_KINDA_SMALL_NUMBER` in any test assertion that touches vector components.
+
+Prefer unit tests over map-based functional tests when the logic can be extracted into a pure static function. `UQuakeCharacterMovementComponent::ApplyQuakeAirAccel` is the template: a static function that the CMC override calls, so unit tests can exercise the air-accel math directly without spinning up a world, a pawn, or a physics tick.
+
 ## Architecture: C++ First With Thin Blueprint Layer
 
 Per [SPEC.md](SPEC.md) section "Constraints", **all gameplay logic lives in C++**. Blueprints are used **only** as thin subclasses of C++ base classes for two purposes:
@@ -84,13 +94,19 @@ Buttons, triggers, doors, spawn points, and the level exit communicate via the `
 
 ## Risk Note: Strafe-Jumping CMC
 
-The custom `UQuakeCharacterMovementComponent` is **the single biggest risk in the project**. Quake-style strafe jumping requires overriding `PhysFalling` (or `CalcVelocity`) to implement the Quake air-acceleration formula: clamp the **dot product** of current velocity and wishdir, not the velocity magnitude. Stock UE `UCharacterMovementComponent` clamps air velocity to `MaxWalkSpeed`, which breaks strafe jumping fundamentally.
+[UQuakeCharacterMovementComponent](Source/Quake/QuakeCharacterMovementComponent.h) is **the single biggest risk in the project**. It overrides `CalcVelocity` (not `PhysFalling`) and routes the `MOVE_Falling` branch through `ApplyQuakeAirAccel`, which implements the original Quake `PM_AirAccelerate` formula: clamp the **dot product** of velocity and wishdir to `MaxAirSpeedGain`, NOT the velocity magnitude. Stock `UCharacterMovementComponent::CalcVelocity` ends with `Velocity.GetClampedToMaxSize(MaxInputSpeed)` — that magnitude clamp is exactly what breaks Quake strafe jumping, which is why the falling branch must not call `Super::CalcVelocity`. `PhysFalling` zeroes `Velocity.Z` before calling `CalcVelocity` and restores it afterward (gravity is applied separately via `NewFallVelocity`), so `ApplyQuakeAirAccel` only touches horizontal components.
+
+`ApplyQuakeAirAccel` is a pure static function so the formula can be unit-tested without spinning up a world. [Source/Quake/Tests/QuakeCharacterMovementComponentTest.cpp](Source/Quake/Tests/QuakeCharacterMovementComponentTest.cpp) has the canonical regression: velocity `(300,0,0)` + wishdir `(0,1,0)` + `MaxAirSpeedGain=30` must yield a Y gain of exactly 30 with X untouched. Any change to the formula must keep these tests green — the `Quake.Movement.AirAccel.HighSpeedStrafe` test specifically guards against the stock-CMC `MaxWalkSpeed` clamp being accidentally reintroduced.
+
+**Bunny-hop window.** `ProcessLanded` captures pre-landing horizontal velocity; `DoJump` restores it to `Velocity.X/Y` if the jump fires within `BunnyHopWindow` seconds (default 100 ms) and then consumes the window by setting `LastLandedWorldTime = -1`. `Super::DoJump` only touches `Velocity.Z`, so overwriting X/Y after calling it is safe.
+
+**All movement parameters from SPEC 1.1 live in `UQuakeCharacterMovementComponent`'s constructor**, not on `AQuakeCharacter`. `AQuakeCharacter`'s constructor uses `ObjectInitializer.SetDefaultSubobjectClass<UQuakeCharacterMovementComponent>(ACharacter::CharacterMovementComponentName)` to swap the CMC type; BP subclasses inherit this automatically (BPs cannot override component class choice, only property defaults).
 
 If asked to tune movement:
 
-- Do **not** rewrite `PhysFalling` without first understanding the current formula and testing circle-strafe speed gain on a reference map.
-- Feel is binary: either the dot-product clamp is right and the player can gain speed by air-strafing, or the whole game stops feeling like Quake. There is no "70% strafe-jumping."
-- Build a movement sandbox (flat plane, ramps, gap) first. Do not integrate CMC work with other systems until the sandbox passes the feel test.
+- **Feel is binary.** Either the dot-product clamp is right and speed climbs past `MaxWalkSpeed` when air-strafing on `Content/Maps/Tests/PhysSandbox.umap`, or the whole game stops feeling like Quake. There is no "70% strafe-jumping."
+- Use the debug speedometer in [QuakeHUD](Source/Quake/QuakeHUD.h) (Speed / Z vel / MovementMode in the top-left) to verify the feel test at a glance. It's wired via `AQuakeGameMode::HUDClass`.
+- **BP property overrides shadow C++ defaults.** If you change a CMC default in the constructor but `BP_QuakeCharacter` has a stored override for that property, the BP wins and your C++ change is silently ignored. Open the BP, select the `CharacterMovement` component in the Details panel, and right-click → Reset to Default on any overridden values after editing C++ defaults. This is the most common reason a "tuning" change appears to do nothing.
 
 Multiplayer would additionally require `FSavedMove_Character` / `FNetworkPredictionData_Client_Character` overrides for client-side prediction. This is famously the part where "I added Quake movement to UE" projects break, and it's why this project is single-player only (SPEC constraint).
 

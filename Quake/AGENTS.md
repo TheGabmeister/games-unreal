@@ -6,6 +6,7 @@ This file gives repo-specific guidance to coding agents working in this project.
 
 - Unreal Engine 5.7 single-player FPS inspired by Quake, implemented in C++.
 - The full gameplay design lives in `SPEC.md`. Read it before making non-trivial gameplay or architecture changes.
+- The current target is the v1 vertical slice in `SPEC.md` section 11, delivered in phased milestones. Stay within the active phase instead of pulling later systems forward.
 - Module name: `Quake`.
 - Current code lives under `Source/Quake/`.
 
@@ -30,19 +31,21 @@ This file gives repo-specific guidance to coding agents working in this project.
 - `AQuakeCharacter` owns first-person movement and player-side gameplay state.
 - `AQuakePlayerController` owns Enhanced Input setup.
 - `AQuakeGameMode` sets core game classes and rules.
+- `AQuakePlayerState` owns current-level stats plus per-level state such as keys and active powerups.
+- `UQuakeGameInstance` owns persistent inventory, profile-level data, and cross-level state.
 - New shared input actions should be added in `AQuakePlayerController` rather than created as editor-only input assets.
 
 ## Spec Alignment Notes
 
-- Treat `SPEC.md` as the design source of truth, but watch for lifecycle assumptions that UE does not provide automatically. In particular, do not assume `AQuakePlayerState` is recreated on player death; if death is supposed to clear keys, powerups, or other per-attempt state, add an explicit reset path.
-- Keep live health on `AQuakeCharacter` (or a shared health component if one is introduced). If implementing save/load or level-entry snapshot restore, explicitly serialize and restore health rather than assuming `UQuakeGameInstance` ownership implies automatic health restore.
-- Prefer `AQuakeEnemySpawnPoint` as the authoring path for gameplay enemies that need difficulty gating, deferred spawn, or participation in progression logic. Be careful not to build systems that only count already-spawned `AQuakeEnemyBase` actors if trigger/deferred spawn points are part of the level.
-- Save/load systems need a stable actor identity scheme. Do not rely on plain Actor Tags alone for persistent matching unless the project first establishes and enforces unique, stable IDs.
-- For UE interfaces such as `IQuakeActivatable` and `IQuakeSaveable`, pick one implementation style and keep it consistent:
-  plain virtual methods use `Activate(...)`;
-  `BlueprintNativeEvent` methods use `Activate_Implementation(...)`.
-  Do not mix the two patterns in the same interface.
-- `UQuakeSoundManager` is a `UGameInstanceSubsystem`. Keep sound-table ownership aligned with that lifecycle rather than hanging audio configuration off unrelated gameplay actors such as `GameMode`.
+- Treat `SPEC.md` as the design source of truth. When `SPEC.md`, `AGENTS.md`, and `CLAUDE.md` disagree, follow `SPEC.md` and then update the secondary docs to match.
+- Respect the phase plan in `SPEC.md` section 11. Do not quietly pull Phase N work into Phase N-1 just because you are nearby in the code.
+- Do not assume `AQuakePlayerState` is recreated on death. UE keeps `PlayerController` and `PlayerState` across pawn respawn, so Quake's death-restart flow must explicitly call `AQuakePlayerState::ClearPerLifeState()` to clear keys and active powerups while preserving cumulative level-attempt stats.
+- Keep live health on `AQuakeCharacter` or a shared health component tied to the pawn. Inventory lives on `UQuakeGameInstance`, but save/load and level-entry restore must serialize and restore health explicitly.
+- Counted enemies are authored through `AQuakeEnemySpawnPoint`, not by dragging `BP_Enemy_*` actors directly into a map. Direct enemy placements are decoration/scripted display unless the user explicitly changes that rule.
+- Stats and level-clear logic must follow spawn points, difficulty gating, and spawn-point satisfaction state. Do not build systems that only count already-spawned `AQuakeEnemyBase` actors.
+- Save/load identity for level-placed actors uses stable actor identity via `GetFName()`/`FActorSaveRecord::ActorName`, not ad hoc Actor Tags or string registries.
+- `IQuakeActivatable` is a pure C++ interface method: implement `Activate(AActor* Instigator)`. Do not use `Activate_Implementation` unless the interface is explicitly changed to `BlueprintNativeEvent`.
+- `UQuakeSoundManager` is a `UGameInstanceSubsystem`. Keep sound-table ownership aligned with the GameInstance/subsystem lifecycle rather than hanging audio configuration off unrelated gameplay actors.
 
 ## Damage Guidance
 
@@ -75,21 +78,33 @@ $env:DOTNET_ROLL_FORWARD = "LatestMajor"
 & "$env:UE_DOTNET_DIR/dotnet.exe" "C:/Program Files/Epic Games/UE_5.7/Engine/Binaries/DotNET/UnrealBuildTool/UnrealBuildTool.dll" -projectfiles -project="C:/dev/games-unreal/Quake/Quake.uproject" -game -engine -VSCode
 ```
 
+## Tests
+
+- Automation tests live under `Source/Quake/Tests/` and use Unreal's automation framework.
+- Prefer unit tests for pure gameplay logic and functional tests for map-driven interactions.
+- Run automation tests from the editor via Session Frontend -> Automation and filter on `Quake.*`.
+- Keep `Source/Quake/Quake.Build.cs` configured so tests under `Source/Quake/Tests/` can include module headers. Do not remove include-path support without replacing it with an equivalent solution.
+
 ## Unreal-Specific Guidance
 
 - Prefer C++ base classes plus editor-assigned defaults over gameplay implemented in Blueprints.
 - Treat VS Code IntelliSense errors as secondary to a real Unreal build. Stale compile commands can produce false squiggles.
 - Keep project settings changes in `Config/Default*.ini` under version control.
 - Avoid editing generated directories such as `Binaries/`, `DerivedDataCache/`, `Intermediate/`, or `Saved/` unless the task explicitly requires it.
+- Keep the custom collision channels (`Pickup`, `Projectile`, `Corpse`, and the `Weapon` trace channel) in sync with `SPEC.md` section 1.6 when touching collision.
+- Enemy navigation settings must stay aligned with player traversal assumptions. In particular, NavMesh step height should match the movement spec rather than drifting lower than the player's step-up capability.
 
 ## Implementation Preferences
 
 - Favor data-driven tuning for weapons, enemies, pickups, and other balance values even when behavior stays in C++.
 - Keep HUD work in C++/Slate unless the user explicitly changes that direction.
+- Keep the HUD primarily pull-based for always-visible state and reserve event-driven logic for transient messages or feedback effects.
 - When adding new gameplay systems, match the naming/style of the existing `AQuake*` and `UQuake*` classes.
 - For non-trivial gameplay changes, update `SPEC.md` if the implementation changes the design contract.
+- If touching movement, AI, or save/load architecture, read the matching section in `CLAUDE.md` before editing; those are the highest-churn areas.
 
 ## Verification
 
 - After meaningful C++ changes, run a real `Build.bat` compile when feasible.
+- When a task maps to a specific v1 phase, run that phase's relevant automated checks and manual verification steps from `SPEC.md` section 11 before calling the work done.
 - If you could not build or test, say so clearly in your final handoff.
