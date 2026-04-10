@@ -1,7 +1,26 @@
 {
   "permissions": {
     "allow": [
-      "Bash(\"/c/Program Files/Epic Games/UE_5.7/Engine/Build/BatchFiles/Build.bat\" QuakeEditor Win64 Development -Project=\"c:/dev/games-unreal/Quake/Quake.uproject\" -WaitMutex -FromMsBuild)"
+      "Bash(\"/c/Program Files/Epic Games/UE_5.7/Engine/Build/BatchFiles/Build.bat\" QuakeEditor Win64 Development -Project=\"c:/dev/games-unreal/Quake/Quake.uproject\" -WaitMutex -FromMsBuild)",
+      "Bash(\"/c/Program Files/Epic Games/UE_5.7/Engine/Build/BatchFiles/GenerateProjectFiles.bat\" -project=\"c:/dev/games-unreal/Quake/Quake.uproject\" -game -vscode)",
+      "Bash(\"/c/Program Files/Epic Games/UE_5.7/Engine/Binaries/DotNET/UnrealBuildTool/UnrealBuildTool.exe\" -projectfiles -project=\"C:/dev/games-unreal/Quake/Quake.uproject\" -game -engine -vscode)",
+      "Skill(update-config)",
+      "Skill(update-config:*)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -c \"import sys,json; d=json.load(sys.stdin); print(d['tool_input']['file_path'])\" | grep -qE \"Source.*\\.(h|cpp)$\" && export DOTNET_MULTILEVEL_LOOKUP=0 && export DOTNET_ROLL_FORWARD=LatestMajor && export UE_DOTNET_DIR='/c/Program Files/Epic Games/UE_5.7/Engine/Binaries/ThirdParty/DotNet/8.0.412/win-x64' && export PATH=\"$UE_DOTNET_DIR:$PATH\" && export DOTNET_ROOT=\"$UE_DOTNET_DIR\" && dotnet '/c/Program Files/Epic Games/UE_5.7/Engine/Binaries/DotNET/UnrealBuildTool/UnrealBuildTool.dll' -projectfiles -project='C:/dev/games-unreal/Quake/Quake.uproject' -game -engine -VSCode 2>/dev/null || true",
+            "timeout": 60,
+            "statusMessage": "Regenerating VS Code project files..."
+          }
+        ]
+      }
     ]
   }
 }
