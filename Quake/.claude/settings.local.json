@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(\"/c/Program Files/Epic Games/UE_5.7/Engine/Build/BatchFiles/Build.bat\" QuakeEditor Win64 Development -Project=\"c:/dev/games-unreal/Quake/Quake.uproject\" -WaitMutex -FromMsBuild)"
+    ]
+  }
+}
