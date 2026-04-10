@@ -79,7 +79,6 @@ void AQuakeCharacter::SpawnAndEquipDefaultWeapon()
 		CurrentWeapon->AttachToComponent(
 			FirstPersonCamera,
 			FAttachmentTransformRules::SnapToTargetNotIncludingScale);
-		UE_LOG(LogQuakeCharacter, Log, TEXT("Spawned default weapon: %s"), *CurrentWeapon->GetName());
 	}
 	else
 	{
@@ -105,7 +104,6 @@ void AQuakeCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComp
 	if (PC->FireAction)
 	{
 		EnhancedInput->BindAction(PC->FireAction, ETriggerEvent::Triggered, this, &AQuakeCharacter::OnFirePressed);
-		UE_LOG(LogQuakeCharacter, Log, TEXT("FireAction bound to %s"), *PC->FireAction->GetName());
 	}
 	else
 	{
@@ -140,9 +138,6 @@ void AQuakeCharacter::OnFirePressed(const FInputActionValue& /*Value*/)
 	// Bound to ETriggerEvent::Triggered so a "Hold" trigger on the IA can
 	// auto-repeat. Cooldown enforcement lives in AQuakeWeaponBase::TryFire,
 	// which gates the per-tick spam to the weapon's RoF.
-	UE_LOG(LogQuakeCharacter, Verbose, TEXT("OnFirePressed (CurrentWeapon=%s)"),
-		CurrentWeapon ? *CurrentWeapon->GetName() : TEXT("none"));
-
 	if (CurrentWeapon)
 	{
 		CurrentWeapon->TryFire(this);

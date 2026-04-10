@@ -9,8 +9,6 @@
 #include "GameFramework/Pawn.h"
 #include "Kismet/GameplayStatics.h"
 
-DEFINE_LOG_CATEGORY_STATIC(LogQuakeWeapon, Log, All);
-
 AQuakeWeapon_Axe::AQuakeWeapon_Axe()
 {
 	// SPEC section 2.0: Axe RoF = 2/sec  -> 0.5 s cooldown.
@@ -56,15 +54,10 @@ void AQuakeWeapon_Axe::Fire(AActor* InInstigator)
 		Params);
 
 #if !UE_BUILD_SHIPPING
-	// Phase 2 dev visualization: red miss, green hit. The line stays visible
-	// for 1 second so a single swing is easy to see in PIE. Stripped from
-	// shipping builds.
+	// Dev visualization: red miss, green hit. 1-second lifetime so single
+	// swings are easy to see in PIE. Stripped from shipping builds.
 	const FColor LineColor = bHit ? FColor::Green : FColor::Red;
 	DrawDebugLine(World, TraceStart, TraceEnd, LineColor, /*bPersistent*/ false, /*Lifetime*/ 1.f, 0, /*Thickness*/ 1.f);
-	UE_LOG(LogQuakeWeapon, Log, TEXT("Axe::Fire trace start=%s end=%s hit=%s actor=%s"),
-		*TraceStart.ToString(), *TraceEnd.ToString(),
-		bHit ? TEXT("YES") : TEXT("NO"),
-		Hit.GetActor() ? *Hit.GetActor()->GetName() : TEXT("none"));
 #endif
 
 	if (!bHit || !Hit.GetActor())
