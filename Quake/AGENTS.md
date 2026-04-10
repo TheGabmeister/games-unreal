@@ -32,6 +32,18 @@ This file gives repo-specific guidance to coding agents working in this project.
 - `AQuakeGameMode` sets core game classes and rules.
 - New shared input actions should be added in `AQuakePlayerController` rather than created as editor-only input assets.
 
+## Spec Alignment Notes
+
+- Treat `SPEC.md` as the design source of truth, but watch for lifecycle assumptions that UE does not provide automatically. In particular, do not assume `AQuakePlayerState` is recreated on player death; if death is supposed to clear keys, powerups, or other per-attempt state, add an explicit reset path.
+- Keep live health on `AQuakeCharacter` (or a shared health component if one is introduced). If implementing save/load or level-entry snapshot restore, explicitly serialize and restore health rather than assuming `UQuakeGameInstance` ownership implies automatic health restore.
+- Prefer `AQuakeEnemySpawnPoint` as the authoring path for gameplay enemies that need difficulty gating, deferred spawn, or participation in progression logic. Be careful not to build systems that only count already-spawned `AQuakeEnemyBase` actors if trigger/deferred spawn points are part of the level.
+- Save/load systems need a stable actor identity scheme. Do not rely on plain Actor Tags alone for persistent matching unless the project first establishes and enforces unique, stable IDs.
+- For UE interfaces such as `IQuakeActivatable` and `IQuakeSaveable`, pick one implementation style and keep it consistent:
+  plain virtual methods use `Activate(...)`;
+  `BlueprintNativeEvent` methods use `Activate_Implementation(...)`.
+  Do not mix the two patterns in the same interface.
+- `UQuakeSoundManager` is a `UGameInstanceSubsystem`. Keep sound-table ownership aligned with that lifecycle rather than hanging audio configuration off unrelated gameplay actors such as `GameMode`.
+
 ## Damage Guidance
 
 - Follow Unreal's built-in damage pipeline: attackers call `UGameplayStatics::ApplyPointDamage`, `ApplyRadialDamage`, or `ApplyDamage`; receivers own the final response in `TakeDamage`.

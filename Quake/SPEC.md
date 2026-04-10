@@ -1296,9 +1296,31 @@ When creating a new gameplay level, every map must include:
 
 ## 11. v1 Scope (First Playable Milestone)
 
-The first milestone targets a small, complete vertical slice rather than the full game. The goal is to prove the core systems end-to-end, then expand in v2+.
+The first milestone targets a small, complete vertical slice rather than the full game. The goal is to prove the core systems end-to-end, then expand in v2+. v1 is delivered in **16 phases** (0–15), each gated on automated tests and manual verification before the next phase begins.
 
-### 11.1 Content
+### 11.1 Approach
+
+**Each phase is self-contained.** A phase produces a playable artifact — sandbox map, test level, content level — that can be exercised before the next phase starts. No phase is a pure plumbing layer; even Phase 0 ends with a runnable PIE session.
+
+**Three test layers, used differently per phase:**
+
+| Layer | Tool | What it catches | When to use |
+|---|---|---|---|
+| **Unit tests** | UE Automation (`IMPLEMENT_SIMPLE_AUTOMATION_TEST`, `EAutomationTestFlags::EditorContext`) | Pure-C++ logic regressions: math formulas, state-machine transitions, struct serialization | Damage scaling, drop table evaluation, powerup timer, save record round-trip |
+| **Functional tests** | UE `AFunctionalTest` actor in dedicated test maps under `Content/Maps/Tests/` | Gameplay flow: spawn an actor, drive an input, assert a result | Pickup overlap effects, weapon damage to enemies, save→load round-trip, level-clear scan |
+| **Manual smoke tests** | Human in PIE | Feel, polish, anything subjective | Strafe-jump feel, infighting emergence, "does this look right" |
+
+Test maps live under `Content/Maps/Tests/` and are excluded from packaged builds via the section 10.4 packaging settings.
+
+**Exit criteria.** Each phase has an explicit exit criterion. The phase is **not** done until (a) all phase-specific automated tests pass, (b) all manual verification steps succeed, and (c) the previous phase's tests still pass (no regressions). Implementation does not advance to the next phase until exit criteria are met. If a test for a previous phase breaks, fix it before adding new code.
+
+**Phase ordering principle.** Risk first, content last. The highest-risk single item is the strafe-jumping CMC ([CLAUDE.md "Risk Note"](CLAUDE.md)), so it gets its own phase very early (Phase 1) on a sandbox before any combat code exists. Content authoring (the actual E1M1/M2/M3 maps) is the last phase, after every system it depends on is verified.
+
+**No Phase N work in Phase N-1.** It is tempting to "go ahead and add the keys system while I'm in pickups." Don't. Phase boundaries exist so each test pass is targeted; mixing phases makes it harder to localize bugs. If a phase finishes early, run the manual verification a second time and fix anything that feels off — don't pull work forward.
+
+### 11.2 Content Scope
+
+This is what v1 ships, regardless of phasing:
 
 | Category    | v1 Subset                                                          | Deferred to v2+                            |
 |-------------|--------------------------------------------------------------------|--------------------------------------------|
@@ -1314,29 +1336,7 @@ The first milestone targets a small, complete vertical slice rather than the ful
 | Saves       | Auto-save on level start, quick save / quick load                  | Multiple save slots, save menus            |
 | Stats       | Kills, Secrets, Time, Deaths                                       | —                                          |
 
-### 11.2 Systems Required for v1
-
-These must be working for the milestone to be considered complete:
-
-- Player movement with strafe/bunny hop physics (section 1.1)
-- Inventory persistence and level-entry snapshot (section 1.4)
-- All v1 weapons with full behavior (section 2)
-- Enemy AI: state machine, sight/hearing, infighting, friendly fire, drops (section 3)
-- Pickup system with all v1 pickups (section 4)
-- Doors with key locks, buttons, generic triggers, exit triggers (section 5.4–5.6)
-- Lava hazard volumes (section 5.2)
-- Stat tracking (section 5.9)
-- Difficulty selection at new game (section 6.1)
-- Quick save / load and auto-save (section 6.2)
-- Win sequence and death/restart loop (section 6.3, 6.4)
-- HUD: health, armor, ammo, weapon bar, keys, powerup timer, crosshair, level stats (section 7)
-- Audio system stubs in place — every gameplay sound event reaches `UQuakeSoundManager` even though no assets are mapped (section 8)
-- Main menu (new game, load, quit) and difficulty select
-- Settings: mouse sensitivity, audio volume sliders (no-op until audio assets exist)
-
 ### 11.3 Out of Scope for v1
-
-These can be designed and stubbed but should not block the milestone:
 
 - Water and swimming, drowning, Thunderbolt underwater discharge
 - Slime hazard
@@ -1347,7 +1347,493 @@ These can be designed and stubbed but should not block the milestone:
 - Controller / gamepad input (mouse + keyboard only for v1)
 - Cutscenes / intermissions
 
-### 11.4 v1 Definition of Done
+### 11.4 Phase Roadmap
+
+| # | Phase | Primary deliverable | Risk |
+|---|---|---|---|
+| 0 | Foundation | Build infrastructure, test runner, collision channels, sandbox map loads | Low |
+| 1 | Player Movement Sandbox | `UQuakeCharacterMovementComponent` with strafe-jump | **Highest** |
+| 2 | Damage Pipeline + Axe | `TakeDamage` works; Axe damages a target dummy | Low |
+| 3 | First Enemy (Grunt) | One Grunt patrols, sees, shoots | Medium (AI debugger, perception) |
+| 4 | Shotgun + Ammo + First Pickups | Shoot Grunts; pick up shells and health | Low |
+| 5 | Rocket Launcher + Splash + Knockback | Rockets explode; rocket-jumping works | Medium (knockback feel) |
+| 6 | Nailgun | All 4 v1 weapons working | Low |
+| 7 | More Enemies (Knight, Ogre) + Drops + Infighting | 3 enemy types; emergent infighting | Medium (Ogre grenade arc) |
+| 8 | Level Structure (doors, buttons, triggers, lava) | A real level can be assembled | Low |
+| 9 | Spawn Points + Stats + Level Transitions | Levels chain; exit unlocks on clear | Low |
+| 10 | Powerups + Keys + Full HUD | Quad damage; locked doors; complete HUD bar | Low |
+| 11 | Save/Load | Quick save/load round-trips correctly | Medium (identity, restore order) |
+| 12 | Difficulty | Easy/Normal both playable; multipliers apply | Low |
+| 13 | Main Menu / Hub / Win / Death | Full game flow from launch to win | Low |
+| 14 | Audio Stubs + Settings | Every sound event reaches sound manager (no-op) | Low |
+| 15 | Content Authoring | E1M1 / E1M2 / E1M3 / Hub built and shipped | Medium (level design effort) |
+
+### 11.5 Phase Details
+
+#### Phase 0: Foundation
+
+**Goal.** Build infrastructure exists. Test runner works. Collision channels are configured. A sandbox map loads in PIE.
+
+**Implements:**
+- Stub C++ classes (empty `BeginPlay`/constructors): `AQuakeGameMode`, `AQuakePlayerController`, `AQuakePlayerState`, `UQuakeGameInstance`, `AQuakeCharacter`. Most already exist per [section 9.3](SPEC.md#L1027); fill the gaps.
+- `UQuakeDamageType` base class with the shared fields from [section 1.5](SPEC.md#L95). No leaf subclasses yet.
+- Custom collision channels (`Pickup`, `Projectile`, `Corpse`, `Weapon` trace) added to `Config/DefaultEngine.ini` per [section 1.6](SPEC.md#L165).
+- Thin BPs: `BP_QuakeGameMode`, `BP_QuakeGameInstance`, `BP_QuakePlayerController` under `Content/Blueprints/Framework/`.
+- Project Settings: `Game Instance Class = BP_QuakeGameInstance`, `Default GameMode = BP_QuakeGameMode`.
+- `Content/Maps/Tests/PhysSandbox.umap` — flat plane, ramps at 30/40/45° (one valid, one borderline, one too steep), a 256-unit gap, a few low and high walls. Has a `PlayerStart` and a `NavMeshBoundsVolume`. Will be reused in Phase 1.
+- Verify the UE Automation Testing plugin is enabled.
+
+**Automated tests:**
+- One trivial `IMPLEMENT_SIMPLE_AUTOMATION_TEST` in `Source/Quake/Tests/QuakeFoundationTest.cpp` that always passes — proves the test runner picks up Quake-module tests under the `Quake.*` filter.
+- Build smoke test: `Build.bat` succeeds with no warnings related to new files.
+
+**Manual verification:**
+- Editor opens the project without errors.
+- `PhysSandbox` map opens and shows the sandbox geometry.
+- PIE on `PhysSandbox` spawns a default `AQuakeCharacter` (stock UE movement is fine for now), can look around with the mouse.
+- Session Frontend → Automation tab → run `Quake.*` filter → trivial test passes.
+- Collision settings panel in Project Settings shows the four custom channels.
+
+**Exit criteria.** Trivial automation test runs green from the editor; PIE on PhysSandbox doesn't crash.
+
+#### Phase 1: Player Movement Sandbox
+
+**Goal.** Player can strafe-jump and bunny-hop on the sandbox map. The dot-product air-acceleration formula is correct. **This is the single highest-risk item in v1** — see [CLAUDE.md "Risk Note"](CLAUDE.md).
+
+**Implements:**
+- `UQuakeCharacterMovementComponent : public UCharacterMovementComponent` with `PhysFalling` override implementing the Quake air-acceleration formula (clamp the dot product of velocity and wishdir, NOT the velocity magnitude).
+- All movement parameters from [section 1.1](SPEC.md#L21) as `UPROPERTY` defaults: `MaxGroundSpeed`, `GroundAcceleration`, `GroundFriction`, `StopSpeed`, `AirAcceleration`, `MaxAirSpeedGain`, `JumpZVelocity`, `MaxWalkableSlope`, step height 45.
+- Bunny-hop window logic (100 ms post-land, jump preserves horizontal velocity).
+- `AQuakeCharacter` uses the custom CMC via the constructor's `UCharacterMovementComponent` override.
+- `BP_QuakePlayerController` Input Action and Input Mapping Context assets assigned (Move, Look, Jump). Authored in the Editor per the input convention from [CLAUDE.md "Architecture: Input Configuration"](CLAUDE.md).
+- A debug HUD overlay showing `Speed`, `Z velocity`, and `MovementMode` as text in the corner — this is the speedometer needed to verify strafe-jump works.
+
+**Automated tests:**
+- Unit test: dot-product clamp formula. Given `Velocity = (300, 0, 0)`, `WishDir = (0, 1, 0)`, `MaxAirSpeedGain = 30`, assert post-tick velocity gains exactly 30 in the wish direction (not capped to `MaxGroundSpeed`).
+- Functional test (`Tests/FT_StrafeJump.umap`): spawn pawn on flat plane, programmatically apply forward+right input + jump, simulate for 60 ticks, assert horizontal speed > `MaxGroundSpeed × 1.2`. Proves air gain is happening.
+- Functional test: bunny hop sequence. Apply jump, simulate to landing, apply jump within 100 ms of landing, assert horizontal speed ≥ pre-landing speed.
+- Functional test: walkable slope. Spawn on 30° ramp, apply forward, assert pawn ascends. Spawn on 50° ramp, apply forward, assert pawn does not ascend (treated as wall).
+
+**Manual verification:** (this is the binary feel test — there is no "70% strafe-jump")
+- Run around the sandbox. Speedometer shows `~600` on flat ground walking forward.
+- Hold strafe + W, turn the mouse smoothly in the strafe direction while jumping. **Speedometer should climb past 600.** If it doesn't, the formula is wrong — do not advance phases until this works.
+- Jump in place repeatedly while holding W. Each jump should preserve horizontal speed (bunny hop).
+- Jump off the edge of the gap. Mid-air, strafe across to land on the far side. Air control is responsive but limited.
+- Walk up the 30° ramp ✓, the 40° ramp ✓, the 45° ramp ✗ (treated as wall).
+- Confirm: no fall damage, no crouch.
+
+**Exit criteria.** Manual strafe-jump speed-gain test passes (speedometer climbs past `MaxGroundSpeed`); all functional tests green; `Build.bat` warns are zero.
+
+#### Phase 2: Damage Pipeline + Axe (no enemies)
+
+**Goal.** `TakeDamage` flows correctly. The Axe damages a static target dummy. Health appears on a minimal HUD.
+
+**Implements:**
+- `UQuakeDamageType_Melee` leaf subclass per [section 1.5](SPEC.md#L95).
+- `AQuakeCharacter::TakeDamage` override: read damage type via shared-base CDO cast, apply armor absorption, apply knockback impulse, decrement health, screen flash via `UMaterialInstanceDynamic` on a `PostProcessVolume`.
+- `AQuakeWeaponBase` with `Fire(Instigator)` virtual.
+- `AQuakeWeapon_Axe` with melee trace using the `Weapon` trace channel.
+- `AQuakeTargetDummy` (test-only `AActor`): static cube with health, override `TakeDamage`, render current HP above its head as a 3D text component for visibility.
+- `AQuakeHUD` + minimal `SQuakeHUDOverlay` showing only `Health`. Polls `AQuakeCharacter` on paint.
+- `BP_Weapon_Axe` (mesh slot only).
+
+**Automated tests:**
+- Functional test: spawn target dummy with 100 HP, fire Axe at it, assert HP = 80.
+- Functional test: fire Axe 5 times (with frame delays for cooldown), assert dummy is dead.
+- Unit test: armor absorption math. 100 HP + 100 green armor (30%), take 50 damage → assert HP = 85, armor = 65.
+- Unit test: shared-base CDO cast. Construct an `FDamageEvent` with `UQuakeDamageType_Melee::StaticClass()`, run the cast pattern from [section 1.5](SPEC.md#L155), assert the returned `UQuakeDamageType*` is non-null and has the expected default field values.
+
+**Manual verification:**
+- Swing Axe at target dummy in PhysSandbox. See HP text decrease by 20 per swing.
+- Reduce Axe cooldown temporarily to verify auto-fire feels right.
+- Spawn a target dummy that returns fire (test-only behavior — make it call `ApplyPointDamage` on the player on tick), confirm pain flash on screen and HUD health drops.
+- Confirm: Axe range (64 units) is correct — too far and it whiffs.
+
+**Exit criteria.** Damage flows in both directions. HUD health updates. All Phase 0–2 tests still pass.
+
+#### Phase 3: First Enemy (Grunt) + body/brain split
+
+**Goal.** One Grunt patrols, sees the player, shoots the player. The body/brain split works. The AI debugger overlay works.
+
+**Implements:**
+- `AQuakeEnemyBase : public ACharacter` with capsule, mesh slots, health, action methods (`MoveToTarget`, `FireAtTarget`, `PlayPainReaction`, `PlayDeathReaction`), `TakeDamage` override per [section 3.3](SPEC.md#L288).
+- `AQuakeEnemyAIController : public AAIController` with the FSM (`Idle → Alert → Chase → Attack → Pain → Dead`) and `UAIPerceptionComponent` configured with `UAISenseConfig_Sight` + `UAISenseConfig_Hearing` (`bUseLoSHearing = false`).
+- `AQuakeEnemy_Grunt` and `AQuakeAIController_Grunt` (hitscan rifle attack).
+- `UQuakeDamageType_Bullet` leaf.
+- `BP_Enemy_Grunt` with primitive mesh slots (capsule body + sphere head + box rifle).
+- `OnDamaged(EventInstigator)` plumbing from pawn → controller per [section 3.3](SPEC.md#L317).
+
+**Automated tests:**
+- Functional test: spawn Grunt + player; tick 1 frame; assert Grunt state = `Idle`. Move player into sight cone; tick 1 frame; assert state = `Alert`. Tick past alert pulse duration; assert state = `Chase`.
+- Functional test: spawn Grunt with player in attack range and direct LoS; assert Grunt fires within `Cooldown` seconds.
+- Functional test: spawn Grunt (30 HP), apply 30 damage from player instigator, assert state = `Dead` and controller is unpossessed.
+- Functional test: spawn Grunt with player out of sight cone but firing the Axe (noise), assert Grunt becomes `Alert` from hearing.
+- Unit test: pain chance formula `min(0.8, damage / max_health × 2)` for several values.
+
+**Manual verification:**
+- Drop a Grunt in PhysSandbox. Walk into its sight. See it alert (visual scale pulse + sound stub log), then chase, then fire.
+- Take damage from the Grunt's hitscan. HUD health drops. Pain flash plays.
+- Hide behind a wall. Grunt loses sight after 5 s, stops chasing.
+- Press `'` (apostrophe) in PIE for the AI debugger overlay. Verify perception cone, current state, and target are visible.
+- Fire the Axe behind a wall — the Grunt should hear it (no LoS) and become Alert.
+- Kill the Grunt with the Axe. It enters Dead state, falls flat, becomes non-collidable to projectiles after 2 s (per [section 1.6](SPEC.md#L165) corpse rule).
+
+**Exit criteria.** AI debugger shows correct state transitions; manual hearing-through-walls test passes; Grunt can be killed by Axe.
+
+#### Phase 4: Shotgun + Ammo + First Pickups (health, ammo)
+
+**Goal.** Player can pick up shells and shoot Grunts with the Shotgun. Inventory persists in `UQuakeGameInstance`.
+
+**Implements:**
+- Ammo storage on `UQuakeGameInstance`: `TMap<EQuakeAmmoType, int32>` with caps from [section 2.1](SPEC.md#L142).
+- `AQuakeWeapon_Shotgun` (hitscan with 6-pellet 4° spread, 4 dmg/pellet, 1.5 s RoF).
+- `AQuakePickupBase` with `USphereComponent` overlap detection per [section 4](SPEC.md#L345).
+- `AQuakePickup_Health` and `AQuakePickup_Ammo` subclasses.
+- `AQuakeCharacter` facade methods: `GiveAmmo(Type, Amount)`, `ConsumeAmmo(Type, Amount)`, `GiveHealth(Amount)` — forward to GameInstance/self per the ownership model.
+- HUD adds: current ammo for active weapon, weapon icon.
+- `BP_Pickup_AmmoShells`, `BP_Pickup_Health25`, `BP_Pickup_Health15`, `BP_Pickup_Megahealth`, `BP_Weapon_Shotgun`.
+- "Click" sound stub call when firing on empty.
+
+**Automated tests:**
+- Functional test: spawn shell pickup, walk player over it, assert `GameInstance.Ammo[Shells]` increased by 20.
+- Functional test: spawn health pickup at full HP, walk over it, assert NOT consumed (still in world).
+- Functional test: spawn health pickup at 50 HP, walk over it, assert HP = 75 and pickup destroyed.
+- Functional test: fire Shotgun once with 1 shell, assert ammo consumed and 6 hitscan traces fired.
+- Functional test: spawn 5 Grunts in a tight formation 1500 u away, fire Shotgun once, assert at least 4 took damage (cone math).
+- Functional test: fire Shotgun with 0 shells, assert no traces fired and the click stub was called.
+
+**Manual verification:**
+- Pick up shell pack in PhysSandbox, see HUD ammo count change.
+- Switch from Axe to Shotgun (number key 2), see weapon swap. Try to fire — no shells yet → click. Pick up shells, fire — shells deplete.
+- Kill multiple Grunts with the Shotgun. Step into spread distance and out — see damage drop with distance/cone.
+- Pick up health when at full HP — confirm it stays in world.
+- Take damage to 50 HP, pick up Health25 — confirm it's consumed and HP = 75.
+- Pick up Megahealth at 100 HP — confirm overcharge.
+
+**Exit criteria.** HUD ammo and health both update correctly; pickup conditional consumption works; Shotgun kills Grunts.
+
+#### Phase 5: Rocket Launcher + Splash + Knockback
+
+**Goal.** Rockets explode with falloff. Splash damages everything in radius. Self-damage is half. Rocket jumping launches the player.
+
+**Implements:**
+- `AQuakeProjectile` base with `USphereComponent` + `UProjectileMovementComponent`.
+- `AQuakeProjectile_Rocket` (1000 u/s straight, no gravity).
+- `AQuakeWeapon_RocketLauncher`.
+- `UQuakeDamageType_Explosive` with `SelfDamageScale = 0.5`, `KnockbackScale = 4.0`.
+- `OnHit` handler: call `UGameplayStatics::ApplyRadialDamageWithFalloff` (linear falloff, 120 u radius), then destroy.
+- Knockback impulse application in `AQuakeCharacter::TakeDamage` per [section 1.5](SPEC.md#L150) and [section 2.2](SPEC.md#L254).
+- Muzzle spawn-out: project 60 u in front of pawn at spawn. `IgnoreActorWhenMoving(Instigator, true)` per [section 1.6](SPEC.md#L201) rule 1.
+- `AQuakePickup_Ammo` for rockets.
+- `BP_Weapon_RocketLauncher`, `BP_Projectile_Rocket`, `BP_Pickup_AmmoRockets`.
+
+**Automated tests:**
+- Functional test: detonate rocket at known location with 5 actors at varying distances within 120 u; assert each took damage equal to expected linear falloff.
+- Functional test: spawn rocket from a pawn at origin facing +X; assert projectile transform is at `(60, 0, ZOffset)`, not `(0, 0, ZOffset)`.
+- Functional test: fire rocket straight down at pawn's feet, assert pawn took 50% of full splash and was knocked upward.
+- Unit test: damage falloff formula. Distance 0 → full damage; distance 60 (half radius) → half damage; distance 120 → 0; distance 200 → 0.
+- Functional test: fire rocket on first frame after spawn (which previously caused self-detonation), assert no self-damage.
+
+**Manual verification:**
+- Fire rockets at Grunts. See them die from imperfect aim due to splash.
+- Stand at edge of explosion radius, take partial damage.
+- **Rocket jump test (binary feel):** look straight down, fire rocket, jump simultaneously. Player is launched into the air, loses ~25 HP. If the launch height is wrong or self-damage feels off, tune `KnockbackScale` or `SelfDamageScale`.
+- Fire a rocket directly forward into a wall 60 u away. Confirm it explodes on the wall, not in your face.
+- Fire a rocket at the floor 5 u in front of you. Confirm the muzzle spawn-out prevents instant self-detonation.
+
+**Exit criteria.** Rocket-jump feel test passes; splash damage falloff matches the unit test expectations.
+
+#### Phase 6: Nailgun (final v1 weapon)
+
+**Goal.** All 4 v1 weapons working.
+
+**Implements:**
+- `AQuakeProjectile_Nail` (1500 u/s straight, gravity-free).
+- `UQuakeDamageType_Nail` leaf.
+- `AQuakeWeapon_Nailgun` (8 nails/sec, 1° spread).
+- `AQuakePickup_Ammo` for nails.
+- `BP_Weapon_Nailgun`, `BP_Projectile_Nail`, `BP_Pickup_AmmoNails`.
+
+**Automated tests:**
+- Functional test: hold fire on Nailgun for 1 s with full ammo, assert 8 projectiles spawned and 8 ammo consumed.
+- Functional test: nail hits Grunt at 500 u, assert 9 damage applied.
+- Functional test: fire 100 nails sequentially, assert all directions are within 1° of the firing forward vector.
+
+**Manual verification:**
+- Hose down a Grunt with the Nailgun. See it shred.
+- Confirm: ammo decreases at 8/sec while held.
+- Switch between all four weapons (1/2/4/7) using number keys — instant swap, no animation locking.
+- Try the auto-switch on empty: deplete shotgun shells, fire — should auto-switch to next-best weapon with ammo per the priority in [section 2.2](SPEC.md#L249).
+
+**Exit criteria.** All four v1 weapons fire correctly, swap correctly, and auto-switch on empty.
+
+#### Phase 7: More Enemies (Knight, Ogre) + Drops + Infighting
+
+**Goal.** Three enemy types working. Drop tables work. Infighting emerges from the existing damage pipeline + target switching.
+
+**Implements:**
+- `AQuakeEnemy_Knight` + `AQuakeAIController_Knight` (charge melee).
+- `AQuakeEnemy_Ogre` + `AQuakeAIController_Ogre` (grenade arc projectile attack).
+- `AQuakeProjectile_Grenade` (bouncing, fuse timer, 800 u/s, gravity 1.0).
+- `OnProjectileBounce` delegate hook for grenade bounce sound + fuse check.
+- Drop table on `AQuakeEnemyBase`: `TArray<FQuakeDropEntry> DropTable` per [section 3.2](SPEC.md#L259).
+- Drop spawn logic in `AQuakeEnemyBase::Die` (only on non-gibbed deaths, per [section 3.4](SPEC.md#L382)).
+- Friendly fire & infighting target switch in the controller's `TakeDamage`-driven `OnDamaged` flow per [section 3.3](SPEC.md#L323).
+- `BP_Enemy_Knight`, `BP_Enemy_Ogre`, `BP_Projectile_Grenade`, `BP_Pickup_BackpackShells`, `BP_Pickup_BackpackRockets`.
+
+**Automated tests:**
+- Functional test: spawn Grunt with `DropTable = [{ BP_BackpackShells, 5, 1.0 }]`, kill it with player damage, assert pickup spawned at death location, asset class matches.
+- Functional test: spawn Grunt with `Chance = 0.0`, kill it, assert no pickup.
+- Functional test: spawn Ogre and Knight 200 u apart, place player such that the Ogre's grenade lands near the Knight, run for N seconds, assert the Knight's `CurrentTarget` is now the Ogre and its grudge timer is non-zero.
+- Functional test: Knight spawn 500 u from player, walk player into sight, assert Knight enters `Chase` and moves toward player.
+- Functional test: gib an enemy (apply > 2× max HP in one hit), assert no drop spawned, assert capsule is destroyed.
+
+**Manual verification:**
+- Fight Knights and Ogres in PhysSandbox.
+- Pick up dropped backpacks, see ammo replenish.
+- **Infighting test:** lure an Ogre near a Knight, dodge so the Ogre's grenade bounces near the Knight. Watch the Knight charge the Ogre. The Quake-classic moment.
+- Gib a Grunt with a direct rocket hit. Confirm scattered pieces, no drop, blood splatter stub.
+
+**Exit criteria.** Infighting emergent behavior works without writing infighting-specific code (it falls out of damage attribution + target switch).
+
+#### Phase 8: Level Structure (doors, buttons, triggers, lava)
+
+**Goal.** A real level can be assembled. The first content-shaped map is built.
+
+**Implements:**
+- `IQuakeActivatable` interface per [section 5.5](SPEC.md#L580) (pure C++ virtual).
+- `AQuakeDoor` with `UStaticMeshComponent` + `UTimelineComponent`. Implements `IQuakeActivatable`. Closed-door collision blocks per [section 1.6](SPEC.md#L196).
+- `AQuakeButton` (touch / shoot activation). Holds `TArray<TObjectPtr<AActor>> Targets`.
+- `AQuakeTrigger` abstract base + subclasses: `_Relay`, `_Spawn`, `_Message`, `_Hurt`, `_Teleport`, `_Secret`. (`_Spawn` is implemented but not exercised until Phase 9.)
+- `ExitTrigger` actor (subclass of `AQuakeTrigger` or standalone) that loads the next map name on overlap.
+- `AQuakeHazardVolume` for lava: 30 dmg / 1 s tick + entry knockback per [section 5.2](SPEC.md#L495).
+- `UQuakeDamageType_Lava` (with `bSuppressesPain = true`, `bCausedByWorld = true`) and `UQuakeDamageType_Telefrag`.
+- `Content/Maps/Tests/LevelStructureSandbox.umap` — small room with one door, one button, one lava pit, one trigger relay, one exit. NOT a content level — for testing only.
+
+**Automated tests:**
+- Functional test: button overlap → assert door's `MovementMode == Opening` then `Open`.
+- Functional test: door's swept volume contains a pawn → assert door does not begin closing.
+- Functional test: pawn in lava for 1 tick → assert took 30 damage.
+- Functional test: `AQuakeTrigger_Relay` with 3 targets (mock `IQuakeActivatable` actors that record calls), fire, assert all 3 received `Activate` exactly once.
+- Functional test: `AQuakeTrigger_Hurt` with `DamagePerTick = 100`, overlap a pawn for `TickRate` seconds, assert pawn took 100 damage.
+- Functional test: `AQuakeTrigger_Teleport` with `Destination = ATargetPoint`, overlap pawn, assert pawn at destination location.
+- Functional test: closed door blocks a fired rocket (rocket explodes on the door, not behind it).
+
+**Manual verification:**
+- Walk through `LevelStructureSandbox`. Step on a button — door opens. Walk through. Step into lava — take 30 damage / sec, screen tints orange (no pain flinch from lava per spec).
+- Walk into the exit trigger — see "level complete" log message (no transition yet).
+- Fire a rocket at the closed door — explodes on the door.
+
+**Exit criteria.** Activation chain works without name lookups; lava damage and door collision behave per spec.
+
+#### Phase 9: Spawn Points + Stats + Level Transitions + Level-Clear
+
+**Goal.** Stats work. Levels chain. Exit unlocks only when all eligible spawn points are satisfied.
+
+**Implements:**
+- `AQuakeEnemySpawnPoint` per [section 5.1](SPEC.md#L460) with `EnemyClass`, `MinDifficulty`, `bDeferredSpawn`, `bIsMarkedKillTarget`.
+- `AQuakePlayerState` fields: `Kills`, `Secrets`, `TimeElapsed`, `Deaths`.
+- `AQuakeGameMode::KillsTotal` and `SecretsTotal` computed at `BeginPlay` by counting eligible spawn points and `AQuakeTrigger_Secret` actors per [section 5.9](SPEC.md#L693).
+- `AQuakeGameMode::IsLevelCleared()` scan over spawn points (not enemies) per [section 5.9](SPEC.md#L704).
+- `AQuakeEnemySpawnPoint::IsSatisfied()` (spawned + dead).
+- `ExitTrigger` checks `IsLevelCleared()` (configurable per-instance: `bGatedByClearCondition`).
+- `AQuakeTrigger_Spawn` with `TArray<TObjectPtr<AQuakeEnemySpawnPoint>> SpawnPoints` (typed list).
+- HUD additions: kill count `X / KillsTotal`, secret count `X / SecretsTotal`, level time.
+- Level-end stats screen Slate widget (shown for 5 s before transition).
+- `Content/Maps/Tests/StatsSandbox.umap` — 3 marked spawn points + 1 unmarked + 1 deferred + 2 secrets, with a clear-gated exit.
+
+**Automated tests:**
+- Functional test: spawn the StatsSandbox layout, tick 1 frame, assert `KillsTotal == 4` (3 marked + 1 deferred eligible, 1 unmarked excluded).
+- Functional test: kill all 4 eligible enemies, assert `IsLevelCleared() == true`.
+- Functional test: kill 3/4, assert `false`.
+- Functional test: deferred spawn point — confirm spawn point exists at BeginPlay but enemy doesn't; fire the trigger; assert enemy spawns; kill it; assert clear.
+- Functional test: secret trigger overlap → assert `PlayerState.Secrets += 1`. Re-enter → no change.
+- Functional test: revived Zombie placeholder (spawn an enemy with `IsDead()` returning false during a Down state) → assert `IsSatisfied()` returns false during Down state, true after permanent death. (Even though Zombies aren't in v1, the scan logic should support this for forward compat.)
+
+**Manual verification:**
+- Walk through `StatsSandbox`. Kill the 3 marked Grunts. HUD shows `3 / 4`. Walk to the exit — gated. Fire the deferred-spawn trigger, the 4th enemy appears, kill it, HUD shows `4 / 4`, exit unlocks.
+- Find both secrets, see the secret message, HUD increments to `2 / 2`.
+- Reach the exit, see the level-end stats screen with kills/secrets/time/deaths.
+
+**Exit criteria.** Level-clear gating works for both immediate and deferred spawn points; stats display matches reality.
+
+#### Phase 10: Powerups + Keys + Full HUD
+
+**Goal.** All v1 pickup categories working. Quad damage feels right. Locked doors work.
+
+**Implements:**
+- `AQuakePickup_Powerup` and `AQuakePickup_Key` and `AQuakePickup_Weapon` and `AQuakePickup_Armor`.
+- `FQuakeActivePowerup { EQuakePowerup Type; float TimeRemaining; }` and `TArray<FQuakeActivePowerup> ActivePowerups` on `AQuakePlayerState`.
+- `AQuakePlayerState::Tick` decrements timers, removes expired entries.
+- `AQuakePlayerState::ClearPerLifeState()` per [section 1.4](SPEC.md#L93).
+- `AQuakePlayerState::HasKey(EKeyColor)` and `Keys` storage.
+- `AQuakeCharacter::GetOutgoingDamageScale()` queries PlayerState for Quad → returns 4.0 if active.
+- Door key check: `AQuakeDoor::TryOpen(Player)` queries `PlayerState->HasKey(RequiredKey)`.
+- Locked-door bump-back + on-screen "You need the [color] key" message for 2 s.
+- HUD additions: armor (with tier color), keys (silver/gold icons), powerup timer (with countdown).
+- `BP_Pickup_Quad`, `BP_Pickup_KeySilver`, `BP_Pickup_KeyGold`, `BP_Pickup_Armor_Green/Yellow/Red`, `BP_Pickup_Health*`.
+- Powerup screen tint via `UMaterialInstanceDynamic` on the level `PostProcessVolume` (blue for Quad).
+- Weapon-pickup logic: first pickup grants weapon + ammo and auto-switches; subsequent pickup grants only ammo per [section 2.2](SPEC.md#L246).
+
+**Automated tests:**
+- Functional test: pick up Quad, query `Character->GetOutgoingDamageScale()`, assert 4.0. Tick past 30 s, assert 1.0.
+- Functional test: pick up Quad twice in succession, assert remaining time capped at 60 s per [section 4.3](SPEC.md#L384).
+- Functional test: tick PlayerState with Quad active for 31 s, assert powerup removed from array.
+- Functional test: pick up silver key, walk into silver door, assert door opens.
+- Functional test: walk into silver door without key, assert door blocks player and the message log fires.
+- Functional test: `ClearPerLifeState` — set powerups + keys, call clear, assert both empty, assert kills/secrets/deaths NOT cleared.
+- Functional test: pick up Shotgun for the first time, assert `bHasShotgun = true` and active weapon switched. Pick up another Shotgun, assert active weapon NOT switched, ammo increased.
+
+**Manual verification:**
+- Pick up Quad, fire a Rocket Launcher at a Grunt. Watch the Grunt explode dramatically. Screen is tinted blue.
+- Wait 30 s, see Quad expire, HUD timer countdown reaches 0.
+- Pick up silver key — silver key icon appears on HUD top-right. Walk through silver door.
+- Try a locked door without the matching key — bump back, message appears for 2 s.
+- Pick up green armor — armor value shows on HUD with green color. Take damage — both health and armor decrease per the 30% absorption rule.
+- Pick up the Shotgun the first time → auto-switch and full ammo. Pick up another → no switch, ammo only.
+
+**Exit criteria.** All pickup categories work; key-locked doors work; Quad scaling works through the existing `GetOutgoingDamageScale` pull pattern.
+
+#### Phase 11: Save / Load
+
+**Goal.** Quick save and quick load round-trip the world state correctly. Auto-save on level start works.
+
+**Implements:**
+- `UQuakeSaveGame : public USaveGame` with all fields per [section 6.2](SPEC.md#L832).
+- `IQuakeSaveable` interface with `SaveState(FActorSaveRecord&)` and `LoadState(const FActorSaveRecord&)`.
+- `FActorSaveRecord { FName ActorName; TArray<uint8> Payload; }` per [section 6.2](SPEC.md#L857).
+- All persistent actors implement `IQuakeSaveable`: doors, buttons, secrets, spawn points, pickups, enemies, character (for health).
+- `UQuakeGameInstance::SaveCurrentState()` — gathers all records, writes via `SaveGameToSlot`.
+- `UQuakeGameInstance::LoadFromSlot(SlotName)` — reads, restores GameInstance fields, calls `OpenLevel`, then on the new level's `BeginPlay` the GameMode iterates `IQuakeSaveable` actors and applies records by `GetFName()` lookup.
+- Auto-save call on level entry (after the level-entry snapshot is taken).
+- F5 (quick save) and F9 (quick load) input actions wired through `AQuakePlayerController`.
+- "No mid-air saves" guard: F5 rejects if `MovementMode != MOVE_Walking` or if pain reaction active.
+
+**Automated tests:**
+- Functional test: open a door, save, reload the level (without restarting PIE), load the save, assert door's saved state restored as Open.
+- Functional test: kill an enemy at a spawn point, save, reload level, load, assert spawn point still satisfied (enemy still dead — not respawned).
+- Functional test: pick up health to full HP, save, take damage, load, assert HP restored to saved value.
+- Functional test: save with active Quad (15 s remaining), load, assert Quad active with ~15 s remaining (within 0.1 s tolerance).
+- Functional test: F5 save while jumping, assert save call returned false / save file not written.
+- Functional test: F5 save while pain-reacting, assert save call returned false.
+- Functional test: save record `FName` round-trip — save a level, deserialize, walk records, assert each `ActorName` is non-empty and matches a level actor's `GetFName()`.
+- Functional test: actor with no matching record at load time falls back to its level-default state (no crash).
+
+**Manual verification:**
+- Play through half a level, F5. Take damage to near-death. F9 — assert state restored to save point including HP, ammo, powerup timer, opened doors, dead enemies, picked-up items.
+- Save in level 2 with weapons from level 1. Restart the editor entirely. Reopen, F9 — assert weapons present and level 2 loaded.
+- Try to F5 mid-jump — see message "Cannot save while airborne" or similar.
+
+**Exit criteria.** Quick save/load round-trips state correctly across PIE restarts; identity-by-`GetFName()` works without false matches.
+
+#### Phase 12: Difficulty
+
+**Goal.** Easy and Normal both playable. Multipliers apply correctly to damage and HP. Spawn-point filtering enables/disables placements.
+
+**Implements:**
+- `EQuakeDifficulty` enum.
+- `Difficulty` field on `UQuakeGameInstance`, set at new-game time.
+- `FQuakeDifficultyMultipliers` USTRUCT and `TMap<EQuakeDifficulty, FQuakeDifficultyMultipliers> DifficultyTable` on `AQuakeGameMode` per [section 6.1](SPEC.md#L753).
+- `AQuakeEnemyBase::ApplyDifficultyScaling()` (virtual) called from `BeginPlay`.
+- `AQuakeEnemySpawnPoint::IsEligible()` checks `MinDifficulty` (already implemented as a stub in Phase 9; this phase makes it functional).
+- `AQuakeAIController_Zombie::ApplyDifficultyScaling()` override for revive timing — even though Zombies aren't in v1 content, the override slot exists for v2.
+- Pain-immunity check in `AQuakeEnemyAIController::OnDamaged` for Nightmare — same future-proofing.
+- `BP_QuakeGameMode` populates the multiplier `TMap` with the four difficulty entries.
+
+**Automated tests:**
+- Functional test: spawn Grunt on Easy, assert `MaxHealth == 30 × 1.0`. Spawn on Hard (set GameInstance directly for the test), assert `MaxHealth == 30 × 1.25`.
+- Functional test: spawn level with 5 `MinDifficulty=Easy` + 3 `MinDifficulty=Hard` spawn points; set difficulty Easy → assert `KillsTotal == 5`. Set Hard → assert `KillsTotal == 8`.
+- Functional test: enemy fires at player on Easy/Normal/Hard, assert damage applied matches the per-difficulty multiplier.
+- Functional test: change difficulty between two PIE sessions, verify the spawn-point filtering kicks in correctly per session.
+
+**Manual verification:**
+- Start a new game on Easy, fight a few Grunts, note time-to-kill and damage taken.
+- Restart with Normal, same room, feel the difference (damage taken roughly +33% per the 0.75 → 1.0 jump).
+- (Hard / Nightmare are deferred to v2 per content scope, but the implementation should still support them for tests.)
+
+**Exit criteria.** Per-difficulty multipliers apply at spawn time; spawn-point filtering correctly excludes higher-tier placements.
+
+#### Phase 13: Main Menu / Hub / Win Sequence / Death Restart
+
+**Goal.** The full game flow from launch to win works.
+
+**Implements:**
+- `MainMenu.umap` with title screen and main menu Slate widget (`SQuakeMainMenu`).
+- New-game flow: difficulty select → load Hub → walk into portal → load E1M1.
+- `Hub.umap` with a single `AQuakeTrigger_Teleport` representing the Episode 1 portal (no art).
+- Death screen Slate widget with "Press Fire to Restart".
+- Restart sequence per [section 6.4](SPEC.md#L894): increment Deaths → `ClearPerLifeState` → restore inventory snapshot → respawn at PlayerStart.
+- Win screen Slate widget shown after the final level's exit, with total stats per [section 6.3](SPEC.md#L885).
+- Level-end stats screen (already partial in Phase 9) finalized.
+- Settings Slate widget with mouse sensitivity (functional) and audio volume sliders (no-op until Phase 14).
+- Game Mode flag for "is final level of episode" → triggers win screen instead of next-level transition.
+
+**Automated tests:**
+- Functional test: simulate new-game flow programmatically, set difficulty, verify `GameInstance->Difficulty` matches.
+- Functional test: kill player programmatically, advance to restart, assert `PlayerState.Deaths += 1`, assert powerups cleared, assert inventory matches the snapshot (NOT pre-death state).
+- Functional test: complete the final level (mock by directly calling the win flow), assert win screen widget exists in the viewport.
+- Functional test: time pauses while paused → tick the GameMode while paused, assert `PlayerState.TimeElapsed` does not increase.
+
+**Manual verification:**
+- Main menu → New Game → Easy → spawn in Hub.
+- Walk into portal → loads `E1M1` (a placeholder map for now — Phase 15 fills it in).
+- Die in PhysSandbox by jumping into a kill volume (or take Lava damage to 0). See death screen. Press fire → respawn at PlayerStart with snapshot inventory, +1 to Deaths.
+- Manually trigger the win flow → see the stats screen and "return to main menu" option.
+
+**Exit criteria.** Full launch-to-win flow works with placeholder content; restart sequence correctly clears per-life state without touching cumulative stats.
+
+#### Phase 14: Audio Stubs + Settings
+
+**Goal.** Every gameplay sound event reaches the (no-op) sound manager. Settings work.
+
+**Implements:**
+- `UQuakeSoundManager : public UGameInstanceSubsystem`.
+- `ESoundEvent` enum cataloging every sound from [section 8.2](SPEC.md#L928).
+- `UQuakeGameInstance::SoundEventTable` `UPROPERTY` and `GetSoundEventTable()` accessor per [section 8.1](SPEC.md#L908).
+- `BP_QuakeGameInstance` assigns `DT_SoundEvents.uasset`.
+- `DT_SoundEvents.uasset` with row type `FQuakeSoundEvent`, all rows present but `Sound = nullptr`.
+- `UQuakeSoundManager::PlaySound(ESoundEvent, FVector)` — looks up the row, calls `UGameplayStatics::PlaySoundAtLocation` if non-null, no-op otherwise. Logs every call at Verbose level for verification.
+- Insert `PlaySound` calls at every gameplay event: weapon fire, weapon empty click, weapon pickup, item pickup, enemy alert/pain/death/attack, door open/close, button press, secret found, footstep, jump, land, player pain/death.
+- Settings persistence via `UGameUserSettings` subclass with mouse sensitivity + master volume.
+- Settings widget reads/writes via `UGameUserSettings`.
+
+**Automated tests:**
+- Functional test (with a mock subsystem variant): fire each weapon, assert `PlaySound` was called with the expected `ESoundEvent` for each.
+- Functional test: open a door, assert `door_open` was called.
+- Functional test: pick up a health pack, assert `pickup_item` was called.
+- Functional test: settings — set mouse sensitivity to 2.0, save, reload, assert restored value matches.
+
+**Manual verification:**
+- Set log level to Verbose for `LogQuakeSound`. Run through a level and observe the log: every gameplay action logs one `PlaySound` call.
+- Open settings, change sensitivity to 2.0 and back to 1.0, confirm the camera responds immediately.
+- Confirm volume slider exists and saves (no audible effect yet).
+
+**Exit criteria.** Every gameplay event reaches the sound manager; nothing in the codebase calls `UGameplayStatics::PlaySoundAtLocation` directly.
+
+#### Phase 15: Content Authoring
+
+**Goal.** `E1M1`, `E1M2`, `E1M3`, and `Hub` are real shippable maps that meet the [v1 Definition of Done](#116-v1-definition-of-done).
+
+**Implements:**
+- `Content/Maps/Hub.umap` — single room with the Episode 1 portal teleporter and "Quit" trigger. No art beyond primitive shapes.
+- `Content/Maps/E1/E1M1.umap` — tutorial map. ~5 rooms, Grunts only, one silver key, one locked door, one secret, one button, lava pit, exit trigger. Estimated 5–10 minutes of gameplay.
+- `Content/Maps/E1/E1M2.umap` — full map. Grunts + Knights + Ogres, gold key, multiple secrets, deferred spawns, lava hazards. ~10–15 minutes.
+- `Content/Maps/E1/E1M3.umap` — boss map. Leads to a final arena with the Greater Ogre (Ogre subclass with 800 HP and faster grenade RoF). Win triggers on boss death.
+- `AQuakeEnemy_GreaterOgre` C++ subclass of `AQuakeEnemy_Ogre` with the boss stat overrides.
+- Per-level checklist from [section 10.5](SPEC.md#L1183) followed for each map.
+
+**Automated tests:**
+- Functional test per level: programmatically spawn at PlayerStart, run UE Navigation pathfinding to the ExitTrigger location, assert a path exists. Catches "I built a level the AI can't navigate" issues.
+- Functional test per level: load the map, tick 1 frame, assert `KillsTotal > 0`, assert at least one `IQuakeActivatable` exit trigger exists.
+- Functional test: navigate from MainMenu → Hub → E1M1 → E1M2 → E1M3 → win (drive by simulated player input and direct level-clear scripting), assert the win screen appears at the end.
+- Functional test: each map has all the [section 10.5](SPEC.md#L1183) per-level checklist items present (PlayerStart, NavMeshBoundsVolume, PostProcessVolume, light sources, exit trigger).
+
+**Manual verification:**
+- The full v1 Definition of Done playthrough (see 11.6 below).
+
+**Exit criteria.** All four maps shippable; the v1 Definition of Done passes manual playthrough end-to-end.
+
+### 11.6 v1 Definition of Done
 
 The milestone is complete when a player can:
 
@@ -1359,3 +1845,5 @@ The milestone is complete when a player can:
 6. Quick save mid-level and quick load successfully.
 7. Complete E1M1, transition to E1M2, transition to E1M3, defeat the Greater Ogre boss, and see the win screen with stats.
 8. Return to main menu and start a new game on a different difficulty.
+
+**All Phase 0–15 automated tests pass.** All previous-phase tests continue to pass at the time of milestone completion (no regressions).

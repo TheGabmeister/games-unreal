@@ -8,6 +8,8 @@ Unreal Engine 5.7 single-player FPS recreating original Quake gameplay with prim
 
 **SPEC.md is the design source of truth.** When the SPEC and this file disagree about gameplay or data ownership, the SPEC wins — update CLAUDE.md to match. CLAUDE.md is a working-notes file for build/tooling/conventions, not a design doc.
 
+**Implementation phases.** v1 is built in 16 phases (Phase 0–15) defined in [SPEC.md section 11.5](SPEC.md). Each phase has explicit exit criteria — automated tests + manual verification — that must pass before the next phase begins. Before adding gameplay code, find the current phase and stay within its scope. **Phase 1 (the strafe-jumping CMC) is the highest-risk item**; do not build combat code on top of an unverified CMC.
+
 ## Build Commands
 
 Build the editor target (the most common command during development):
@@ -48,7 +50,7 @@ Blueprints contain **no nodes in event graphs** — only property defaults. Do n
 Data lives in a specific place depending on its lifecycle. Putting it in the wrong place breaks respawn, level transitions, or the HUD. From SPEC.md's ownership summary:
 
 - **`UQuakeGameInstance`** — inventory (weapons owned, ammo, armor), level-entry snapshot, save-game reference, player profile, difficulty. Survives `OpenLevel` and Character respawn. **Note:** keys are *not* here despite being colloquially "inventory" — see PlayerState below.
-- **`AQuakePlayerState`** — current-level stats (kills, secrets, deaths, time), active powerups (`TArray<FQuakeActivePowerup>`), and keys held. Destroyed on level transition, which matches "reset per level" and "clear on death" semantics automatically — keys live here because their lifecycle matches powerups, not weapons/ammo/armor.
+- **`AQuakePlayerState`** — current-level stats (kills, secrets, deaths, time), active powerups (`TArray<FQuakeActivePowerup>`), and keys held. **Auto-cleared on `OpenLevel` only** — UE preserves PlayerState across pawn death/respawn, so the death-restart path (SPEC section 6.4) calls `ClearPerLifeState()` explicitly to empty powerups and keys. Cumulative stats (kills, secrets, deaths, time) persist across the level attempt. Don't assume "PlayerState resets on death" without that call. Keys live here because their lifecycle matches powerups, not weapons/ammo/armor.
 - **`AQuakeCharacter`** — live health, currently-equipped weapon actor. Tied to the body; destroyed on death and respawn.
 - **`AQuakeGameMode`** — level totals (`KillsTotal`, `SecretsTotal`), spawn rules, win conditions. Server-authoritative (prepared for future multiplayer).
 - **`AQuakeHUD`** — reads from all of the above; caches weak pointers in the Slate widget and reads them on paint.
@@ -76,6 +78,10 @@ AI is split between the body and the brain per standard UE convention:
 
 Per-enemy behavior variations (Fiend leap, Ogre grenade arc, Zombie revive) live on per-enemy AIController subclasses, not on pawn subclasses. This is what makes the AI debugger (`'` key in PIE) work and keeps "what I am" separate from "what I'm doing."
 
+## Architecture: Activation Chains
+
+Buttons, triggers, doors, spawn points, and the level exit communicate via the `IQuakeActivatable` interface — a **pure C++ virtual** `Activate(AActor* Instigator)`, **not** a `BlueprintNativeEvent`. Do not write `Activate_Implementation` (that suffix is only valid for `BlueprintNativeEvent` methods, and using it with this interface will not compile). Sources hold typed `TArray<TObjectPtr<AActor>>` slots filled per-instance in the editor via the actor picker (eyedropper UX). **No string-name targeting** — Quake's original `targetname`/`target` lookup is intentionally not used because it loses refactor traceability and editor pick-list filtering. See SPEC sections 5.5 and 5.6.
+
 ## Risk Note: Strafe-Jumping CMC
 
 The custom `UQuakeCharacterMovementComponent` is **the single biggest risk in the project**. Quake-style strafe jumping requires overriding `PhysFalling` (or `CalcVelocity`) to implement the Quake air-acceleration formula: clamp the **dot product** of current velocity and wishdir, not the velocity magnitude. Stock UE `UCharacterMovementComponent` clamps air velocity to `MaxWalkSpeed`, which breaks strafe jumping fundamentally.
@@ -99,8 +105,10 @@ When adding a new input action, add a new `UPROPERTY(EditDefaultsOnly)` slot on 
 The following must exist in the Editor; they cannot be created from C++ alone (per `SPEC.md` section 10):
 
 - **Levels** (`.umap`) under `Content/Maps/` — World Partition disabled per level.
+- **Enemy placements** — always `AQuakeEnemySpawnPoint` actors with `EnemyClass` set to a `BP_Enemy_*` class. Direct `BP_Enemy_*` placements in a level are decoration and **do not count** toward `KillsTotal` or gate the level-clear scan. This is the canonical authoring path for counted enemies; see SPEC section 5.1.
 - **One master material** `M_QuakeBase` with `BaseColor` / `Emissive` / `Metallic` / `Roughness` parameters; everything else is a `MaterialInstance` of it. Runtime tinting (damage flash, powerup overlays) uses `UMaterialInstanceDynamic` from C++.
-- **NavMesh** — `NavMeshBoundsVolume` per level, agent radius 35 / height 180 to match the player capsule.
+- **NavMesh** — `NavMeshBoundsVolume` per level, agent radius 35 / height 180 / step height 45 to match the player capsule and movement params (step height MUST equal the player's value or AI cannot path through geometry the player can walk over).
+- **Collision channels** — four custom channels (`Pickup`, `Projectile`, `Corpse` object channels + `Weapon` trace channel) defined in `Config/DefaultEngine.ini`. Per-actor responses are set in C++ constructors (`SetCollisionResponseToChannel` / `SetCollisionProfileName`), not via editor profile assets. See SPEC section 1.6 for the full response matrix and per-system rules.
 - **Project Settings** in `Config/Default*.ini` — version-controlled.
 
 The per-level checklist in `SPEC.md` section 10.5 is the authoritative reference when creating new maps.
