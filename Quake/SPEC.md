@@ -472,22 +472,44 @@ Hazards damage both players and enemies. Biosuit makes the player immune to slim
 
 ### 5.3 Water Volumes
 
-`AQuakeWaterVolume` is a trigger volume that puts any pawn inside it into a swimming state.
+**`AQuakeWaterVolume : public APhysicsVolume`**, not a custom trigger actor. `APhysicsVolume` is a UE built-in `AVolume` subclass (a brush) whose `bWaterVolume` flag is read by `UCharacterMovementComponent` every tick to decide whether the pawn is swimming. Setting it in the constructor is enough to make the engine handle all `MOVE_Walking`/`MOVE_Falling` ↔ `MOVE_Swimming` transitions automatically — the volume's brush shape (assigned in the editor) defines the water boundary, and any pawn whose `GetPawnPhysicsVolume()` resolves to this volume enters swim mode at the start of the next movement update. **No overlap callbacks, no manual `SetMovementMode` calls.** Driving swim mode from a custom trigger volume's `OnBeginOverlap` would fight the engine because `PhysSwimming` re-checks `Pawn->GetPawnPhysicsVolume()->bWaterVolume` every frame and would immediately snap the pawn back out of swim mode.
 
-**Swimming movement:**
+```cpp
+// QuakeWaterVolume.h
+UCLASS()
+class AQuakeWaterVolume : public APhysicsVolume
+{
+    GENERATED_BODY()
+public:
+    AQuakeWaterVolume(const FObjectInitializer& OI);
+};
 
-| Attribute              | Value |
-|------------------------|-------|
-| Max swim speed         | 350   |
-| Swim acceleration      | 2000  |
-| Buoyancy               | neutral (no auto-float, no auto-sink) |
-| Vertical control       | look up/down + Move forward swims along view; Jump = swim up |
+// QuakeWaterVolume.cpp
+AQuakeWaterVolume::AQuakeWaterVolume(const FObjectInitializer& OI) : Super(OI)
+{
+    bWaterVolume     = true;
+    FluidFriction    = 0.3f;   // Quake-feel water drag (tune in playtesting)
+    TerminalVelocity = 350.f;  // matches Max swim speed below
+    Priority         = 1;      // higher than the world default APhysicsVolume
+}
+```
 
-**Surface detection:**
+**Swimming movement** — these values are set on `UQuakeCharacterMovementComponent` (the per-pawn CMC), not on the volume. The CMC reads them while `MovementMode == MOVE_Swimming`. Stock `PhysSwimming` is used; the project does **not** override it.
+
+| SPEC value             | UE value | `UCharacterMovementComponent` property                |
+|------------------------|----------|--------------------------------------------------------|
+| Max swim speed         | 350      | `MaxSwimSpeed`                                         |
+| Swim acceleration      | 2000     | `MaxAcceleration` (active value while swimming)        |
+| Buoyancy               | neutral  | `Buoyancy = 1.0` (the CMC default)                     |
+| Vertical control       | —        | Native: `PhysSwimming` reads view pitch + Jump input   |
+
+**Surface detection** — this is computed on `AQuakeCharacter`, not on the volume, because the test cares about the *camera* position, not the capsule, and the engine doesn't know where the camera is:
 
 - A pawn is **submerged** if its camera (eye) is below the water surface.
 - A pawn is **partially in water** if its capsule overlaps the volume but the camera is above the surface.
 - Drowning only applies when fully submerged.
+
+The character can determine "am I in any water at all" with one call: `GetCharacterMovement()->IsSwimming()` or equivalently `GetPawnPhysicsVolume()->bWaterVolume`. The "is the camera submerged" follow-up is a single line-against-volume-bounds check on tick. The Underwater Discharge from [section 2.3](SPEC.md#L271) and the half-speed projectile rule below both call `IsSwimming()` (or `bWaterVolume`) on the firing pawn — no overlap state to track.
 
 **Drowning:**
 
@@ -520,32 +542,107 @@ Hazards damage both players and enemies. Biosuit makes the player immune to slim
 - A door will not close while a pawn (player or enemy) is inside its swept volume — it stays open until clear.
 - A locked door bumps the player back slightly and prints a "You need the [color] key" message at the top of the screen for 2 seconds. A locked-door click sound stub plays.
 - Doors block both player and enemy movement and projectiles when closed.
+- `AQuakeDoor` implements `IQuakeActivatable` (see 5.5). Buttons and triggers fire it via **direct actor reference**, not by name. The `Required key` field is an `EKeyColor` enum (`None` / `Silver` / `Gold`) checked against `Player->GetPlayerState<AQuakePlayerState>()->HasKey(...)` per [section 4.4](SPEC.md#L432) — also no string lookup.
 
 ### 5.5 Buttons
 
 `AQuakeButton` is a one-shot or reusable interactable.
 
-| Property        | Default | Notes                                          |
-|-----------------|---------|------------------------------------------------|
-| Activation      | Player touch / shoot | Configurable per button           |
-| Cooldown        | one-shot | If set > 0, button can be re-pressed after cooldown |
-| Target name     | (string) | Name of the door / trigger / event to fire   |
+**Activation model: `IQuakeActivatable` interface, direct actor references — no string-name targeting.** Quake's original `targetname`/`target` string lookup is not used. Instead, every fireable actor (`AQuakeDoor`, `AQuakeTrigger` and its subclasses, `AQuakeSecret`, level exit, etc.) implements a small `UInterface` declared in C++:
 
-When activated, a button broadcasts an "activate" event to its target by name. The target may be a door, a trigger, or a script event. One-shot buttons become non-interactable after first use (visual: depressed state).
+```cpp
+// QuakeActivatable.h
+UINTERFACE(MinimalAPI, BlueprintType)
+class UQuakeActivatable : public UInterface { GENERATED_BODY() };
+
+class IQuakeActivatable
+{
+    GENERATED_BODY()
+public:
+    /** Fire this actor. Instigator is the pawn that caused the activation (player, usually); may be null for indirect chains. */
+    virtual void Activate(AActor* Instigator) = 0;
+};
+```
+
+Buttons and triggers hold a typed `TArray<TObjectPtr<AActor>>` of targets, set per-instance in the editor via UE5's actor picker (eyedropper UX) on each placed instance. On fire, the source iterates the list, casts each entry to `IQuakeActivatable`, and calls `Activate()`. No name registry, no `TActorIterator` walks, no silent typo failures, no runtime cost beyond a list iteration.
+
+```cpp
+// QuakeButton.h
+UCLASS()
+class AQuakeButton : public AActor
+{
+    GENERATED_BODY()
+public:
+    UPROPERTY(EditAnywhere, Category="Quake|Button")
+    EQuakeButtonActivation ActivationMode = EQuakeButtonActivation::Touch;
+
+    UPROPERTY(EditAnywhere, Category="Quake|Button")
+    float Cooldown = 0.0f;   // 0 = one-shot
+
+    /** Actors to fire when this button activates. Each must implement IQuakeActivatable. */
+    UPROPERTY(EditInstanceOnly, Category="Quake|Button")
+    TArray<TObjectPtr<AActor>> Targets;
+
+protected:
+    void Fire(AActor* Instigator);
+};
+```
+
+| Property        | Default              | Notes                                                |
+|-----------------|----------------------|------------------------------------------------------|
+| ActivationMode  | Touch / Shoot        | `EQuakeButtonActivation` enum, configurable per button |
+| Cooldown        | 0 (one-shot)         | Seconds; 0 means single use                          |
+| Targets         | (empty)              | `TArray<TObjectPtr<AActor>>`, picked per-instance in the editor |
+
+**Behavior:**
+
+- On activation, `Fire(Instigator)` iterates `Targets`, casts each to `IQuakeActivatable`, calls `Activate(Instigator)`, and skips entries that don't implement the interface (with a runtime warning so authoring errors are visible in the log).
+- One-shot buttons become non-interactable after first use (visual: depressed state). Reusable buttons return to the up state after the cooldown.
+- The button itself does **not** implement `IQuakeActivatable`. Buttons are only activated by world input (touch/shoot), not by other buttons or triggers. If you need a "fire on signal" relay, use [`AQuakeTrigger_Relay`](SPEC.md#L558) (see 5.6).
+
+**Per-instance editor authoring.** `AQuakeButton` is a pure C++ class. There is no `BP_Button` thin subclass required for the targeting — `EditInstanceOnly` properties are editable on every level-placed instance regardless of class kind. A thin BP subclass (`BP_Button`) exists only to assign the visible mesh and material asset slots, matching the project convention from [section 9.2](SPEC.md#L744). The `Targets` list is filled per placed instance in the level, not in the BP defaults.
 
 ### 5.6 Triggers
 
-`AQuakeTrigger` is a generic, named trigger volume or actor that fires an "activate" event when entered (volumes) or when externally fired (named buttons / other triggers).
+`AQuakeTrigger` is the abstract base for trigger volumes and trigger actors. Every trigger subclass **implements `IQuakeActivatable`** (see 5.5), so triggers can be chained — a button fires a trigger, which fires more triggers, doors, secrets, etc.
+
+```cpp
+// QuakeTrigger.h
+UCLASS(Abstract)
+class AQuakeTrigger : public AActor, public IQuakeActivatable
+{
+    GENERATED_BODY()
+public:
+    /** Volume component for overlap-based triggers. Optional — relay-style triggers leave it disabled. */
+    UPROPERTY(VisibleAnywhere) TObjectPtr<UBoxComponent> TriggerVolume;
+
+    /** Generic targets fired when this trigger activates. Subclasses MAY also have type-specific reference fields. */
+    UPROPERTY(EditInstanceOnly, Category="Quake|Trigger")
+    TArray<TObjectPtr<AActor>> Targets;
+
+    virtual void Activate_Implementation(AActor* Instigator) override;  // fires Targets, then runs subclass-specific behavior
+};
+```
+
+The base class binds `OnComponentBeginOverlap` on `TriggerVolume` (when present) to call `Activate(OverlappingActor)` on itself. Subclasses don't have to think about overlap wiring — they only override `Activate` to add per-type behavior, then call `Super::Activate(Instigator)` to fire the generic `Targets` chain.
+
+**Targeting is direct-reference throughout.** No subclass uses string lookups. Each subclass that needs *typed* references (e.g., spawn points, teleport destination) declares its own additional `TArray<TObjectPtr<T>>` field with the concrete type, so the editor's actor picker filters the dropdown to only valid choices.
 
 **Trigger types:**
 
-- **`AQuakeTrigger_Spawn`** — spawns a list of enemies at named spawn points when activated.
-- **`AQuakeTrigger_Open`** — opens a list of named doors.
-- **`AQuakeTrigger_Message`** — displays a message on screen for N seconds.
-- **`AQuakeTrigger_Hurt`** — applies damage over time to anything inside (used for kill volumes / damage zones).
-- **`AQuakeTrigger_Teleport`** — teleports the player to a named destination.
+| Subclass                    | Type-specific fields                                       | Behavior on `Activate` |
+|-----------------------------|------------------------------------------------------------|------------------------|
+| **`AQuakeTrigger_Relay`**   | none (uses base `Targets`)                                 | Fires every actor in `Targets` via `IQuakeActivatable::Activate`. Replaces the old "fire by name" pattern; chains buttons → triggers → doors / secrets / level exit. |
+| **`AQuakeTrigger_Spawn`**   | `TArray<TObjectPtr<AQuakeEnemySpawnPoint>> SpawnPoints`    | Iterates `SpawnPoints`, asks each one to spawn its enemy class. Then calls `Super::Activate` to fire any base `Targets`. |
+| **`AQuakeTrigger_Message`** | `FText Message`, `float Duration = 3.0f`                   | Displays `Message` on the HUD for `Duration` seconds via the existing HUD message API. Then `Super::Activate`. |
+| **`AQuakeTrigger_Hurt`**    | `float DamagePerTick = 10000.0f`, `float TickRate = 0.5f`  | **Self-contained — does not fire targets.** Damages every overlapping pawn via `ApplyPointDamage` with `UQuakeDamageType_Telefrag` on a tick interval. Used for kill volumes, crusher pits, and "you walked into the trap" zones. The trigger volume stays active for the duration the actor is inside. |
+| **`AQuakeTrigger_Teleport`**| `TObjectPtr<AActor> Destination`                           | Teleports the overlapping pawn to `Destination`'s transform (location + yaw, preserves velocity magnitude rotated to the new yaw). `Destination` is typed `AActor*` so any actor works — typically an engine `ATargetPoint` placed in the level. Then `Super::Activate`. |
 
-Triggers find their targets by name, set in the Editor on each trigger instance.
+**Why every trigger has both overlap-fire and `Activate()`:** the same trigger asset can be either an entry trigger (player walks in → fires targets) or a relay (another trigger fires it → fires its own targets) without changing class. Authoring decision: leave `TriggerVolume`'s collision enabled for entry triggers, disable it for relays. No subclass split needed.
+
+**Per-instance editor authoring.** Same as buttons — `AQuakeTrigger_*` are pure C++ classes. `Targets`, `SpawnPoints`, `Destination`, and `Message` are all `EditInstanceOnly` and editable on every level-placed instance via the picker. Thin BP subclasses exist only if a trigger needs visible meshes (most don't — triggers are typically invisible volumes).
+
+**Why the `IQuakeActivatable` chain replaces named targets cleanly.** Quake's `targetname` model gave you fan-out (one trigger → many actors with the same name) and chaining (trigger A fires trigger B fires trigger C). With direct references, fan-out is just a longer `Targets` list and chaining is just adding the next trigger as a target. No semantic loss, no global name registry, no string typos. The one thing the name model could do that direct references can't is forward-reference an actor that doesn't exist at edit time (e.g., spawned at runtime by another trigger) — the v1 SPEC has no such case, and if one appears later, the right answer is to expose a runtime registration API on the relevant subsystem, not to bring back name-based lookup globally.
 
 ### 5.7 Progression
 
@@ -562,15 +659,40 @@ Triggers find their targets by name, set in the Editor on each trigger instance.
 
 ### 5.9 Stat Counting
 
-Per-level stats live on `AQuakePlayerState` and are displayed at level end (and on the HUD as live counters). The game mode owns the level totals (`KillsTotal`, `SecretsTotal`) and applies global rules; the PlayerState owns the running player-side counters (`Kills`, `Secrets`, `TimeElapsed`, `Deaths`). Game mode events (an enemy dying, a secret being entered) call into the PlayerState to increment counters. The HUD reads PlayerState directly via `PlayerController->GetPlayerState<AQuakePlayerState>()`.
+Stats split across two actors as a **numerator/denominator pair** — these are not duplicate counts:
+
+- **`AQuakeGameMode`** owns the **denominators**: `KillsTotal` and `SecretsTotal`. Both are computed once at `BeginPlay` (by counting `AQuakeEnemyBase` actors with `bIsMarkedKillTarget = true` and `AQuakeTrigger_Secret` volumes in the level) and **never updated** afterward. They represent "how many existed in this level," not "how many have happened so far." `bIsMarkedKillTarget` is a `UPROPERTY(EditAnywhere)` flag on `AQuakeEnemyBase` that defaults to `true`; level designers flip it off for decoration enemies, infinitely-spawning enemies, or scripted-display enemies that shouldn't gate the level-clear check.
+- **`AQuakePlayerState`** owns the **numerators**: `Kills`, `Secrets`, `TimeElapsed`, `Deaths`. These run up as the player progresses and represent the player's score for the level attempt.
+
+The HUD displays `Kills / KillsTotal` and `Secrets / SecretsTotal` by reading the numerator from `PlayerState` and the denominator from `GameMode`. The end-of-level stat screen does the same. There is **no third counter** for "how many kills have happened" — the level-clear check is computed on demand (see below).
+
+Game-mode events (an enemy dying, a secret being entered) call into the PlayerState to increment counters where the player has earned credit. The HUD reads PlayerState directly via `PlayerController->GetPlayerState<AQuakePlayerState>()` and reads GameMode via `GetWorld()->GetAuthGameMode<AQuakeGameMode>()`.
+
+**Level-clear check.** "Has the player cleared the level?" is computed on demand by scanning the world rather than tracked as a separate counter. This avoids drift from miscounted edge cases (revived Zombies, infighting, hazard kills) and matches the SPEC's preference for derived state over cached state:
+
+```cpp
+bool AQuakeGameMode::IsLevelCleared() const
+{
+    for (TActorIterator<AQuakeEnemyBase> It(GetWorld()); It; ++It)
+    {
+        if (It->IsMarkedKillTarget() && !It->IsDead()) return false;
+    }
+    return true;
+}
+```
+
+The exit unlocks when this returns true. Note this is independent of `PlayerState.Kills` — an enemy that died from infighting without player credit still satisfies the clear condition (it's dead), even though the player doesn't get a point for it on the score screen.
+
+**Counter rules:**
 
 - **Time:** starts ticking when the player gains control after the level loads (post-fade-in). Pauses while paused. Stops the moment the player overlaps the `ExitTrigger`.
-- **Kills:** total = the count of `AQuakeTrigger_KillTarget` enemies in the level (set at BeginPlay). The player's kill count increments by 1 each time an enemy enters its `Dead` state. Special cases:
-  - **Zombie revive:** a Zombie that goes Down and revives counts as 0 kills until it is permanently killed (gibbed).
-  - **Gibbed kill:** counts as 1 kill (same value as normal death).
-  - **Infighting kill:** counts as 1 kill toward the player's total only if the chain originated from a player action within 5 seconds. Otherwise, the kill counts toward the level total but not the player.
-  - **Hazard kill:** an enemy killed by a hazard volume counts as a kill, attributed to the player only if the player damaged the enemy at any point.
-- **Secrets:** total = the count of `AQuakeTrigger_Secret` volumes in the level. Increments by 1 the first time the player enters each secret. Re-entering does nothing.
+- **Kills (player credit, increments `PlayerState.Kills`):** +1 each time a marked kill-target enemy enters its `Dead` state **and the player is credited** by the rules below. Player credit is independent of whether the enemy actually died — credit is purely about score attribution.
+  - **Normal death:** +1 if the player dealt the killing blow (`EventInstigator == Player->GetController()`).
+  - **Gibbed kill:** +1 (same as normal death — gibbing doesn't double-count).
+  - **Zombie revive:** a Zombie that goes Down and revives is **not** dead for level-clear purposes (`IsDead()` returns false during the Down state, true after permanent death/gib only). The player gets +1 only on the permanent kill, never on the temporary Down.
+  - **Infighting kill:** +1 to player credit only if a player action started the chain within the last 5 seconds (e.g., the player's rocket bounced an Ogre's grenade into a Shambler). Otherwise the enemy is still dead (counts for level-clear) but the player gets no score credit.
+  - **Hazard kill:** +1 to player credit only if the player damaged the enemy at any point during this level attempt. Otherwise, dead but uncredited.
+- **Secrets:** `PlayerState.Secrets` increments by 1 the first time the player enters each `AQuakeTrigger_Secret` volume. Re-entering does nothing.
 - **Deaths:** number of times the player died on this level attempt. Incremented before restoring the level-entry snapshot.
 
 ---
@@ -721,6 +843,7 @@ AQuakeProjectile                     — base projectile, holds UProjectileMovem
   AQuakeProjectile_Grenade
 
 AQuakeEnemyBase : public ACharacter  — enemy body: mesh, movement, health, action methods
+  bIsMarkedKillTarget (UPROPERTY EditAnywhere, default true) — counts toward GameMode.KillsTotal; flip off for decoration / infinitely-spawning enemies
   AQuakeEnemy_Grunt
   AQuakeEnemy_Knight
   AQuakeEnemy_Ogre
@@ -740,16 +863,23 @@ AQuakeEnemyAIController : public AAIController  — enemy brain: FSM, perception
 AQuakePickupBase                     — base pickup (USphereComponent overlap detection)
   AQuakePickup_Health, _Armor, _Ammo, _Weapon, _Key, _Powerup (subclasses)
 
-AQuakeDoor                           — UStaticMeshComponent + UTimelineComponent
-AQuakeButton                         — interactable, broadcasts to named target
-AQuakeTrigger                        — generic trigger volume base
-  AQuakeTrigger_Spawn, _Open, _Message, _Hurt, _Teleport, _Secret, _KillTarget
+AQuakeDoor                           — UStaticMeshComponent + UTimelineComponent; implements IQuakeActivatable
+AQuakeButton                         — touch/shoot interactable; fires IQuakeActivatable targets via direct reference (no name lookup)
+AQuakeTrigger                        — abstract base; implements IQuakeActivatable; optional UBoxComponent for entry-overlap fire
+  AQuakeTrigger_Relay                — fires base Targets list (relay / external-fire only — old "_Open" name, since it's not door-specific)
+  AQuakeTrigger_Spawn                — typed SpawnPoints list of AQuakeEnemySpawnPoint
+  AQuakeTrigger_Message              — FText Message + Duration; displays on HUD
+  AQuakeTrigger_Hurt                 — DamagePerTick + TickRate; self-contained, no Targets
+  AQuakeTrigger_Teleport             — single Destination AActor* (typically ATargetPoint)
+  AQuakeTrigger_Secret               — credits a secret on first player overlap
+AQuakeWaterVolume : public APhysicsVolume  — bWaterVolume = true; CMC handles MOVE_Swimming transitions automatically
 AQuakeHazardVolume                   — slime/lava damage volume
 
 UDamageType subclasses               — see section 1.5 for the full list
   UQuakeDamageType_Melee, _Bullet, _Nail, _Explosive, _Lightning,
   _Lava, _Slime, _Drown, _Telefrag
 
+IQuakeActivatable                    — UInterface; Activate(AActor* Instigator); implemented by Door, Trigger and subclasses, level exit; fired by Button targets and Trigger chains (see 5.5 / 5.6)
 IQuakeSaveable                       — interface for actors that persist in saves
 UQuakeSaveGame : public USaveGame    — save data container
 UQuakeSoundManager : public UGameInstanceSubsystem  — audio
@@ -760,7 +890,7 @@ UQuakeGameInstance                   — owns inventory, snapshot, save/load, le
 
 - **Inventory** (weapons owned, ammo, armor) lives on `UQuakeGameInstance`. Survives `OpenLevel` and Character respawn. The Character reads it on `BeginPlay` and writes back on changes.
 - **Live health** lives on `AQuakeCharacter`. Tied to the body; reset from the level-entry snapshot on respawn.
-- **Current-level stats** (kills, secrets, time, deaths) and **active powerups** live on `AQuakePlayerState`. Recreated on every level transition, which matches the reset semantics. The HUD reads them directly via `PlayerController->GetPlayerState<AQuakePlayerState>()`.
+- **Current-level stats** (kills, secrets, time, deaths), **active powerups**, and **keys held** live on `AQuakePlayerState`. Recreated on every level transition, which matches the reset semantics — keys live here (rather than on `UQuakeGameInstance` with the rest of "inventory") because their lifecycle is per-level, matching powerups (see 1.4 / 4.4). The HUD reads them directly via `PlayerController->GetPlayerState<AQuakePlayerState>()`.
 - **AI** lives on `AQuakeEnemyAIController`. The Enemy pawn only exposes action methods (`MoveTo`, `FireAt`, `PlayPainReaction`).
 - **HUD** is `AQuakeHUD` (an `AHUD`), owned by the PlayerController. It adds an `SQuakeHUDOverlay` Slate widget to the viewport in `BeginPlay`.
 - **Damage** flows through `AActor::TakeDamage` with `UDamageType` subclasses carrying metadata.
