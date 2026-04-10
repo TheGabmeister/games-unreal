@@ -143,7 +143,16 @@ void AQuakeCharacter::ApplyArmorAbsorption(
 	// and "save" is the portion taken by armor instead of HP. The remainder
 	// (take) hits HP. If absorption is zero or armor is empty, save is zero
 	// and the formula reduces to OutHealth = InHealth - InDamage.
-	const float Save = FMath::Min(FMath::CeilToFloat(InAbsorption * InDamage), InArmor);
+	//
+	// Float-imprecision guard: 0.3f is not exactly representable in IEEE 754,
+	// so 0.3f * 50.0f computes to 15.000000596..., which a naive CeilToFloat
+	// rounds to 16 instead of 15. Subtract UE_KINDA_SMALL_NUMBER (1e-4) before
+	// the ceil so values that are "essentially integer" don't get bumped up by
+	// one. The epsilon is well below any meaningful damage fraction
+	// (1e-4 << 1) so genuine fractional results (e.g. ceil(7.5) = 8) are
+	// unaffected.
+	const float Product = InAbsorption * InDamage;
+	const float Save = FMath::Min(FMath::CeilToFloat(Product - UE_KINDA_SMALL_NUMBER), InArmor);
 	const float Take = InDamage - Save;
 
 	OutArmor = InArmor - Save;
