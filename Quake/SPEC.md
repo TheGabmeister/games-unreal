@@ -90,7 +90,30 @@ The player has a persistent inventory across levels within an episode, with thes
 
 `AQuakeCharacter::BeginPlay` reads the current inventory from `UQuakeGameInstance` and applies it to the spawned pawn (via `AQuakeWeaponBase` actors attached to the character). On weapon pickup or ammo change, the character writes back to the GameInstance immediately.
 
-**Storage location: `AQuakePlayerState`** for **keys.** Although keys are colloquially "inventory," their lifecycle (reset on level transition, reset on death, reset on hub return) is identical to powerups, not to weapons/ammo/armor. PlayerState is destroyed automatically on `OpenLevel` and on death-respawn, so storing keys there gives the correct lifecycle for free with no explicit cleanup code. Powerups already live on PlayerState for the same reason (see 4.3). See section 4.4 for the full key rules.
+**Storage location: `AQuakePlayerState`** for **keys** and **active powerups.** Although keys are colloquially "inventory," their lifecycle (reset on level transition, reset on death, reset on hub return) is identical to powerups, not to weapons/ammo/armor. See section 4.4 for the full key rules and 4.3 for powerups.
+
+**PlayerState lifecycle — important.** UE's standard PlayerState is owned by the PlayerController and only **partially** auto-resets. The matrix:
+
+| Event             | Happens to PlayerState                    | Powerups / keys behavior                            |
+|-------------------|-------------------------------------------|-----------------------------------------------------|
+| `OpenLevel`       | Destroyed and recreated with the world    | Cleared automatically (new instance has empty state)|
+| Hub return        | Same as `OpenLevel` (it's a level load)   | Cleared automatically                                |
+| Death-respawn     | **Persists** (only the Pawn is recreated) | **NOT cleared automatically — explicit reset required** |
+
+The death-respawn case is the gotcha: standard UE keeps the PlayerController and PlayerState across pawn respawn so player identity (name, score, team) is preserved. For Quake's "die and reset" semantics, the death/restart flow in [section 6.4](SPEC.md#L868) must explicitly call `AQuakePlayerState::ClearPerLifeState()` (which empties the powerups array, clears keys, and resets the death-counter increment is **not** included — deaths are cumulative across the level attempt). The `OpenLevel` cases don't need this — they get a fresh PlayerState for free.
+
+```cpp
+// AQuakePlayerState.h
+void ClearPerLifeState();  // empties ActivePowerups; clears Keys; called from death-restart in 6.4
+
+// AQuakePlayerState.cpp
+void AQuakePlayerState::ClearPerLifeState()
+{
+    ActivePowerups.Empty();
+    Keys.Reset();
+    // Kills, Secrets, TimeElapsed, Deaths persist across this level's attempts.
+}
+```
 
 **Level-entry snapshot:** when the player crosses a level boundary, `UQuakeGameInstance` snapshots the inventory state immediately after the transition (i.e., after weapons/ammo carried over but health was topped up to 100). This snapshot is what death restores to. The snapshot is a separate `FQuakeInventorySnapshot` struct field on the GameInstance, distinct from the live inventory.
 
@@ -186,7 +209,7 @@ Collision configuration is shared between several systems (projectiles, hitscan,
 |----------------|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
 | **Player capsule** (`Pawn`)        | B | B | B | O | B | I | B | B |
 | **Enemy capsule** (`Pawn`)         | B | B | B | I | B | I | B | B |
-| **Corpse capsule** (`Corpse`)      | B | B | I | I | I | I | B | I |
+| **Corpse capsule** (`Corpse`)      | B | B | I | I | I | I | I | I |
 | **Projectile sphere** (`Projectile`)| B | B | B | I | I | B | I | I |
 | **Pickup sphere** (`Pickup`)       | I | I | O | I | I | I | I | I |
 | **Hazard volume** (`WorldDynamic`)  | I | I | O | I | I | O | I | I |
@@ -199,7 +222,7 @@ Collision configuration is shared between several systems (projectiles, hitscan,
 **Per-system rules** (the parts the matrix can't express):
 
 1. **Projectile spawn-out distance.** Projectile actors spawn 60 units in front of the firing pawn's muzzle, not at the muzzle itself. This prevents the muzzle-flash-frame self-detonation that breaks the Rocket Launcher otherwise. The first frame the projectile also calls `IgnoreActorWhenMoving(Instigator, true)` as a belt-and-braces second guard; this ignore is left in place for the projectile's lifetime since rockets shouldn't bounce off the firer mid-flight either.
-2. **Corpse channel flip.** When `AQuakeEnemyBase::Die()` runs, the capsule keeps its `Pawn` channel for 2 seconds (so a freshly-dead body still blocks the player and reads as a hit target during gib chains). After 2 s, a timer flips the capsule to the `Corpse` channel. The `Corpse` channel ignores `Projectile`, `Weapon` (hitscan), and `Pawn` — meaning rockets, hitscan, and the player all pass straight through corpses. Corpses still block `WorldStatic` so they don't fall through floors.
+2. **Corpse channel flip.** When `AQuakeEnemyBase::Die()` runs, the capsule keeps its `Pawn` channel for 2 seconds (so a freshly-dead body still blocks the player and reads as a hit target during gib chains). After 2 s, a timer flips the capsule to the `Corpse` channel. The `Corpse` channel ignores `Projectile`, `Weapon` (hitscan), `Pawn`, **and `Visibility`** — meaning rockets, hitscan, the player, and splash-damage line-of-sight queries (rule 10 below) all pass straight through corpses. Without the `Visibility` ignore, a corpse capsule would shield nearby still-living enemies from rocket splash damage, which contradicts the "corpses no longer affect combat" intent. Corpses still block `WorldStatic` so they don't fall through floors.
 3. **Gibbed enemies.** On gib, the capsule is destroyed entirely along with the actor; the scattered primitive pieces are physics objects on the `PhysicsBody` channel and don't participate in damage at all.
 4. **Pickup overlap is player-only.** The pickup's sphere overlaps the `Pawn` channel, but the C++ overlap handler casts the overlapping actor to `AQuakeCharacter` and bails on null. Enemies *trigger* the overlap (no harm) but never *consume* the pickup. This is simpler than adding a "PlayerPawn" sub-channel and produces the same end behavior.
 5. **Player-only triggers.** `AQuakeTrigger_Teleport`, `AQuakeTrigger_Message`, and the level `ExitTrigger` use the same player-only filter pattern as pickups: overlap on `Pawn`, cast to `AQuakeCharacter` in the handler, bail on null. Listed as "player only" in the matrix above for documentation but mechanically it's a C++-side filter, not a channel difference.
@@ -439,7 +462,7 @@ All pickups are simple floating/rotating primitive shapes with a colored glow (p
 - Visual: rotating metallic box (gray for Silver, gold for Gold).
 - Picking up a key the player already holds is a no-op (no message, no effect).
 
-**Storage: `AQuakePlayerState`.** Keys live on the PlayerState, not on `UQuakeGameInstance`, because their lifecycle (reset on level transition, reset on death, reset on hub return) matches PlayerState's destruction lifecycle exactly — same reasoning as powerups in 4.3. PlayerState is destroyed by `OpenLevel` and by death-respawn, so the reset rules in section 1.4 are automatic with no cleanup code. Door key checks call `Player->GetPlayerState<AQuakePlayerState>()->HasKey(Color)`. Key pickups call `Player->GiveKey(Color)` which forwards to the PlayerState, matching the Character-as-facade pattern used elsewhere for state writes.
+**Storage: `AQuakePlayerState`.** Keys live on the PlayerState, not on `UQuakeGameInstance`, because their lifecycle (reset on level transition, reset on death, reset on hub return) matches powerups (section 4.3). `OpenLevel` and hub returns clear the PlayerState automatically (the world tears down and a fresh PlayerState is created). **Death-respawn does NOT auto-clear** — UE keeps the PlayerController and PlayerState across pawn respawn — so the death/restart flow must call `AQuakePlayerState::ClearPerLifeState()` explicitly (see section 1.4 for the lifecycle table and section 6.4 for the call site). Door key checks call `Player->GetPlayerState<AQuakePlayerState>()->HasKey(Color)`. Key pickups call `Player->GiveKey(Color)` which forwards to the PlayerState, matching the Character-as-facade pattern used elsewhere for state writes.
 
 ---
 
@@ -459,7 +482,9 @@ Levels are built in the Unreal Editor using BSP brushes and/or simple static mes
 - **Hazards** — slime (damage over time) and lava (heavy damage over time) volumes.
 - **Water volumes** — swimmable, with drowning timer (see 5.3).
 
-**`AQuakeEnemySpawnPoint`.** A passive marker actor placed in the level that defines where an enemy should appear. Each spawn point holds the enemy class to spawn, the lowest difficulty at which it activates, and a flag controlling whether it spawns automatically at level start or waits to be fired by a trigger. Spawn points implement `IQuakeActivatable` so they can also be targets of generic buttons / `AQuakeTrigger_Relay` chains, in addition to the typed `AQuakeTrigger_Spawn` (see 5.6).
+**`AQuakeEnemySpawnPoint`.** A passive marker actor placed in the level that defines where an enemy should appear. **This is the only authoring path for enemies that count toward `KillsTotal`** — directly-placed `BP_Enemy_*` actors in the level are treated as decoration / scripted display and never participate in stat counting or the level-clear check. If you want an enemy to count, you place a spawn point. (See section 10.5 for the per-level checklist.)
+
+Each spawn point holds the enemy class to spawn, the lowest difficulty at which it activates, the kill-target flag, and a flag controlling whether it spawns automatically at level start or waits to be fired by a trigger. Spawn points implement `IQuakeActivatable` so they can be targets of generic buttons / `AQuakeTrigger_Relay` chains in addition to the typed `AQuakeTrigger_Spawn` (see 5.6).
 
 ```cpp
 UCLASS()
@@ -479,18 +504,29 @@ public:
     UPROPERTY(EditAnywhere, Category="Spawn")
     bool bDeferredSpawn = false;
 
+    /** If true, this spawn point's enemy counts toward KillsTotal and the level-clear check (default true). */
+    UPROPERTY(EditAnywhere, Category="Spawn")
+    bool bIsMarkedKillTarget = true;
+
+    /** True if this spawn point participates in stat / clear counting at the current difficulty. */
+    bool IsEligible() const;  // bIsMarkedKillTarget && current difficulty >= MinDifficulty
+    /** True if the spawn point's enemy has been spawned AND has died. Unspawned eligible spawn points are NOT satisfied. */
+    bool IsSatisfied() const;
+
     virtual void BeginPlay() override;
-    virtual void Activate_Implementation(AActor* Instigator) override;  // IQuakeActivatable
+    virtual void Activate(AActor* Instigator) override;  // IQuakeActivatable
 
 protected:
     UPROPERTY() TObjectPtr<AQuakeEnemyBase> SpawnedEnemy;  // null until spawned; ensures one-shot
-    bool TrySpawn();  // checks MinDifficulty + SpawnedEnemy, then spawns
+    bool TrySpawn();  // checks IsEligible() + SpawnedEnemy, then spawns
 };
 ```
 
-**Behavior:** `BeginPlay` calls `TrySpawn()` if `bDeferredSpawn == false`. `Activate(Instigator)` calls `TrySpawn()` regardless. `TrySpawn` checks the current difficulty against `MinDifficulty` (via `GameMode->GetDifficulty()`), bails if too low, bails if already spawned, otherwise spawns `EnemyClass` at the actor's transform and stores the result in `SpawnedEnemy`. Each spawn point spawns at most once per level attempt.
+**Behavior:** `BeginPlay` calls `TrySpawn()` if `bDeferredSpawn == false`. `Activate(Instigator)` calls `TrySpawn()` regardless. `TrySpawn` calls `IsEligible()` (difficulty + marked check), bails if false, bails if already spawned, otherwise spawns `EnemyClass` at the actor's transform and stores the result in `SpawnedEnemy`. Each spawn point spawns at most once per level attempt.
 
-**Why a flag instead of two subclasses:** the level-start vs deferred behaviors share 90% of the code (difficulty check, one-shot guard, actual spawn call). A boolean is simpler than `AQuakeEnemySpawnPoint_LevelStart` / `AQuakeEnemySpawnPoint_Deferred` subclasses, and a designer can flip the flag in the editor without re-placing the actor.
+**Why a flag instead of two subclasses:** the level-start vs deferred behaviors share 90% of the code (eligibility check, one-shot guard, actual spawn call). A boolean is simpler than `AQuakeEnemySpawnPoint_LevelStart` / `AQuakeEnemySpawnPoint_Deferred` subclasses, and a designer can flip the flag in the editor without re-placing the actor.
+
+**Why the flag lives on the spawn point, not the enemy.** The "should this count?" decision is a *placement* decision, not a *class* decision — every Grunt class is a real enemy, but a Grunt placed as boss-arena ambient decoration shouldn't gate exit unlock. Putting the flag on the spawn point keeps the placement and the count rule co-located.
 
 ### 5.2 Hazards and Water
 
@@ -581,11 +617,11 @@ The character can determine "am I in any water at all" with one call: `GetCharac
 
 `AQuakeButton` is a one-shot or reusable interactable.
 
-**Activation model: `IQuakeActivatable` interface, direct actor references — no string-name targeting.** Quake's original `targetname`/`target` string lookup is not used. Instead, every fireable actor (`AQuakeDoor`, `AQuakeTrigger` and its subclasses, `AQuakeSecret`, level exit, etc.) implements a small `UInterface` declared in C++:
+**Activation model: `IQuakeActivatable` interface, direct actor references — no string-name targeting.** Quake's original `targetname`/`target` string lookup is not used. Instead, every fireable actor (`AQuakeDoor`, `AQuakeTrigger` and its subclasses, `AQuakeSecret`, level exit, etc.) implements a small `UInterface` declared in C++. The interface is **C++-only** (not `BlueprintNativeEvent`) — `Activate` is a pure-virtual method that subclasses override directly with `virtual void Activate(...) override`. **Do not use `Activate_Implementation`** — that suffix is only valid for `UFUNCTION(BlueprintNativeEvent)` methods, which this interface intentionally avoids per the project's "no Blueprint logic" rule.
 
 ```cpp
 // QuakeActivatable.h
-UINTERFACE(MinimalAPI, BlueprintType)
+UINTERFACE(MinimalAPI)
 class UQuakeActivatable : public UInterface { GENERATED_BODY() };
 
 class IQuakeActivatable
@@ -653,7 +689,7 @@ public:
     UPROPERTY(EditInstanceOnly, Category="Quake|Trigger")
     TArray<TObjectPtr<AActor>> Targets;
 
-    virtual void Activate_Implementation(AActor* Instigator) override;  // fires Targets, then runs subclass-specific behavior
+    virtual void Activate(AActor* Instigator) override;  // fires Targets, then runs subclass-specific behavior
 };
 ```
 
@@ -694,27 +730,36 @@ The base class binds `OnComponentBeginOverlap` on `TriggerVolume` (when present)
 
 Stats split across two actors as a **numerator/denominator pair** — these are not duplicate counts:
 
-- **`AQuakeGameMode`** owns the **denominators**: `KillsTotal` and `SecretsTotal`. Both are computed once at `BeginPlay` (by counting `AQuakeEnemyBase` actors with `bIsMarkedKillTarget = true` and `AQuakeTrigger_Secret` volumes in the level) and **never updated** afterward. They represent "how many existed in this level," not "how many have happened so far." `bIsMarkedKillTarget` is a `UPROPERTY(EditAnywhere)` flag on `AQuakeEnemyBase` that defaults to `true`; level designers flip it off for decoration enemies, infinitely-spawning enemies, or scripted-display enemies that shouldn't gate the level-clear check.
+- **`AQuakeGameMode`** owns the **denominators**: `KillsTotal` and `SecretsTotal`. Both are computed once at `BeginPlay` and **never updated** afterward.
+  - `KillsTotal` = count of `AQuakeEnemySpawnPoint` actors where `IsEligible()` is true at the current difficulty (i.e., `bIsMarkedKillTarget == true && MinDifficulty <= GameMode->GetDifficulty()`). Spawn points are counted regardless of `bDeferredSpawn` — a deferred spawn point still owes its enemy to the level total. **Directly-placed `AQuakeEnemyBase` actors do not contribute** (they're decoration; see [section 5.1](SPEC.md#L446)).
+  - `SecretsTotal` = count of `AQuakeTrigger_Secret` volumes in the level.
+  - These represent "how many existed (or will exist) in this level," not "how many have happened so far."
 - **`AQuakePlayerState`** owns the **numerators**: `Kills`, `Secrets`, `TimeElapsed`, `Deaths`. These run up as the player progresses and represent the player's score for the level attempt.
 
 The HUD displays `Kills / KillsTotal` and `Secrets / SecretsTotal` by reading the numerator from `PlayerState` and the denominator from `GameMode`. The end-of-level stat screen does the same. There is **no third counter** for "how many kills have happened" — the level-clear check is computed on demand (see below).
 
 Game-mode events (an enemy dying, a secret being entered) call into the PlayerState to increment counters where the player has earned credit. The HUD reads PlayerState directly via `PlayerController->GetPlayerState<AQuakePlayerState>()` and reads GameMode via `GetWorld()->GetAuthGameMode<AQuakeGameMode>()`.
 
-**Level-clear check.** "Has the player cleared the level?" is computed on demand by scanning the world rather than tracked as a separate counter. This avoids drift from miscounted edge cases (revived Zombies, infighting, hazard kills) and matches the SPEC's preference for derived state over cached state:
+**Level-clear check.** "Has the player cleared the level?" is computed on demand by scanning **spawn points** (not enemies) rather than tracked as a separate counter. Scanning spawn points correctly handles the deferred-spawn case: a deferred spawn point that hasn't fired yet is *not* satisfied, so the level cannot clear until that trigger fires AND the resulting enemy dies.
 
 ```cpp
 bool AQuakeGameMode::IsLevelCleared() const
 {
-    for (TActorIterator<AQuakeEnemyBase> It(GetWorld()); It; ++It)
+    for (TActorIterator<AQuakeEnemySpawnPoint> It(GetWorld()); It; ++It)
     {
-        if (It->IsMarkedKillTarget() && !It->IsDead()) return false;
+        if (It->IsEligible() && !It->IsSatisfied()) return false;
     }
     return true;
 }
+
+// AQuakeEnemySpawnPoint::IsSatisfied
+bool AQuakeEnemySpawnPoint::IsSatisfied() const
+{
+    return SpawnedEnemy != nullptr && SpawnedEnemy->IsDead();
+}
 ```
 
-The exit unlocks when this returns true. Note this is independent of `PlayerState.Kills` — an enemy that died from infighting without player credit still satisfies the clear condition (it's dead), even though the player doesn't get a point for it on the score screen.
+The exit unlocks when this returns true. This is independent of `PlayerState.Kills` — an enemy that died from infighting without player credit still satisfies the clear condition (its spawn point is satisfied), even though the player doesn't get a point for it on the score screen. It also avoids drift from miscounted edge cases (revived Zombies don't `IsDead()` until permanently killed, so their spawn point isn't satisfied; infighting kills satisfy the spawn point regardless of credit; hazard kills satisfy regardless of credit).
 
 **Counter rules:**
 
@@ -736,12 +781,14 @@ The exit unlocks when this returns true. Note this is independent of `PlayerStat
 
 Difficulty is selected at new-game time from the main menu and persists for the entire playthrough. It cannot be changed mid-playthrough.
 
-| Difficulty | Enemy Damage | Enemy HP | Enemy Count | Notes                                  |
-|------------|--------------|----------|-------------|----------------------------------------|
-| Easy       | ×0.75        | ×1.0     | ×1.0        | Forgiving, for new players             |
-| Normal     | ×1.0         | ×1.0     | ×1.0        | Default                                |
-| Hard       | ×1.5         | ×1.25    | ×1.25       | Extra enemies in marked spawn slots    |
-| Nightmare  | ×2.0         | ×1.5     | ×1.5        | Zombies revive 2× faster; pain immunity for all enemies |
+| Difficulty | Enemy Damage | Enemy HP | Notes                                                                    |
+|------------|--------------|----------|--------------------------------------------------------------------------|
+| Easy       | ×0.75        | ×1.0     | Forgiving, for new players                                               |
+| Normal     | ×1.0         | ×1.0     | Default                                                                  |
+| Hard       | ×1.5         | ×1.25    | Extra enemies via spawn-point filtering (no runtime multiplier)          |
+| Nightmare  | ×2.0         | ×1.5     | Even more spawn-point enemies; Zombies revive 2× faster; pain immunity for all enemies |
+
+Damage and HP are flat runtime multipliers applied in `AQuakeEnemyBase::ApplyDifficultyScaling` (see "Application" below). **Enemy count is not a multiplier** — it is implemented entirely by `AQuakeEnemySpawnPoint.MinDifficulty` filtering, which is authored per-placement in the editor. The "extra enemies" wording in the table is descriptive of design intent, not a runtime calculation. See "Enemy count scaling" below for the mechanism.
 
 **Storage and accessor.** `EQuakeDifficulty` is an enum (`Easy`, `Normal`, `Hard`, `Nightmare`) stored on `UQuakeGameInstance` as the source of truth — it must outlive both `OpenLevel` and Character respawn, which is GameInstance's role per [section 1.4](SPEC.md#L70). `AQuakeGameMode` reads it on `BeginPlay` and exposes:
 
@@ -831,13 +878,22 @@ Save data is implemented via UE's standard `USaveGame` framework. `UQuakeSaveGam
 
 **`UQuakeSaveGame` fields:**
 
-- Player profile: difficulty, total stats across all levels (kills, secrets, time, deaths)
-- Inventory snapshot (from `UQuakeGameInstance`): weapons owned, ammo per type, armor type and value, current health
-- Level state: current level name, player transform (position + rotation)
-- PlayerState snapshot: current-level kills, secrets, time, deaths, and the active powerups array (type + remaining duration for each)
-- Actor state: per-level array of `FActorSaveRecord` capturing alive/dead status, current state (for doors and one-shot triggers), and any other per-actor persistent data
+- **Player profile** — difficulty, total stats across all levels (kills, secrets, time, deaths). Persisted from `UQuakeGameInstance`.
+- **Inventory snapshot** (from `UQuakeGameInstance`) — weapons owned, ammo per type, armor type and value. **Health is not in this bullet** (it's not inventory; see below).
+- **Live health** (from `AQuakeCharacter`) — current health value at save time. The Character serializes its own health into the save record; on load, the new Character reads it back in `BeginPlay` after the GameInstance inventory restore.
+- **Level state** — current level name, player transform (position + rotation).
+- **PlayerState snapshot** (from `AQuakePlayerState`) — current-level kills, secrets, time, deaths, the active powerups array (type + remaining duration for each), and **keys held**.
+- **Per-actor state** — array of `FActorSaveRecord` keyed by stable per-actor identity (see "Per-actor save participation" below). Captures door state (open/closed/locked), button state (pressed/cooldown), one-shot trigger state (fired/not), secret state (entered/not), spawn point state (spawned/not + spawned-enemy alive/dead), pickup state (consumed/not), and per-enemy state for currently-spawned enemies (alive/dead, current health, AI state).
 
-On save, the GameInstance and the active `AQuakePlayerState` both serialize their fields into the save game struct. On load, the GameInstance restores the inventory immediately (before `OpenLevel`), and after the new level loads, the GameMode restores the PlayerState fields and then iterates `IQuakeSaveable` actors to apply per-actor records.
+**Save flow.** On save, the GameInstance, the active `AQuakeCharacter`, and the active `AQuakePlayerState` each serialize their fields into the save game struct. The GameMode then iterates `IQuakeSaveable` actors and asks each one to fill an `FActorSaveRecord`.
+
+**Load flow.** On load:
+1. `UGameplayStatics::LoadGameFromSlot` returns the `UQuakeSaveGame`.
+2. `UQuakeGameInstance` restores its own fields (player profile, inventory snapshot) immediately, before `OpenLevel`.
+3. `OpenLevel` is called with the saved level name. The world tears down and rebuilds.
+4. After the new level loads, the GameMode restores the PlayerState fields from the save's PlayerState snapshot.
+5. The GameMode builds a `TMap<FName, const FActorSaveRecord*>` from the save's per-actor records and iterates `IQuakeSaveable` actors, looking each one up by its stable identity (see below) and calling `LoadState(record)` if a matching record exists.
+6. `AQuakeCharacter::BeginPlay` reads inventory from `UQuakeGameInstance` (already restored in step 2) and reads its `Health` from the save record (loaded in step 5 since the Character implements `IQuakeSaveable`).
 
 **Save slots:**
 
@@ -854,7 +910,23 @@ On save, the GameInstance and the active `AQuakePlayerState` both serialize thei
 - Save files persist between sessions in `Saved/SaveGames/`.
 - Starting a new game on the same profile clears existing slots.
 
-**Per-actor save participation:** any actor that has persistent state implements `IQuakeSaveable` (a C++ interface) with `SaveState(FActorSaveRecord&)` and `LoadState(const FActorSaveRecord&)` methods. The game mode iterates `IQuakeSaveable` actors at save time and applies records by tag at load time.
+**Per-actor save participation.** Any actor that has persistent state implements `IQuakeSaveable` with `SaveState(FActorSaveRecord&)` and `LoadState(const FActorSaveRecord&)` methods. The save record carries a stable identity field used to match records to actors at load time.
+
+**Stable identity = `AActor::GetFName()` for level-placed actors.** UE5 assigns each level-placed actor a stable, unique `FName` at placement time and serializes it with the `.umap`. This name survives save/load cycles, package re-saves, and editor restarts. It changes only if the actor is duplicated, deleted-and-replaced, or has its name forcibly edited in the level outliner — in which case any existing save records for the old name simply won't match and the actor restores to its level-default state. This is the standard UE5 idiom for persistent identity and matches the SPEC's preference for direct, refactor-traceable references over user-typed strings (the name is editor-assigned, not user-typed; renaming in the outliner is visible in the diff).
+
+```cpp
+USTRUCT()
+struct FActorSaveRecord
+{
+    GENERATED_BODY()
+    UPROPERTY() FName ActorName;          // == owner's GetFName(); set by SaveState before serialize
+    UPROPERTY() TArray<uint8> Payload;    // FMemoryWriter blob written by the actor's SaveState
+};
+```
+
+**Runtime-spawned actors (not from spawn points) do not persist.** A level reload re-runs `BeginPlay` for spawn points and the chain reproduces the spawn-point-derived enemies. Anything spawned by other runtime systems (e.g., a hypothetical future AI summoner) is intentionally out of scope for v1 saves; if such systems get added later they'll need their own runtime registration mechanism rather than retrofitting names. Currently the only runtime-spawned gameplay actors are spawn-point-derived enemies and their projectiles, and projectiles are too transient to bother saving.
+
+**Why not `AActor::Tags`?** `Tags` is a `TArray<FName>` that requires the user to type a tag string per instance — that's exactly the stringly-typed mechanism the SPEC removed from buttons/triggers in [section 5.5](SPEC.md#L546). `GetFName()` is editor-assigned and refactor-stable, so it's preferred.
 
 ### 6.3 Win Condition
 
@@ -871,6 +943,15 @@ On save, the GameInstance and the active `AQuakePlayerState` both serialize thei
 - Pressing fire restores the level-entry snapshot (see 1.4) and respawns the player at the level's PlayerStart.
 - There is no game-over screen and no run termination — the player can retry indefinitely.
 - The death counter increments per death and is shown on the level-end stats screen.
+
+**Restart sequence (in order).** This is the explicit cleanup path that compensates for UE not auto-resetting PlayerState on pawn respawn (see section 1.4 lifecycle table):
+
+1. Increment `AQuakePlayerState::Deaths`.
+2. Call `AQuakePlayerState::ClearPerLifeState()` — empties powerups array and key set. Does **not** touch `Kills`/`Secrets`/`TimeElapsed`/`Deaths` (those persist across the level attempt).
+3. Restore `UQuakeGameInstance` inventory from the level-entry snapshot (weapons, ammo, armor).
+4. Destroy the dead pawn and spawn a new `AQuakeCharacter` at the level's `PlayerStart`.
+5. New pawn's `BeginPlay` reads inventory from GameInstance and sets `Health = 100` (or the snapshot value).
+6. Time counter continues running (death does not pause the level timer).
 
 ---
 
@@ -911,11 +992,22 @@ No audio assets exist yet. The system provides a clean interface for future inte
 
 ### 8.1 Architecture
 
-- **`UQuakeSoundManager`** (Game Instance Subsystem) — central audio manager.
+- **`UQuakeSoundManager`** (`UGameInstanceSubsystem`) — central audio manager. Auto-instantiated by the engine; **subsystems cannot have Blueprint subclasses.**
 - Exposes functions like `PlaySound(ESoundEvent, Location)`, `PlayMusic(EMusicTrack)`, `StopMusic()`.
 - `ESoundEvent` is an enum cataloging every game sound (weapon fire, pickup, enemy alert, door open, etc.).
-- Sounds are mapped to `USoundBase*` via a `UDataTable` whose row asset is assigned in a Blueprint subclass of the manager (or referenced from the Game Instance). When a row is unmapped (nullptr), the call is a no-op.
-- This means all gameplay code calls the sound manager, and adding audio later is just filling in the data table rows in the Editor.
+
+**Sound table ownership.** Because subsystems can't be Blueprint-subclassed, the data table reference cannot live on `UQuakeSoundManager` itself in a tunable way. Instead:
+
+- The reference lives as a `UPROPERTY(EditDefaultsOnly) TObjectPtr<UDataTable> SoundEventTable` on **`UQuakeGameInstance`**, which **does** have a thin BP subclass (`BP_QuakeGameInstance`) where the slot is filled in.
+- `UQuakeSoundManager` reads it via `GetGameInstance<UQuakeGameInstance>()->GetSoundEventTable()` on first use and caches the pointer.
+- The sound table is `DT_SoundEvents.uasset` (see [section 10.1](SPEC.md#L1049)) with row type `FQuakeSoundEvent { ESoundEvent Key; TObjectPtr<USoundBase> Sound; }`.
+- When a row is unmapped (nullptr) or missing, the `PlaySound` call is a no-op so gameplay code can ship before audio assets exist.
+
+**Why GameInstance and not GameMode.** `AQuakeGameMode` does not own subsystems and is recreated on level transition; the sound manager subsystem persists across levels. The data table reference must live somewhere with the same lifetime as the subsystem, which is `UQuakeGameInstance`.
+
+**`BP_QuakeGameInstance` is set as the Game Instance class in `Project Settings → Maps & Modes → Game Instance Class`.**
+
+This means all gameplay code calls the sound manager, and adding audio later is just filling in the data table rows in the Editor — without touching the subsystem or the GameInstance C++.
 
 ### 8.2 Sound Events (partial list)
 
@@ -956,7 +1048,6 @@ AQuakeProjectile                     — base projectile, holds UProjectileMovem
   AQuakeProjectile_Grenade
 
 AQuakeEnemyBase : public ACharacter  — enemy body: mesh, movement, health, action methods
-  bIsMarkedKillTarget (UPROPERTY EditAnywhere, default true) — counts toward GameMode.KillsTotal; flip off for decoration / infinitely-spawning enemies
   AQuakeEnemy_Grunt
   AQuakeEnemy_Knight
   AQuakeEnemy_Ogre
@@ -976,7 +1067,7 @@ AQuakeEnemyAIController : public AAIController  — enemy brain: FSM, perception
 AQuakePickupBase                     — base pickup (USphereComponent overlap detection)
   AQuakePickup_Health, _Armor, _Ammo, _Weapon, _Key, _Powerup (subclasses)
 
-AQuakeEnemySpawnPoint                — passive level marker; spawns EnemyClass at level start (or on Activate); MinDifficulty gates; implements IQuakeActivatable
+AQuakeEnemySpawnPoint                — passive level marker; spawns EnemyClass at BeginPlay (or on Activate when bDeferredSpawn); MinDifficulty + bIsMarkedKillTarget gate stat counting; implements IQuakeActivatable; canonical authoring path for counted enemies
 
 AQuakeDoor                           — UStaticMeshComponent + UTimelineComponent; implements IQuakeActivatable
 AQuakeButton                         — touch/shoot interactable; fires IQuakeActivatable targets via direct reference (no name lookup)
@@ -1005,7 +1096,7 @@ UQuakeGameInstance                   — owns inventory, snapshot, save/load, le
 
 - **Inventory** (weapons owned, ammo, armor) lives on `UQuakeGameInstance`. Survives `OpenLevel` and Character respawn. The Character reads it on `BeginPlay` and writes back on changes.
 - **Live health** lives on `AQuakeCharacter`. Tied to the body; reset from the level-entry snapshot on respawn.
-- **Current-level stats** (kills, secrets, time, deaths), **active powerups**, and **keys held** live on `AQuakePlayerState`. Recreated on every level transition, which matches the reset semantics — keys live here (rather than on `UQuakeGameInstance` with the rest of "inventory") because their lifecycle is per-level, matching powerups (see 1.4 / 4.4). The HUD reads them directly via `PlayerController->GetPlayerState<AQuakePlayerState>()`.
+- **Current-level stats** (kills, secrets, time, deaths), **active powerups**, and **keys held** live on `AQuakePlayerState`. Recreated on level transition (which clears stats, powerups, and keys for free). **Death-respawn does not auto-clear** PlayerState — `ClearPerLifeState()` is called explicitly from the restart flow in [section 6.4](SPEC.md#L868) to empty powerups and keys while leaving cumulative stats intact. The HUD reads them directly via `PlayerController->GetPlayerState<AQuakePlayerState>()`.
 - **AI** lives on `AQuakeEnemyAIController`. The Enemy pawn only exposes action methods (`MoveTo`, `FireAt`, `PlayPainReaction`).
 - **HUD** is `AQuakeHUD` (an `AHUD`), owned by the PlayerController. It adds an `SQuakeHUDOverlay` Slate widget to the viewport in `BeginPlay`.
 - **Damage** flows through `AActor::TakeDamage` with `UDamageType` subclasses carrying metadata.
@@ -1065,8 +1156,10 @@ Content/
       E2M1.umap
       ...
   Blueprints/
-    GameMode/
-      BP_QuakeGameMode.uasset      — assigns default pawn, HUD, sound table
+    Framework/
+      BP_QuakeGameMode.uasset      — assigns default pawn, HUD, difficulty multiplier table
+      BP_QuakeGameInstance.uasset  — assigns sound event data table; set as Game Instance Class in Project Settings
+      BP_QuakePlayerController.uasset — assigns Input Action and Input Mapping Context assets
     Weapons/
       BP_Weapon_Axe.uasset
       BP_Weapon_Shotgun.uasset
@@ -1146,11 +1239,11 @@ Material Instances (`MI_*`) override these parameters per use case. Runtime tint
 - A `NavMeshBoundsVolume` scaled to cover the entire walkable area.
 - The auto-spawned `RecastNavMesh` actor with `Runtime Generation` set to `Static`.
 
-**Project Settings → Navigation System.** Configure a single Supported Agent matching the player capsule:
-- Agent Radius: 35
-- Agent Height: 180
-- Agent Max Slope: 44
-- Agent Max Step Height: 35
+**Project Settings → Navigation System.** Configure a single Supported Agent matching the player capsule and the player movement parameters in [section 1.1](SPEC.md#L22):
+- Agent Radius: 35 (matches player capsule radius)
+- Agent Height: 180 (matches player capsule full height)
+- Agent Max Slope: 44 (matches player `Max walkable slope`)
+- Agent Max Step Height: 45 (matches player `Step height` — must equal player value or AI cannot path through geometry the player can walk over)
 
 Press **P** in the editor viewport to visualize the NavMesh. Green = walkable. If enemies refuse to chase, this is the first thing to check.
 
@@ -1160,6 +1253,7 @@ All values below are stored in `Config/Default*.ini` and committed to version co
 
 **Maps & Modes:**
 - `Default GameMode` = `BP_QuakeGameMode`
+- `Game Instance Class` = `BP_QuakeGameInstance`
 - `Editor Startup Map` = `MainMenu`
 - `Game Default Map` = `MainMenu`
 - `Transition Map` = empty
@@ -1189,12 +1283,12 @@ When creating a new gameplay level, every map must include:
 - [ ] `PostProcessVolume` (Unbound, low priority) — used by C++ for damage flash and powerup tint
 - [ ] At least one light source (directional or point lights)
 - [ ] Floor/wall geometry (BSP brushes or static meshes with `MI_Wall_*` / `MI_Floor` applied)
-- [ ] Enemy spawn placements (`BP_Enemy_*` actors dragged into the level)
+- [ ] **Enemy spawn placements: `AQuakeEnemySpawnPoint` actors with `EnemyClass` set to a `BP_Enemy_*` class.** Do NOT drag `BP_Enemy_*` actors directly into the level — those won't count toward `KillsTotal` and won't gate the level-clear check. The spawn point is the canonical authoring path (see [section 5.1](SPEC.md#L446)). Set `MinDifficulty`, `bDeferredSpawn`, and `bIsMarkedKillTarget` per placement.
 - [ ] Pickup placements (`BP_Pickup_*` actors)
 - [ ] Doors (`AQuakeDoor` actors), keyed appropriately
 - [ ] An `ExitTrigger` (C++ actor) at the level end, configured with the next map name
 - [ ] Optional: `AQuakeHazardVolume` actors for slime/lava areas
-- [ ] Optional: `AQuakeTrigger` actors for scripted spawns or area events
+- [ ] Optional: `AQuakeTrigger_*` actors for scripted spawns, relays, messages, teleports, kill volumes (see [5.6](SPEC.md#L598))
 - [ ] World Partition disabled (uncheck on level creation)
 - [ ] Level Blueprint event graph: empty
 
