@@ -13,21 +13,18 @@ class QUAKE_API AQuakePlayerController : public APlayerController
 	GENERATED_BODY()
 
 public:
-	UPROPERTY()
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input")
+	TObjectPtr<UInputMappingContext> InputMappingContext;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input")
 	TObjectPtr<UInputAction> MoveAction;
 
-	UPROPERTY()
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input")
 	TObjectPtr<UInputAction> LookAction;
 
-	UPROPERTY()
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input")
 	TObjectPtr<UInputAction> JumpAction;
 
 protected:
 	virtual void BeginPlay() override;
-
-private:
-	void SetupInputMappings();
-
-	UPROPERTY()
-	TObjectPtr<UInputMappingContext> InputMappingContext;
 };

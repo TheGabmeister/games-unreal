@@ -43,11 +43,9 @@ Blueprints contain **no nodes in event graphs** — only property defaults. Do n
 
 ## Architecture: Input Configuration
 
-Enhanced Input is configured **entirely in C++** in `AQuakePlayerController` ([Source/Quake/QuakePlayerController.cpp](Source/Quake/QuakePlayerController.cpp)). The PlayerController owns the `UInputAction` and `UInputMappingContext` objects and creates them at runtime via `NewObject<>()` rather than referencing Editor-created assets. Pawns access actions via `GetController<AQuakePlayerController>()->MoveAction` etc. and bind handlers in `SetupPlayerInputComponent`.
+Enhanced Input uses Editor-authored assets (Input Actions and Input Mapping Context), assigned to `UPROPERTY(EditDefaultsOnly)` slots on `AQuakePlayerController` via a Blueprint subclass (`BP_QuakePlayerController`). The PlayerController adds the mapping context to the Enhanced Input subsystem in `BeginPlay`. Pawns access actions via `GetController<AQuakePlayerController>()->MoveAction` etc. and bind handlers in `SetupPlayerInputComponent`.
 
-This is the project's standard pattern for shared input. When adding a new input action (e.g., for a vehicle), extend `AQuakePlayerController::SetupInputMappings()` rather than creating IA/IMC assets in the Editor.
-
-The standard Quake-style swizzle/negate modifiers for WASD on an `Axis2D` action are already wired up there — copy that pattern when adding new 2D-axis inputs.
+When adding a new input action, add a new `UPROPERTY(EditDefaultsOnly)` slot on `AQuakePlayerController`, create the IA asset in the Editor, map it in IMC_Default, then assign it in the BP subclass. Do not create IA/IMC objects at runtime with `NewObject<>()` — that approach was tried and reverted.
 
 ## Architecture: Editor-Only Pieces
 
