@@ -1,4 +1,5 @@
 #include "QuakeCharacter.h"
+#include "QuakeCollisionChannels.h"
 #include "QuakeCharacterMovementComponent.h"
 #include "QuakeDamageType.h"
 #include "QuakeGameInstance.h"
@@ -26,6 +27,7 @@ AQuakeCharacter::AQuakeCharacter(const FObjectInitializer& ObjectInitializer)
 
 	// SPEC section 1.6: player capsule radius 35, half-height 90.
 	GetCapsuleComponent()->InitCapsuleSize(35.f, 90.f);
+	GetCapsuleComponent()->SetCollisionResponseToChannel(QuakeCollision::ECC_Pickup, ECR_Overlap);
 
 	FirstPersonCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FirstPersonCamera"));
 	FirstPersonCamera->SetupAttachment(GetCapsuleComponent());
