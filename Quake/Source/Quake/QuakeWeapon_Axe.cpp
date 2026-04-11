@@ -8,6 +8,7 @@
 #include "GameFramework/Controller.h"
 #include "GameFramework/Pawn.h"
 #include "Kismet/GameplayStatics.h"
+#include "Perception/AISense_Hearing.h"
 
 AQuakeWeapon_Axe::AQuakeWeapon_Axe()
 {
@@ -52,6 +53,20 @@ void AQuakeWeapon_Axe::Fire(AActor* InInstigator)
 		TraceEnd,
 		QuakeCollision::ECC_Weapon,
 		Params);
+
+	// Noise event for AI hearing. SPEC section 3.3: firing any weapon (and
+	// taking damage) reports a noise event via UAISense_Hearing; the Grunt's
+	// sense config has bUseLoSHearing=false, so the swing is audible through
+	// walls just like original Quake. Source location is the swing origin
+	// (the player's eyes), loudness 1.0 — hearing range is determined per-
+	// enemy on the AISenseConfig_Hearing side.
+	UAISense_Hearing::ReportNoiseEvent(
+		World,
+		TraceStart,
+		/*Loudness*/ 1.f,
+		InInstigator,
+		/*MaxRange*/ 0.f,
+		FName(TEXT("QuakeWeaponFire")));
 
 #if !UE_BUILD_SHIPPING
 	// Dev visualization: red miss, green hit. 1-second lifetime so single

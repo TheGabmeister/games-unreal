@@ -382,7 +382,7 @@ This split enables the AI debugger (`'` key in PIE), allows the same pawn body t
 The controller owns a `UAIPerceptionComponent` configured with two senses:
 
 - **`UAISenseConfig_Sight`** — sight radius and lose-sight radius set per enemy from section 3.1's Sight column. Peripheral vision angle: 90° (180° FOV cone). Stimulus aging: stimulus is "remembered" for 5 seconds after losing sight, allowing the enemy to chase to last known position.
-- **`UAISenseConfig_Hearing`** — hearing range set per enemy from section 3.1's Hearing column. Walls do **not** block hearing (matching Quake) — set `bUseLoSHearing = false`. Noise events are reported via `UAISense_Hearing::ReportNoiseEvent` whenever the player fires a non-Axe weapon or takes damage.
+- **`UAISenseConfig_Hearing`** — hearing range set per enemy from section 3.1's Hearing column. Walls do **not** block hearing (matching Quake). `bUseLoSHearing` was deprecated in UE 5.7 and its default already matches the Quake behavior (walls do not block), so it is not set explicitly. Noise events are reported via `UAISense_Hearing::ReportNoiseEvent` whenever the player fires any weapon (the Axe included, matching original Quake) or takes damage.
 
 The controller binds `OnTargetPerceptionUpdated` to drive transitions: a fresh sight or hearing stimulus on the player promotes the controller from Idle to Alert and stores the target.
 
