@@ -13,6 +13,64 @@ A single-player FPS inspired by the original Quake (1996), rebuilt in Unreal Eng
 - **No audio assets.** An audio system will be implemented with placeholder hooks so sound effects and music can be plugged in later.
 - **Single player only.** No networking or multiplayer.
 
+## Quick Map — Section Index
+
+**For agents:** grep `^### <N>\.<M>` or `^#### Phase <N>:` to jump to a section's exact line precisely. Line numbers are deliberately omitted from this map because they drift on every edit; section numbers are stable and are what [CLAUDE.md](CLAUDE.md), code comments, and cross-references use. Read only the sections your current task actually touches — this document is ~1800 lines and reading it linearly is wasteful.
+
+### 1. Player — everything attached to the player character
+- **1.1 Movement** — strafe-jump params, bunny-hop window, walkable slope. Highest-risk subsystem.
+- **1.2 Health and Armor** — HP, armor tiers, Quake absorption formula.
+- **1.3 Death and Respawn**
+- **1.4 Inventory Persistence** — what survives `OpenLevel` vs respawn; owned by `UQuakeGameInstance`.
+- **1.5 Damage Pipeline** — `UQuakeDamageType` shared base, CDO-cast pattern, leaf subclass table. Read when adding a damage source.
+- **1.6 Collision Model** — custom channels, response matrix, per-system rules. Read when any actor collides or traces.
+
+### 2. Weapons
+- **2.0 Weapon Table** — dmg / RoF / range / spread for all 8 weapons.
+- **2.1 Ammo** — carry caps and pickup amounts.
+- **2.2 General Weapon Rules** — swap time, auto-switch, splash/knockback, projectile implementation via `UProjectileMovementComponent`.
+- **2.3 Underwater Discharge** — Thunderbolt water rule.
+
+### 3. Enemies
+- **3.1 Enemy Types** — stat table (HP / Speed / Sight / Hearing / Attack).
+- **3.2 Drop Tables** — backpack drops per enemy type.
+- **3.3 AI Behavior** — body/brain split, FSM, perception, aggro propagation, infighting. Read when touching AI.
+- **3.4 Gibs** — overkill rule and zombie revive.
+
+### 4. Items and Pickups
+- **4.1 Health Pickups** | **4.2 Armor Pickups** | **4.3 Powerups** (stored on `AQuakePlayerState`) | **4.4 Keys** (also on PlayerState).
+
+### 5. Level Structure
+- **5.1 Layout** — `AQuakeEnemySpawnPoint` is the only authoring path for counted enemies.
+- **5.2 Hazards and Water** / **5.3 Water Volumes** — lava/slime damage, swim, drowning.
+- **5.4 Doors** — `UTimelineComponent`-driven; player-sweep close-check.
+- **5.5 Buttons** — `IQuakeActivatable` interface (pure C++ virtual, no string-name targeting).
+- **5.6 Triggers** — `_Relay` / `_Spawn` / `_Message` / `_Hurt` / `_Teleport` / `_Secret`.
+- **5.7 Progression** / **5.8 Secrets** / **5.9 Stat Counting** — `KillsTotal` / `SecretsTotal` computed at `BeginPlay`.
+
+### 6. Game Rules
+- **6.1 Difficulty** | **6.2 Saves** (`UQuakeSaveGame`) | **6.3 Win Condition** | **6.4 Failure Loop** (death restart calls `ClearPerLifeState`).
+
+### 7. HUD
+- **7.1 Damage Feedback** — screen flash via `UMaterialInstanceDynamic` on a post-process.
+
+### 8. Audio System
+- **8.1 Architecture** (placeholder hooks only; no assets in v1) | **8.2 Sound Events** (partial list).
+
+### 9. Technical Architecture
+- **9.1 Class Hierarchy** | **9.2 Blueprint Layer** (asset slots only, zero event-graph nodes) | **9.3 Existing Code** | **9.4 Build Configuration**.
+
+### 10. Project Layout & Editor Configuration (editor-only pieces)
+- **10.1 Content Folder Structure** | **10.2 Master Material** (`M_QuakeBase`) | **10.3 NavMesh** (agent 35/180, step 45) | **10.4 Project Settings** | **10.5 Per-Level Checklist** (authoritative for new maps).
+
+### 11. v1 Scope
+- **11.1 Approach** — test layers, phase discipline.
+- **11.2 Content Scope** — 1 hub + 3 levels, 4 weapons, 3 enemies.
+- **11.3 Out of Scope for v1**
+- **11.4 Phase Roadmap** — one-line phase table.
+- **11.5 Phase Details** — exit criteria per phase, Phases 0–15. **Read only the phase you're currently in.** This is the longest block in the spec (~450 lines); each phase is ~25–35 lines. Grep `^#### Phase N:` for the exact offset.
+- **11.6 v1 Definition of Done**
+
 ---
 
 ## 1. Player
