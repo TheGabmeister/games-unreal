@@ -28,7 +28,7 @@ export DOTNET_ROOT="$UE_DOTNET_DIR" PATH="$UE_DOTNET_DIR:$PATH" DOTNET_MULTILEVE
 dotnet '/c/Program Files/Epic Games/UE_5.7/Engine/Binaries/DotNET/UnrealBuildTool/UnrealBuildTool.dll' -projectfiles -project='C:/dev/games-unreal/Quake/Quake.uproject' -game -engine -VSCode
 ```
 
-A `PostToolUse` hook in `.claude/settings.local.json` runs this automatically after `Write` of any `Source/**.{h,cpp}` file. Manually generated files (created in the IDE) will not trigger it.
+Run this manually after adding a new `.h` / `.cpp` file. (An earlier `PostToolUse` hook tried to automate it, but it fired once per Write so a phase that created ~11 source files regenerated the project ~11 times back-to-back; removed as of 2026-04-11.)
 
 The system installs only .NET 10; UnrealBuildTool requires .NET 8. The bundled SDK at the path above is the working version — never invoke a system `dotnet` for UBT.
 
