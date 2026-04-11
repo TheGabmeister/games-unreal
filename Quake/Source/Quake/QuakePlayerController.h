@@ -28,6 +28,18 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input")
 	TObjectPtr<UInputAction> FireAction;
 
+	/**
+	 * Phase 4 weapon-swap inputs. IA_Weapon1 → Axe (slot 1), IA_Weapon2 →
+	 * Shotgun (slot 2). Authored in the editor, mapped to keyboard 1 / 2
+	 * in IMC_Default, and assigned via BP_QuakePlayerController defaults.
+	 * Phase 6 adds IA_Weapon4 (Nailgun) and IA_Weapon7 (Rocket).
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input|Weapons")
+	TObjectPtr<UInputAction> Weapon1Action;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input|Weapons")
+	TObjectPtr<UInputAction> Weapon2Action;
+
 protected:
 	virtual void BeginPlay() override;
 };

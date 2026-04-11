@@ -49,42 +49,99 @@ void AQuakeCharacter::BeginPlay()
 	Super::BeginPlay();
 
 	Health = MaxHealth;
-	SpawnAndEquipDefaultWeapon();
+	SpawnOwnedWeapons();
 }
 
-void AQuakeCharacter::SpawnAndEquipDefaultWeapon()
+void AQuakeCharacter::SpawnOwnedWeapons()
 {
-	if (!DefaultWeaponClass)
-	{
-		return;
-	}
 	UWorld* World = GetWorld();
 	if (!World)
 	{
 		return;
 	}
+	UQuakeGameInstance* GameInstance = World->GetGameInstance<UQuakeGameInstance>();
+	if (!GameInstance)
+	{
+		UE_LOG(LogQuakeCharacter, Warning,
+			TEXT("SpawnOwnedWeapons: no UQuakeGameInstance — set Game Instance Class in Project Settings"));
+		return;
+	}
+
+	// Mirror the GameInstance's 8-slot array so index i always maps to
+	// SPEC 2.0 weapon number i+1, regardless of how many slots are
+	// actually filled.
+	WeaponInstances.SetNum(8);
 
 	FActorSpawnParameters Params;
 	Params.Owner = this;
 	Params.Instigator = this;
 	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
-	// Spawn at origin then attach — the attach immediately overwrites the
-	// transform, so the spawn location doesn't matter. Skipping the
-	// FTransform overload also dodges a TSubclassOf->UClass* template
-	// deduction wrinkle on UE 5.7.
-	CurrentWeapon = World->SpawnActor<AQuakeWeaponBase>(DefaultWeaponClass, Params);
-	if (CurrentWeapon)
+	int32 FirstOwnedSlot = -1;
+	for (int32 Slot = 0; Slot < 8 && Slot < GameInstance->OwnedWeaponClasses.Num(); ++Slot)
 	{
-		CurrentWeapon->AttachToComponent(
+		TSubclassOf<AQuakeWeaponBase> Class = GameInstance->OwnedWeaponClasses[Slot];
+		if (!Class)
+		{
+			continue;
+		}
+
+		// Spawn at origin then attach — the attach immediately overwrites
+		// the transform, so the spawn location doesn't matter. Skipping
+		// the FTransform overload also dodges a TSubclassOf->UClass*
+		// template deduction wrinkle on UE 5.7.
+		AQuakeWeaponBase* Weapon = World->SpawnActor<AQuakeWeaponBase>(Class, Params);
+		if (!Weapon)
+		{
+			UE_LOG(LogQuakeCharacter, Warning, TEXT("Failed to spawn weapon in slot %d (%s)"),
+				Slot + 1, *GetNameSafe(Class));
+			continue;
+		}
+		Weapon->AttachToComponent(
 			FirstPersonCamera,
 			FAttachmentTransformRules::SnapToTargetNotIncludingScale);
+		Weapon->SetActorHiddenInGame(true);  // Hidden until equipped.
+		WeaponInstances[Slot] = Weapon;
+
+		if (FirstOwnedSlot == -1)
+		{
+			FirstOwnedSlot = Slot;
+		}
+	}
+
+	if (FirstOwnedSlot != -1)
+	{
+		SwitchToWeaponSlot(FirstOwnedSlot);
 	}
 	else
 	{
-		UE_LOG(LogQuakeCharacter, Warning, TEXT("Failed to spawn DefaultWeaponClass=%s"),
-			*GetNameSafe(DefaultWeaponClass));
+		UE_LOG(LogQuakeCharacter, Warning,
+			TEXT("SpawnOwnedWeapons: no weapons in UQuakeGameInstance::OwnedWeaponClasses — "
+			     "populate BP_QuakeGameInstance in the editor"));
 	}
+}
+
+bool AQuakeCharacter::SwitchToWeaponSlot(int32 SlotIndexZeroBased)
+{
+	if (SlotIndexZeroBased < 0 || SlotIndexZeroBased >= WeaponInstances.Num())
+	{
+		return false;
+	}
+	AQuakeWeaponBase* Target = WeaponInstances[SlotIndexZeroBased];
+	if (!Target || Target == CurrentWeapon)
+	{
+		return false;
+	}
+
+	// Hide the outgoing viewmodel so only the active weapon is visible.
+	if (CurrentWeapon)
+	{
+		CurrentWeapon->SetActorHiddenInGame(true);
+	}
+	CurrentWeapon = Target;
+	CurrentWeaponSlot = SlotIndexZeroBased;
+	CurrentWeapon->SetActorHiddenInGame(false);
+	return true;
 }
 
 void AQuakeCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -110,6 +167,19 @@ void AQuakeCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComp
 		UE_LOG(LogQuakeCharacter, Warning,
 			TEXT("AQuakePlayerController::FireAction is null — assign IA_Fire in BP_QuakePlayerController defaults, "
 			     "and make sure IA_Fire is mapped to LMB in IMC_Default."));
+	}
+
+	// Phase 4 weapon swap. Per SPEC 2.2 "instant via number keys (1-8)".
+	// IA_Weapon1 / IA_Weapon2 slots on BP_QuakePlayerController are
+	// authored in the editor and mapped to keyboard 1 / 2 in IMC_Default.
+	// Phase 6 will add IA_Weapon4 (Nailgun) and IA_Weapon7 (Rocket).
+	if (PC->Weapon1Action)
+	{
+		EnhancedInput->BindAction(PC->Weapon1Action, ETriggerEvent::Started, this, &AQuakeCharacter::OnWeapon1Pressed);
+	}
+	if (PC->Weapon2Action)
+	{
+		EnhancedInput->BindAction(PC->Weapon2Action, ETriggerEvent::Started, this, &AQuakeCharacter::OnWeapon2Pressed);
 	}
 }
 
@@ -142,6 +212,44 @@ void AQuakeCharacter::OnFirePressed(const FInputActionValue& /*Value*/)
 	{
 		CurrentWeapon->TryFire(this);
 	}
+}
+
+void AQuakeCharacter::OnWeapon1Pressed(const FInputActionValue& /*Value*/)
+{
+	SwitchToWeaponSlot(0);
+}
+
+void AQuakeCharacter::OnWeapon2Pressed(const FInputActionValue& /*Value*/)
+{
+	SwitchToWeaponSlot(1);
+}
+
+int32 AQuakeCharacter::GiveAmmo(EQuakeAmmoType Type, int32 Amount)
+{
+	UQuakeGameInstance* GameInstance = GetWorld() ? GetWorld()->GetGameInstance<UQuakeGameInstance>() : nullptr;
+	return GameInstance ? GameInstance->GiveAmmo(Type, Amount) : 0;
+}
+
+bool AQuakeCharacter::ConsumeAmmo(EQuakeAmmoType Type, int32 Amount)
+{
+	UQuakeGameInstance* GameInstance = GetWorld() ? GetWorld()->GetGameInstance<UQuakeGameInstance>() : nullptr;
+	return GameInstance ? GameInstance->ConsumeAmmo(Type, Amount) : false;
+}
+
+int32 AQuakeCharacter::GetAmmo(EQuakeAmmoType Type) const
+{
+	UQuakeGameInstance* GameInstance = GetWorld() ? GetWorld()->GetGameInstance<UQuakeGameInstance>() : nullptr;
+	return GameInstance ? GameInstance->GetAmmo(Type) : 0;
+}
+
+void AQuakeCharacter::GiveHealth(float Amount, bool bOvercharge)
+{
+	if (IsDead() || Amount <= 0.f)
+	{
+		return;
+	}
+	const float Cap = bOvercharge ? GetOverchargeCap() : MaxHealth;
+	Health = FMath::Min(Health + Amount, Cap);
 }
 
 void AQuakeCharacter::ApplyArmorAbsorption(

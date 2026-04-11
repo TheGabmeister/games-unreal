@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "QuakeAmmoType.h"
 #include "QuakeWeaponBase.generated.h"
 
 class UStaticMeshComponent;
@@ -46,6 +47,30 @@ public:
 	float RateOfFire = 2.f;
 
 	/**
+	 * Display name used by the HUD weapon readout. Set in subclass
+	 * constructor (e.g., "Axe", "Shotgun"). The HUD reads this in the
+	 * Slate paint path so no asset lookup is required at runtime.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon")
+	FText DisplayName;
+
+	/**
+	 * Ammo type consumed per shot. EQuakeAmmoType::None means the weapon
+	 * fires without consuming ammo (the Axe). TryFire uses this as the
+	 * key for the GameInstance ammo check.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon|Ammo")
+	EQuakeAmmoType AmmoType = EQuakeAmmoType::None;
+
+	/**
+	 * Ammo consumed per successful shot. 0 when AmmoType is None; 1 for
+	 * Shotgun / Nailgun / Rocket Launcher; 2 for Double-Barrel Shotgun and
+	 * Super Nailgun.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon|Ammo", meta = (ClampMin = "0"))
+	int32 AmmoPerShot = 0;
+
+	/**
 	 * Returns true if the cooldown has elapsed since the last successful
 	 * Fire. Pure check — does not consume the cooldown.
 	 */
@@ -53,13 +78,28 @@ public:
 	bool CanFire() const;
 
 	/**
-	 * Public entry point. Checks the cooldown, calls Fire if ready, and
-	 * arms the next cooldown window. Returns true iff Fire was actually
-	 * invoked. Cooldown gating lives here so subclasses only have to
-	 * implement the per-weapon hit/projectile logic.
+	 * Public entry point. Runs the cooldown gate, consumes ammo (if the
+	 * weapon has an ammo type), and calls Fire if both pass. On empty
+	 * ammo it plays a "click" stub and arms the cooldown anyway so held
+	 * fire spams click at the weapon's RoF rather than at tick rate.
+	 * Returns true iff Fire was actually invoked.
+	 *
+	 * The ammo check reads from the Instigator's UQuakeGameInstance so
+	 * weapons don't hold local ammo state — inventory ownership stays on
+	 * the GameInstance per CLAUDE.md "Architecture: State Ownership".
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Weapon")
 	bool TryFire(AActor* InInstigator);
+
+protected:
+	/**
+	 * "Click" feedback when firing on empty. Base stub logs and emits a
+	 * hearing noise event so AI still hears the failed fire attempt (SPEC
+	 * 3.3 wants enemies to react to the player making noise, and a dry
+	 * fire is still a meaningful audible cue in Quake). Subclasses may
+	 * override to play the weapon-specific click asset when sound lands.
+	 */
+	virtual void PlayEmptyClick(AActor* InInstigator);
 
 protected:
 	/**

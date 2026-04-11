@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
+#include "QuakeAmmoType.h"
 #include "QuakeCharacter.generated.h"
 
 class UCameraComponent;
@@ -37,19 +38,63 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Health")
 	bool IsDead() const { return Health <= 0.f; }
 
-	// --- Phase 2: weapon ---
+	/**
+	 * Overcharge ceiling for Megahealth / stimpack-style pickups. SPEC
+	 * section 1.2: HP can go up to 200 via Megahealth and decays back to
+	 * 100 at 1 HP/sec. Pickup CanBeConsumedBy uses this to reject a
+	 * Megahealth touch when the player is already at 200.
+	 */
+	static constexpr float GetOverchargeCap() { return 200.f; }
+
+	// --- Phase 4: weapon slot array ---
 
 	/**
-	 * Default weapon class spawned in BeginPlay. SPEC section 2: the player
-	 * always carries the Axe. Filled in BP defaults; the C++ class itself
-	 * leaves it null so unit tests can construct the character without
-	 * dragging the weapon header in.
+	 * Per-slot spawned weapon actors. Index maps to SPEC 2.0 weapon number
+	 * (0 = slot 1 Axe, 1 = slot 2 Shotgun, 3 = slot 4 Nailgun, etc.).
+	 * Parallel to UQuakeGameInstance::OwnedWeaponClasses. Null entries
+	 * mean "not owned". Size is fixed to 8 in BeginPlay.
 	 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapons")
-	TSubclassOf<AQuakeWeaponBase> DefaultWeaponClass;
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Weapons")
+	TArray<TObjectPtr<AQuakeWeaponBase>> WeaponInstances;
 
+	/** Zero-based slot index of the currently-equipped weapon. -1 = none. */
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Weapons")
+	int32 CurrentWeaponSlot = -1;
+
+	/** The weapon the HUD / fire path uses. Points into WeaponInstances or null. */
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Weapons")
 	TObjectPtr<AQuakeWeaponBase> CurrentWeapon;
+
+	/**
+	 * Hide the old weapon, show the slot's weapon, update CurrentWeapon.
+	 * No-op on out-of-range or unowned slots. Instant swap — SPEC 2.2's
+	 * 0.2s lower + 0.2s raise animation is polish for a later phase.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Weapons")
+	bool SwitchToWeaponSlot(int32 SlotIndexZeroBased);
+
+	// --- Phase 4: inventory facade ---
+
+	/** Grant ammo via the GameInstance. Returns the amount actually added (capped). */
+	UFUNCTION(BlueprintCallable, Category = "Inventory")
+	int32 GiveAmmo(EQuakeAmmoType Type, int32 Amount);
+
+	/** Consume ammo via the GameInstance. Returns true if the full amount was available. */
+	UFUNCTION(BlueprintCallable, Category = "Inventory")
+	bool ConsumeAmmo(EQuakeAmmoType Type, int32 Amount);
+
+	/** Read ammo count via the GameInstance — convenience for the HUD and pickups. */
+	UFUNCTION(BlueprintCallable, Category = "Inventory")
+	int32 GetAmmo(EQuakeAmmoType Type) const;
+
+	/**
+	 * Grant health directly to the Character. Self-owned state, so this
+	 * does NOT route through the GameInstance (health isn't persistent
+	 * inventory). bOvercharge allows the grant to push HP past MaxHealth
+	 * up to GetOverchargeCap().
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Health")
+	void GiveHealth(float Amount, bool bOvercharge);
 
 	/**
 	 * Damage absorption math, extracted as a pure static helper so it can
@@ -105,7 +150,13 @@ private:
 	void Move(const struct FInputActionValue& Value);
 	void Look(const struct FInputActionValue& Value);
 	void OnFirePressed(const struct FInputActionValue& Value);
+	void OnWeapon1Pressed(const struct FInputActionValue& Value);
+	void OnWeapon2Pressed(const struct FInputActionValue& Value);
 
-	/** Equipped to CurrentWeapon in BeginPlay if DefaultWeaponClass is set. */
-	void SpawnAndEquipDefaultWeapon();
+	/**
+	 * Spawn all weapons the GameInstance says the player owns, one actor
+	 * per non-null slot in GameInstance->OwnedWeaponClasses. Called from
+	 * BeginPlay. Auto-equips the lowest-index owned weapon.
+	 */
+	void SpawnOwnedWeapons();
 };

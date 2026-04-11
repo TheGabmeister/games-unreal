@@ -32,4 +32,10 @@ private:
 	TWeakObjectPtr<AQuakeCharacter> PlayerCharacter;
 
 	FText GetHealthText() const;
+
+	/** Phase 4: current weapon display name ("Axe" / "Shotgun" / ...). */
+	FText GetWeaponText() const;
+
+	/** Phase 4: ammo count for the currently-equipped weapon's AmmoType, or blank for Axe. */
+	FText GetAmmoText() const;
 };

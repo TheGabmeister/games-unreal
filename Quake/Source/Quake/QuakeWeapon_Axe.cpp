@@ -12,8 +12,11 @@
 
 AQuakeWeapon_Axe::AQuakeWeapon_Axe()
 {
-	// SPEC section 2.0: Axe RoF = 2/sec  -> 0.5 s cooldown.
+	// SPEC section 2.0: Axe RoF = 2/sec  -> 0.5 s cooldown, no ammo.
 	RateOfFire = 2.f;
+	AmmoType = EQuakeAmmoType::None;
+	AmmoPerShot = 0;
+	DisplayName = NSLOCTEXT("QuakeWeapon", "AxeName", "Axe");
 }
 
 void AQuakeWeapon_Axe::Fire(AActor* InInstigator)
