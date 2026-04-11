@@ -5,22 +5,24 @@
       "Bash(\"/c/Program Files/Epic Games/UE_5.7/Engine/Build/BatchFiles/GenerateProjectFiles.bat\" -project=\"c:/dev/games-unreal/Quake/Quake.uproject\" -game -vscode)",
       "Bash(\"/c/Program Files/Epic Games/UE_5.7/Engine/Binaries/DotNET/UnrealBuildTool/UnrealBuildTool.exe\" -projectfiles -project=\"C:/dev/games-unreal/Quake/Quake.uproject\" -game -engine -vscode)",
       "Skill(update-config)",
-      "Skill(update-config:*)"
-    ]
-  },
-  "hooks": {
-    "PostToolUse": [
-      {
-        "matcher": "Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python -c \"import sys,json; d=json.load(sys.stdin); print(d['tool_input']['file_path'])\" | grep -qE \"Source.*\\.(h|cpp)$\" && export DOTNET_MULTILEVEL_LOOKUP=0 && export DOTNET_ROLL_FORWARD=LatestMajor && export UE_DOTNET_DIR='/c/Program Files/Epic Games/UE_5.7/Engine/Binaries/ThirdParty/DotNet/8.0.412/win-x64' && export PATH=\"$UE_DOTNET_DIR:$PATH\" && export DOTNET_ROOT=\"$UE_DOTNET_DIR\" && dotnet '/c/Program Files/Epic Games/UE_5.7/Engine/Binaries/DotNET/UnrealBuildTool/UnrealBuildTool.dll' -projectfiles -project='C:/dev/games-unreal/Quake/Quake.uproject' -game -engine -VSCode 2>/dev/null || true",
-            "timeout": 60,
-            "statusMessage": "Regenerating VS Code project files..."
-          }
-        ]
-      }
+      "Skill(update-config:*)",
+      "Read(//tmp/**)",
+      "Read(//c/Users/Admin/AppData/Local/Temp/**)",
+      "Bash(ls /c/dev/games-unreal/Quake/phase2*.txt)",
+      "Bash(export UE_DOTNET_DIR='/c/Program Files/Epic Games/UE_5.7/Engine/Binaries/ThirdParty/DotNet/8.0.412/win-x64')",
+      "Bash(export DOTNET_ROOT=\"$UE_DOTNET_DIR\" PATH=\"$UE_DOTNET_DIR:$PATH\" DOTNET_MULTILEVEL_LOOKUP=0 DOTNET_ROLL_FORWARD=LatestMajor)",
+      "Bash(dotnet '/c/Program Files/Epic Games/UE_5.7/Engine/Binaries/DotNET/UnrealBuildTool/UnrealBuildTool.dll' -projectfiles -project='C:/dev/games-unreal/Quake/Quake.uproject' -game -engine -VSCode)",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d['tool_input']['file_path']\\)\")",
+      "Bash(ls -lt c:/dev/games-unreal/Quake/compileCommands_Quake.json c:/dev/games-unreal/Quake/.vscode/*.json)",
+      "Bash(grep -qE \"Source.*\\\\.\\(h|cpp\\)$\")",
+      "Bash(echo '{\"tool_input\":{\"file_path\":\"c:\\\\\\\\dev\\\\\\\\games-unreal\\\\\\\\Quake\\\\\\\\Source\\\\\\\\Quake\\\\\\\\Foo.cpp\"}}')",
+      "Bash(printf 'c:\\\\\\\\dev\\\\\\\\games-unreal\\\\\\\\Quake\\\\\\\\Source\\\\\\\\Quake\\\\\\\\QuakeDamageType_Bullet.h\\\\n')",
+      "Bash(printf '%s' '{\"tool_input\":{\"file_path\":\"c:\\\\\\\\dev\\\\\\\\games-unreal\\\\\\\\Quake\\\\\\\\Source\\\\\\\\Quake\\\\\\\\QuakeDamageType_Bullet.h\"}}')",
+      "Bash(python -c \"import json; print\\(json.dumps\\({'tool_input':{'file_path':'c:\\\\\\\\\\\\\\\\dev\\\\\\\\\\\\\\\\games-unreal\\\\\\\\\\\\\\\\Quake\\\\\\\\\\\\\\\\Source\\\\\\\\\\\\\\\\Quake\\\\\\\\\\\\\\\\Foo.h'}}\\)\\)\" cat /tmp/hook-test.json echo \"---\" python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d['tool_input']['file_path']\\)\")",
+      "Read(//c/dev/games-unreal/Quake/**)"
+    ],
+    "additionalDirectories": [
+      "\\tmp"
     ]
   }
 }
