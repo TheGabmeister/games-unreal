@@ -8,6 +8,7 @@
 #include "Components/CapsuleComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/DamageEvents.h"
+#include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/Controller.h"
@@ -114,14 +115,30 @@ void AQuakeEnemyBase::PlayDeathReaction()
 	UE_LOG(LogQuakeEnemy, Verbose, TEXT("%s: PlayDeathReaction stub"), *GetName());
 }
 
-void AQuakeEnemyBase::Die(AController* /*Killer*/)
+void AQuakeEnemyBase::Die(AController* Killer)
 {
-	if (IsDead())
-	{
-		return;
-	}
 
 	Health = 0.f;
+
+	// Dev-only visual indicator so a human in PIE can see kills without
+	// tailing the output log. AddOnScreenDebugMessage renders straight to
+	// the viewport; Key=-1 means "always add a new line, never overwrite".
+	// Stripped from shipping builds alongside the DrawDebugLine calls in
+	// the Axe and Grunt fire paths.
+#if !UE_BUILD_SHIPPING
+	if (GEngine)
+	{
+		const FString KillerName = Killer ? Killer->GetName() : TEXT("<world>");
+		GEngine->AddOnScreenDebugMessage(
+			/*Key*/          -1,
+			/*TimeToDisplay*/ 5.f,
+			/*DisplayColor*/  FColor::Red,
+			FString::Printf(TEXT("[Quake] %s killed by %s"), *GetName(), *KillerName));
+	}
+#endif
+	UE_LOG(LogQuakeEnemy, Log, TEXT("%s killed by %s"),
+		*GetName(),
+		Killer ? *Killer->GetName() : TEXT("<world>"));
 
 	// Notify the AIController to transition to Dead BEFORE we unpossess,
 	// otherwise the controller still ticks on the next frame expecting a
