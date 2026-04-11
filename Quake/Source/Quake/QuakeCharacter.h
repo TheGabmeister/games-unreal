@@ -152,6 +152,7 @@ private:
 	void OnFirePressed(const struct FInputActionValue& Value);
 	void OnWeapon1Pressed(const struct FInputActionValue& Value);
 	void OnWeapon2Pressed(const struct FInputActionValue& Value);
+	void OnWeapon7Pressed(const struct FInputActionValue& Value);
 
 	/**
 	 * Spawn all weapons the GameInstance says the player owns, one actor

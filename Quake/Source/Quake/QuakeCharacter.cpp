@@ -171,10 +171,10 @@ void AQuakeCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComp
 			     "and make sure IA_Fire is mapped to LMB in IMC_Default."));
 	}
 
-	// Phase 4 weapon swap. Per SPEC 2.2 "instant via number keys (1-8)".
-	// IA_Weapon1 / IA_Weapon2 slots on BP_QuakePlayerController are
-	// authored in the editor and mapped to keyboard 1 / 2 in IMC_Default.
-	// Phase 6 will add IA_Weapon4 (Nailgun) and IA_Weapon7 (Rocket).
+	// Weapon swap. Per SPEC 2.2 "instant via number keys (1-8)". IA_Weapon1 /
+	// IA_Weapon2 / IA_Weapon7 slots on BP_QuakePlayerController are authored
+	// in the editor and mapped to keyboard 1 / 2 / 7 in IMC_Default.
+	// Phase 6 will add IA_Weapon4 (Nailgun).
 	if (PC->Weapon1Action)
 	{
 		EnhancedInput->BindAction(PC->Weapon1Action, ETriggerEvent::Started, this, &AQuakeCharacter::OnWeapon1Pressed);
@@ -182,6 +182,10 @@ void AQuakeCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComp
 	if (PC->Weapon2Action)
 	{
 		EnhancedInput->BindAction(PC->Weapon2Action, ETriggerEvent::Started, this, &AQuakeCharacter::OnWeapon2Pressed);
+	}
+	if (PC->Weapon7Action)
+	{
+		EnhancedInput->BindAction(PC->Weapon7Action, ETriggerEvent::Started, this, &AQuakeCharacter::OnWeapon7Pressed);
 	}
 }
 
@@ -224,6 +228,12 @@ void AQuakeCharacter::OnWeapon1Pressed(const FInputActionValue& /*Value*/)
 void AQuakeCharacter::OnWeapon2Pressed(const FInputActionValue& /*Value*/)
 {
 	SwitchToWeaponSlot(1);
+}
+
+void AQuakeCharacter::OnWeapon7Pressed(const FInputActionValue& /*Value*/)
+{
+	// Slot index 6 = SPEC 2.0 weapon number 7 = Rocket Launcher.
+	SwitchToWeaponSlot(6);
 }
 
 int32 AQuakeCharacter::GiveAmmo(EQuakeAmmoType Type, int32 Amount)
