@@ -118,8 +118,6 @@ void AQuakeEnemyBase::PlayDeathReaction()
 void AQuakeEnemyBase::Die(AController* Killer)
 {
 
-	Health = 0.f;
-
 	// Dev-only visual indicator so a human in PIE can see kills without
 	// tailing the output log. AddOnScreenDebugMessage renders straight to
 	// the viewport; Key=-1 means "always add a new line, never overwrite".
@@ -139,6 +137,12 @@ void AQuakeEnemyBase::Die(AController* Killer)
 	UE_LOG(LogQuakeEnemy, Log, TEXT("%s killed by %s"),
 		*GetName(),
 		Killer ? *Killer->GetName() : TEXT("<world>"));
+
+	if (IsDead()) return;
+
+	Health = 0.f;
+
+
 
 	// Notify the AIController to transition to Dead BEFORE we unpossess,
 	// otherwise the controller still ticks on the next frame expecting a

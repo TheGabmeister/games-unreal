@@ -1,6 +1,5 @@
 #include "QuakeHUD.h"
 
-#include "QuakeCharacter.h"
 #include "SQuakeHUDOverlay.h"
 
 #include "Engine/Engine.h"
@@ -29,8 +28,11 @@ void AQuakeHUD::BeginPlay()
 		return;
 	}
 
+	// Pass the controller, not the current pawn — the overlay re-resolves
+	// the pawn on every paint so the HUD stays bound to the live body
+	// after a death-restart swaps the pawn out from under the controller.
 	OverlayWidget = SNew(SQuakeHUDOverlay)
-		.PlayerCharacter(Cast<AQuakeCharacter>(PC->GetPawn()));
+		.OwningPlayerController(PC);
 
 	GEngine->GameViewport->AddViewportWidgetForPlayer(
 		LocalPlayer,

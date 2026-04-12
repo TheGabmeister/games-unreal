@@ -18,8 +18,26 @@ AQuakeWeapon_RocketLauncher::AQuakeWeapon_RocketLauncher()
 	DisplayName = NSLOCTEXT("QuakeWeapon", "RocketLauncherName", "Rocket Launcher");
 }
 
+bool AQuakeWeapon_RocketLauncher::CanActuallyFire(AActor* /*InInstigator*/) const
+{
+	if (ProjectileClass != nullptr)
+	{
+		return true;
+	}
+	// A BP_Weapon_RocketLauncher shipped with no ProjectileClass set is a
+	// data-authoring bug. Log from here — TryFire's cooldown arm gates the
+	// spam to the weapon's RoF (1.5 Hz), so the authoring bug is visible
+	// in the Output Log without drowning the editor.
+	UE_LOG(LogTemp, Warning,
+		TEXT("AQuakeWeapon_RocketLauncher: ProjectileClass is null — assign BP_Projectile_Rocket "
+		     "in BP_Weapon_RocketLauncher defaults."));
+	return false;
+}
+
 void AQuakeWeapon_RocketLauncher::Fire(AActor* InInstigator)
 {
+	// ProjectileClass is guaranteed non-null here: TryFire routes through
+	// CanActuallyFire() before invoking Fire().
 	APawn* PawnInstigator = Cast<APawn>(InInstigator);
 	if (!PawnInstigator)
 	{
@@ -29,18 +47,6 @@ void AQuakeWeapon_RocketLauncher::Fire(AActor* InInstigator)
 	UWorld* World = GetWorld();
 	if (!World)
 	{
-		return;
-	}
-
-	if (!ProjectileClass)
-	{
-		// A BP_Weapon_RocketLauncher that ships with no ProjectileClass set is
-		// a data-authoring bug, not a runtime condition. Log loudly so the
-		// editor's Output Log catches it on the first test fire, then bail
-		// before spawning so we don't crash.
-		UE_LOG(LogTemp, Warning,
-			TEXT("AQuakeWeapon_RocketLauncher::Fire: ProjectileClass is null — assign BP_Projectile_Rocket "
-				 "in BP_Weapon_RocketLauncher defaults."));
 		return;
 	}
 

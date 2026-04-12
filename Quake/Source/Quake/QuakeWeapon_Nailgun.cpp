@@ -17,8 +17,25 @@ AQuakeWeapon_Nailgun::AQuakeWeapon_Nailgun()
 	DisplayName = NSLOCTEXT("QuakeWeapon", "NailgunName", "Nailgun");
 }
 
+bool AQuakeWeapon_Nailgun::CanActuallyFire(AActor* /*InInstigator*/) const
+{
+	if (ProjectileClass != nullptr)
+	{
+		return true;
+	}
+	// Data-authoring bug — log from the pre-fire gate so TryFire's cooldown
+	// arm rate-limits the spam (8 Hz here). See the matching pattern in
+	// AQuakeWeapon_RocketLauncher::CanActuallyFire.
+	UE_LOG(LogTemp, Warning,
+		TEXT("AQuakeWeapon_Nailgun: ProjectileClass is null — assign BP_Projectile_Nail "
+		     "in BP_Weapon_Nailgun defaults."));
+	return false;
+}
+
 void AQuakeWeapon_Nailgun::Fire(AActor* InInstigator)
 {
+	// ProjectileClass is guaranteed non-null here: TryFire routes through
+	// CanActuallyFire() before invoking Fire().
 	APawn* PawnInstigator = Cast<APawn>(InInstigator);
 	if (!PawnInstigator)
 	{
@@ -28,18 +45,6 @@ void AQuakeWeapon_Nailgun::Fire(AActor* InInstigator)
 	UWorld* World = GetWorld();
 	if (!World)
 	{
-		return;
-	}
-
-	if (!ProjectileClass)
-	{
-		// A BP_Weapon_Nailgun that ships with no ProjectileClass set is a
-		// data-authoring bug, not a runtime condition. Log loudly so the
-		// editor's Output Log catches it on the first test fire, then bail
-		// before spawning so we don't crash.
-		UE_LOG(LogTemp, Warning,
-			TEXT("AQuakeWeapon_Nailgun::Fire: ProjectileClass is null — assign BP_Projectile_Nail "
-				 "in BP_Weapon_Nailgun defaults."));
 		return;
 	}
 

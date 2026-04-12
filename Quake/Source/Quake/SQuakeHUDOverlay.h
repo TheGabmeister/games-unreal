@@ -4,12 +4,16 @@
 #include "Widgets/SCompoundWidget.h"
 #include "Widgets/DeclarativeSyntaxSupport.h"
 
+class APlayerController;
 class AQuakeCharacter;
 
 /**
  * Phase 2 minimal HUD overlay. Pure Slate (no UMG, no BP) per SPEC
- * section 7. Polls AQuakeCharacter on paint via a weak pointer captured
- * at construction.
+ * section 7. Polls the player pawn on paint via its owning controller —
+ * the controller survives pawn replacement (death / respawn, future
+ * teleport) whereas a pawn pointer would go stale the moment the body
+ * dies. The controller is captured at construction; the character is
+ * looked up via `PC->GetPawn<AQuakeCharacter>()` on every paint call.
  *
  * Phase 2 displays only Health — the rest of the table in SPEC section 7
  * (armor, ammo, weapon bar, keys, powerups, crosshair) is added in later
@@ -23,13 +27,16 @@ class QUAKE_API SQuakeHUDOverlay : public SCompoundWidget
 {
 public:
 	SLATE_BEGIN_ARGS(SQuakeHUDOverlay) {}
-		SLATE_ARGUMENT(TWeakObjectPtr<AQuakeCharacter>, PlayerCharacter)
+		SLATE_ARGUMENT(TWeakObjectPtr<APlayerController>, OwningPlayerController)
 	SLATE_END_ARGS()
 
 	void Construct(const FArguments& InArgs);
 
 private:
-	TWeakObjectPtr<AQuakeCharacter> PlayerCharacter;
+	TWeakObjectPtr<APlayerController> OwningPlayerController;
+
+	/** Resolves the currently-possessed AQuakeCharacter, or nullptr. */
+	const AQuakeCharacter* ResolvePlayerCharacter() const;
 
 	FText GetHealthText() const;
 

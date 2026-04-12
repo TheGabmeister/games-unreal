@@ -107,6 +107,18 @@ protected:
 	/** Helper: cast GetPawn() to AQuakeEnemyBase once. */
 	AQuakeEnemyBase* GetEnemyPawn() const;
 
+	/**
+	 * Line-of-sight test from the enemy's eye viewpoint to CurrentTarget's
+	 * location, traced on `ECC_Visibility`. Returns true iff the trace
+	 * reaches the target without being blocked by world geometry. The
+	 * enemy's own capsule is added to the ignore list.
+	 *
+	 * SPEC 3.3 Attack state requires "in range + LoS" — this is the LoS
+	 * side of that gate. Also used in Chase to avoid promoting to Attack
+	 * when the target ducks behind a wall.
+	 */
+	bool HasLineOfSightToCurrentTarget() const;
+
 	// --- Tuning (defaults can be overridden per enemy controller subclass) ---
 
 	/** Seconds the Alert pulse lasts before transitioning to Chase. */
@@ -124,6 +136,20 @@ protected:
 
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "AI|State")
 	TObjectPtr<AActor> CurrentTarget = nullptr;
+
+	/**
+	 * World-space position of the most recent successful perception or
+	 * damage event involving CurrentTarget. Chase navigates to THIS point
+	 * rather than the live target actor — when the target ducks behind a
+	 * wall, the enemy moves toward where the target WAS and drops back to
+	 * Idle if it reaches that spot without re-acquiring. Without this,
+	 * once a grunt saw the player once it would track the player's live
+	 * position through walls forever.
+	 */
+	FVector LastKnownTargetLocation = FVector::ZeroVector;
+
+	/** Whether LastKnownTargetLocation holds a meaningful value. */
+	bool bHasLastKnownTargetLocation = false;
 
 	/** Seconds spent in the current state — used by Alert / Pain timeouts. */
 	float TimeInState = 0.f;

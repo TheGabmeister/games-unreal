@@ -101,6 +101,25 @@ protected:
 	 */
 	virtual void PlayEmptyClick(AActor* InInstigator);
 
+	/**
+	 * Pre-fire configuration gate. Called by TryFire AFTER the cooldown
+	 * check but BEFORE the ammo gate, so a misconfigured projectile weapon
+	 * (e.g. BP defaults shipped with a null `ProjectileClass`) cannot
+	 * consume ammo or arm the auto-switch path. Default returns true.
+	 *
+	 * Subclasses that can reach an "I know I can't fire right now"
+	 * decision purely from their own state (not a cooldown or ammo issue)
+	 * override this. Projectile weapons use it to guard `ProjectileClass`;
+	 * future melee-with-combo weapons could use it to gate animations.
+	 *
+	 * Returning false from this path still arms the cooldown via TryFire
+	 * so log spam is gated to RoF rather than input-tick rate — a
+	 * misconfigured rocket launcher logs ~1.5 times per second, not
+	 * hundreds. Subclasses should log a Warning from this method so the
+	 * authoring bug surfaces in the editor output log.
+	 */
+	virtual bool CanActuallyFire(AActor* InInstigator) const { return true; }
+
 protected:
 	/**
 	 * Subclass hook: do the actual hit logic (trace, projectile spawn,

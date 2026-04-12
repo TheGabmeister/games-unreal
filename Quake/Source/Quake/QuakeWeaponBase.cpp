@@ -39,6 +39,18 @@ bool AQuakeWeaponBase::TryFire(AActor* InInstigator)
 		return false;
 	}
 
+	// Subclass-level configuration gate. If a projectile weapon has a null
+	// ProjectileClass (BP authoring bug), we MUST NOT consume ammo or run
+	// the auto-switch path — a mis-authored rocket launcher would otherwise
+	// silently burn rockets + cooldown on every click instead of doing
+	// nothing. We still arm the cooldown so the subclass's log-warning
+	// spam is gated to the weapon's RoF rather than the input tick rate.
+	if (!CanActuallyFire(InInstigator))
+	{
+		LastFireWorldTime = GetWorld()->GetTimeSeconds();
+		return false;
+	}
+
 	// Ammo gate. Weapons with AmmoType::None (the Axe) bypass this entirely
 	// — ConsumeAmmo(None, ...) returns true without touching the TMap. For
 	// ammo weapons, a failed consume plays the empty click, re-arms the

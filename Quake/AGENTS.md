@@ -34,6 +34,7 @@ This file gives repo-specific guidance to coding agents working in this project.
 - `AQuakePlayerState` owns current-level stats plus per-level state such as keys and active powerups.
 - `UQuakeGameInstance` owns persistent inventory, profile-level data, and cross-level state.
 - New shared input actions should be added in `AQuakePlayerController` rather than created as editor-only input assets.
+- New input wiring is a 4-part change: add the `UPROPERTY(EditDefaultsOnly)` slot on `AQuakePlayerController`, create the `IA_*` asset, map it in `IMC_Default`, and assign it in `BP_QuakePlayerController`. Do not synthesize IA/IMC objects at runtime as a shortcut.
 
 ## Spec Alignment Notes
 
@@ -42,6 +43,7 @@ This file gives repo-specific guidance to coding agents working in this project.
 - For Phase 2 damage-validation work, keep the "target dummy returns fire" check as a test-only/sandbox behavior that calls `ApplyPointDamage` on the player. Do not pull Phase 3 enemy AI or combat behavior forward just to verify pain flash or HUD health loss.
 - Do not assume `AQuakePlayerState` is recreated on death. UE keeps `PlayerController` and `PlayerState` across pawn respawn, so Quake's death-restart flow must explicitly call `AQuakePlayerState::ClearPerLifeState()` to clear keys and active powerups while preserving cumulative level-attempt stats.
 - Keep live health on `AQuakeCharacter` or a shared health component tied to the pawn. Inventory lives on `UQuakeGameInstance`, but save/load and level-entry restore must serialize and restore health explicitly.
+- Pickups depend on collision setup in C++, not just BP placement: `AQuakePickupBase` overlaps the custom `Pickup` channel, and the player capsule must explicitly overlap `QuakeCollision::ECC_Pickup` or shell/health/powerup pickups will never fire `OnPickupBeginOverlap`.
 - Counted enemies are authored through `AQuakeEnemySpawnPoint`, not by dragging `BP_Enemy_*` actors directly into a map. Direct enemy placements are decoration/scripted display unless the user explicitly changes that rule.
 - Stats and level-clear logic must follow spawn points, difficulty gating, and spawn-point satisfaction state. Do not build systems that only count already-spawned `AQuakeEnemyBase` actors.
 - Save/load identity for level-placed actors uses stable actor identity via `GetFName()`/`FActorSaveRecord::ActorName`, not ad hoc Actor Tags or string registries.
@@ -57,6 +59,7 @@ This file gives repo-specific guidance to coding agents working in this project.
 - Avoid duplicating health/armor resolution logic in both `AQuakeCharacter` and enemy classes. Prefer a shared resolver or `UQuakeHealthComponent` that handles armor absorption, self-damage scaling, knockback inputs, death checks, and related bookkeeping.
 - Actor-specific `TakeDamage` overrides should stay thin: gather context from `FDamageEvent`, hand the calculation to shared code, then perform actor-specific reactions such as HUD feedback, AI aggro, pain reactions, or death presentation.
 - Not every health change belongs in the damage pipeline. Timed effects like megahealth decay should use explicit health-management code rather than being faked as combat damage.
+- Megahealth overcharge/ceiling rules live with the Character/health system, but the time-based decay is separate follow-up behavior. When implementing decay, add explicit health-management logic rather than routing it through `TakeDamage`.
 
 ## Build And Tooling
 

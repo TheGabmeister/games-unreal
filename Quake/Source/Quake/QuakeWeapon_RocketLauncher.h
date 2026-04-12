@@ -52,5 +52,6 @@ public:
 	float MuzzleSpawnForwardOffset = 60.f;
 
 protected:
+	virtual bool CanActuallyFire(AActor* InInstigator) const override;
 	virtual void Fire(AActor* InInstigator) override;
 };

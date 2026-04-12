@@ -59,5 +59,6 @@ public:
 	float SpreadHalfAngleDegrees = 1.f;
 
 protected:
+	virtual bool CanActuallyFire(AActor* InInstigator) const override;
 	virtual void Fire(AActor* InInstigator) override;
 };

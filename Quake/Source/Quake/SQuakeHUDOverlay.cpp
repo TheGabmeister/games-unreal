@@ -5,6 +5,7 @@
 #include "QuakeWeaponBase.h"
 
 #include "Fonts/SlateFontInfo.h"
+#include "GameFramework/PlayerController.h"
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/Text/STextBlock.h"
@@ -13,7 +14,7 @@
 
 void SQuakeHUDOverlay::Construct(const FArguments& InArgs)
 {
-	PlayerCharacter = InArgs._PlayerCharacter;
+	OwningPlayerController = InArgs._OwningPlayerController;
 
 	const FSlateFontInfo HealthFont = FCoreStyle::GetDefaultFontStyle("Bold", 36);
 	const FSlateFontInfo WeaponFont = FCoreStyle::GetDefaultFontStyle("Regular", 18);
@@ -77,9 +78,22 @@ void SQuakeHUDOverlay::Construct(const FArguments& InArgs)
 	];
 }
 
+const AQuakeCharacter* SQuakeHUDOverlay::ResolvePlayerCharacter() const
+{
+	// The controller survives pawn replacement. Resolving the pawn on
+	// every paint call keeps the HUD wired to the live body through
+	// death/respawn and future teleporter flows. If the controller itself
+	// dies (level transition) the weak pointer drops and we render "--".
+	if (const APlayerController* PC = OwningPlayerController.Get())
+	{
+		return Cast<AQuakeCharacter>(PC->GetPawn());
+	}
+	return nullptr;
+}
+
 FText SQuakeHUDOverlay::GetHealthText() const
 {
-	if (const AQuakeCharacter* Char = PlayerCharacter.Get())
+	if (const AQuakeCharacter* Char = ResolvePlayerCharacter())
 	{
 		return FText::FromString(FString::Printf(TEXT("HP %d"), FMath::RoundToInt(Char->GetHealth())));
 	}
@@ -88,7 +102,7 @@ FText SQuakeHUDOverlay::GetHealthText() const
 
 FText SQuakeHUDOverlay::GetWeaponText() const
 {
-	if (const AQuakeCharacter* Char = PlayerCharacter.Get())
+	if (const AQuakeCharacter* Char = ResolvePlayerCharacter())
 	{
 		if (const AQuakeWeaponBase* Weapon = Char->CurrentWeapon)
 		{
@@ -100,7 +114,7 @@ FText SQuakeHUDOverlay::GetWeaponText() const
 
 FText SQuakeHUDOverlay::GetAmmoText() const
 {
-	const AQuakeCharacter* Char = PlayerCharacter.Get();
+	const AQuakeCharacter* Char = ResolvePlayerCharacter();
 	if (!Char)
 	{
 		return FText::GetEmpty();

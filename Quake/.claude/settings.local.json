@@ -19,7 +19,8 @@
       "Bash(printf 'c:\\\\\\\\dev\\\\\\\\games-unreal\\\\\\\\Quake\\\\\\\\Source\\\\\\\\Quake\\\\\\\\QuakeDamageType_Bullet.h\\\\n')",
       "Bash(printf '%s' '{\"tool_input\":{\"file_path\":\"c:\\\\\\\\dev\\\\\\\\games-unreal\\\\\\\\Quake\\\\\\\\Source\\\\\\\\Quake\\\\\\\\QuakeDamageType_Bullet.h\"}}')",
       "Bash(python -c \"import json; print\\(json.dumps\\({'tool_input':{'file_path':'c:\\\\\\\\\\\\\\\\dev\\\\\\\\\\\\\\\\games-unreal\\\\\\\\\\\\\\\\Quake\\\\\\\\\\\\\\\\Source\\\\\\\\\\\\\\\\Quake\\\\\\\\\\\\\\\\Foo.h'}}\\)\\)\" cat /tmp/hook-test.json echo \"---\" python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d['tool_input']['file_path']\\)\")",
-      "Read(//c/dev/games-unreal/Quake/**)"
+      "Read(//c/dev/games-unreal/Quake/**)",
+      "Bash(ls -la /c/dev/games-unreal/Quake/Source/Quake/QuakeDamageType*)"
     ],
     "additionalDirectories": [
       "\\tmp"
