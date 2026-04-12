@@ -2,10 +2,35 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
+// Full include needed for TSubclassOf<AQuakePickupBase> in FQuakeDropEntry
+// (same gotcha as TSubclassOf<AQuakeWeaponBase> in QuakeGameInstance.h).
+#include "QuakePickupBase.h"
 #include "QuakeEnemyBase.generated.h"
 
 class UStaticMeshComponent;
 class USoundBase;
+
+/**
+ * One entry in an enemy's drop table. SPEC section 3.2.
+ * Filled in the BP subclass per the "asset slots in BP" convention.
+ */
+USTRUCT(BlueprintType)
+struct FQuakeDropEntry
+{
+	GENERATED_BODY()
+
+	/** Pickup class to spawn on death (e.g. BP_Pickup_BackpackShells). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
+	TSubclassOf<AQuakePickupBase> PickupClass;
+
+	/** Number of items (passed to the pickup if it supports quantity). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, meta = (ClampMin = "1"))
+	int32 Quantity = 1;
+
+	/** Probability [0..1] that this entry actually spawns on death. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float Chance = 1.0f;
+};
 
 /**
  * Phase 3 body class (the pawn half of the body/brain split) for every
@@ -166,15 +191,29 @@ public:
 	/** Death reaction stub (collapse, sound). Overridable by subclasses. */
 	virtual void PlayDeathReaction();
 
+	/** Gib reaction stub (scatter primitives, blood decal). SPEC 3.4. */
+	virtual void PlayGibReaction();
+
+	// --- Drops (Phase 7) ---
+
+	/**
+	 * Loot dropped on non-gib death per SPEC section 3.2. Filled in the
+	 * BP subclass (BP_Enemy_Grunt, etc.). Each entry rolls independently.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enemy|Drops")
+	TArray<FQuakeDropEntry> DropTable;
+
 	// --- Death ---
 
 	/**
 	 * Kill this enemy immediately. Called from TakeDamage when Health <= 0.
-	 * Notifies the controller, stops movement, plays death reaction, and
-	 * schedules the 2-second corpse channel flip per SPEC section 1.6 rule 2.
-	 * Also unpossesses the AIController as part of the Dead state transition.
+	 * bGibbed: true when overkill damage >= 2× remaining HP (SPEC 3.4).
+	 * Gibbed enemies skip drops and play a scatter reaction instead of collapse.
+	 * Notifies the controller, stops movement, plays death/gib reaction, spawns
+	 * drops (if !bGibbed), and schedules the 2-second corpse channel flip per
+	 * SPEC section 1.6 rule 2.
 	 */
-	virtual void Die(AController* Killer);
+	virtual void Die(AController* Killer, bool bGibbed = false);
 
 	virtual float TakeDamage(
 		float DamageAmount,
@@ -198,6 +237,9 @@ private:
 	/** Attempt to read stats from the EnemyStatsTable. No-op if the table
 	 *  is unconfigured or the row is missing — C++ defaults remain. */
 	void LoadStatsFromDataTable();
+
+	/** Spawn drops from the DropTable at our location. */
+	void SpawnDrops();
 
 	FTimerHandle CorpseFlipTimerHandle;
 };

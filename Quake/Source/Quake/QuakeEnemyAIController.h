@@ -156,4 +156,20 @@ protected:
 
 	/** World time of the last successful attack fire, -inf initially. */
 	float LastAttackTime = -FLT_MAX;
+
+	// --- Infighting (Phase 7, SPEC 3.3) ---
+
+	/**
+	 * SPEC 3.3: 10-second grudge timer. When an enemy damages us, we switch
+	 * target to that enemy. After GrudgeDuration seconds (or if the grudge
+	 * target dies / we lose sight for 5 s), we revert to the player.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "AI|Infighting", meta = (ClampMin = "0.0"))
+	float GrudgeDuration = 10.f;
+
+	/** The actor we're grudge-targeting (another enemy). Null = no grudge. */
+	TWeakObjectPtr<AActor> GrudgeTarget;
+
+	/** World time when the current grudge expires. */
+	double GrudgeExpireTime = 0.0;
 };

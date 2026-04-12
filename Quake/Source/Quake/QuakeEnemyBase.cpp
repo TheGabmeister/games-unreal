@@ -164,14 +164,12 @@ void AQuakeEnemyBase::PlayDeathReaction()
 	UE_LOG(LogQuakeEnemy, Verbose, TEXT("%s: PlayDeathReaction stub"), *GetName());
 }
 
-void AQuakeEnemyBase::Die(AController* Killer)
+void AQuakeEnemyBase::Die(AController* Killer, bool bGibbed)
 {
+	if (IsDead()) return;
 
-	// Dev-only visual indicator so a human in PIE can see kills without
-	// tailing the output log. AddOnScreenDebugMessage renders straight to
-	// the viewport; Key=-1 means "always add a new line, never overwrite".
-	// Stripped from shipping builds alongside the DrawDebugLine calls in
-	// the Axe and Grunt fire paths.
+	Health = 0.f;
+
 #if !UE_BUILD_SHIPPING
 	if (GEngine)
 	{
@@ -180,18 +178,20 @@ void AQuakeEnemyBase::Die(AController* Killer)
 			/*Key*/          -1,
 			/*TimeToDisplay*/ 5.f,
 			/*DisplayColor*/  FColor::Red,
-			FString::Printf(TEXT("[Quake] %s killed by %s"), *GetName(), *KillerName));
+			FString::Printf(TEXT("[Quake] %s %s by %s"),
+				*GetName(), bGibbed ? TEXT("GIBBED") : TEXT("killed"), *KillerName));
 	}
 #endif
-	UE_LOG(LogQuakeEnemy, Log, TEXT("%s killed by %s"),
+	UE_LOG(LogQuakeEnemy, Log, TEXT("%s %s by %s"),
 		*GetName(),
+		bGibbed ? TEXT("gibbed") : TEXT("killed"),
 		Killer ? *Killer->GetName() : TEXT("<world>"));
 
-	if (IsDead()) return;
-
-	Health = 0.f;
-
-
+	// SPEC 3.4: gibbed enemies do not drop loot.
+	if (!bGibbed)
+	{
+		SpawnDrops();
+	}
 
 	// Notify the AIController to transition to Dead BEFORE we unpossess,
 	// otherwise the controller still ticks on the next frame expecting a
@@ -204,7 +204,14 @@ void AQuakeEnemyBase::Die(AController* Killer)
 		QuakeAIC->NotifyPawnDied();
 	}
 
-	PlayDeathReaction();
+	if (bGibbed)
+	{
+		PlayGibReaction();
+	}
+	else
+	{
+		PlayDeathReaction();
+	}
 
 	// Unpossess the controller once state has been recorded. The controller
 	// survives the unpossession (UE keeps the AController instance around)
@@ -244,6 +251,51 @@ void AQuakeEnemyBase::OnCorpseChannelFlip()
 	Capsule->SetCollisionObjectType(QuakeCollision::ECC_Corpse);
 	Capsule->SetCollisionResponseToAllChannels(ECR_Ignore);
 	Capsule->SetCollisionResponseToChannel(ECC_WorldStatic, ECR_Block);
+}
+
+void AQuakeEnemyBase::PlayGibReaction()
+{
+	// Phase 7 stub — real gib scattering (fling mesh pieces, blood decal,
+	// fade-out) is a later polish item. For now, immediately hide the actor
+	// (the corpse timer still runs so cleanup is consistent).
+	if (UCharacterMovementComponent* Move = GetCharacterMovement())
+	{
+		Move->StopMovementImmediately();
+		Move->DisableMovement();
+	}
+	SetActorHiddenInGame(true);
+	UE_LOG(LogQuakeEnemy, Verbose, TEXT("%s: PlayGibReaction stub (hidden)"), *GetName());
+}
+
+void AQuakeEnemyBase::SpawnDrops()
+{
+	UWorld* World = GetWorld();
+	if (!World || DropTable.Num() == 0)
+	{
+		return;
+	}
+
+	const FVector SpawnLoc = GetActorLocation();
+	FActorSpawnParameters Params;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+	for (const FQuakeDropEntry& Entry : DropTable)
+	{
+		if (!Entry.PickupClass)
+		{
+			continue;
+		}
+		// Roll the chance. 1.0 always succeeds; 0.0 never.
+		if (Entry.Chance < 1.f && FMath::FRand() >= Entry.Chance)
+		{
+			continue;
+		}
+		AActor* Pickup = World->SpawnActor<AActor>(Entry.PickupClass, SpawnLoc, FRotator::ZeroRotator, Params);
+		if (Pickup)
+		{
+			UE_LOG(LogQuakeEnemy, Verbose, TEXT("%s: dropped %s"), *GetName(), *GetNameSafe(Pickup));
+		}
+	}
 }
 
 float AQuakeEnemyBase::TakeDamage(
@@ -296,7 +348,14 @@ float AQuakeEnemyBase::TakeDamage(
 
 	if (Health <= 0.f)
 	{
-		Die(EventInstigator);
+		// SPEC 3.4: gib when overkill damage >= 2× remaining HP before this
+		// hit. "Remaining HP before" = Health + ScaledDamage (Health is already
+		// decremented above). HealthBefore <= 0 can't happen — IsDead() early-
+		// returns at the top.
+		const float HealthBefore = Health + ScaledDamage;
+		const float Overkill = ScaledDamage - HealthBefore;  // excess past 0
+		const bool bGibbed = Overkill >= HealthBefore * 2.f;
+		Die(EventInstigator, bGibbed);
 	}
 
 	return ScaledDamage;

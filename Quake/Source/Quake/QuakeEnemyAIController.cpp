@@ -179,14 +179,14 @@ void AQuakeEnemyAIController::OnTargetPerceptionUpdated(AActor* Actor, FAIStimul
 		return;
 	}
 
-	// Phase 3 scope: only the PLAYER pawn (AQuakeCharacter) is a valid
-	// target — not sibling enemies. Infighting target selection (enemy-on-
-	// enemy) comes in Phase 7 and routes through the damage-driven
-	// OnDamaged path anyway. The sight/hearing configs still "see"
-	// everything because UE's neutral/enemy/friendly affiliation flags
-	// don't affect Quake's flat no-team-id model; we filter at the
-	// decision layer here instead.
-	if (!Actor->IsA(AQuakeCharacter::StaticClass()))
+	// Only the player or a grudge target are valid perception targets.
+	// Normal enemies are not chased via perception — infighting routes
+	// through the damage-driven OnDamaged path. But once we HAVE a grudge
+	// target, perception updates from that target should refresh LKL so
+	// chase tracking stays smooth during infighting.
+	const bool bIsPlayer = Actor->IsA(AQuakeCharacter::StaticClass());
+	const bool bIsGrudgeTarget = GrudgeTarget.IsValid() && Actor == GrudgeTarget.Get();
+	if (!bIsPlayer && !bIsGrudgeTarget)
 	{
 		return;
 	}
@@ -234,6 +234,19 @@ void AQuakeEnemyAIController::OnDamaged(AController* EventInstigator, float Dama
 		CurrentTarget = InstigatorPawn;
 		LastKnownTargetLocation = InstigatorPawn->GetActorLocation();
 		bHasLastKnownTargetLocation = true;
+
+		// SPEC 3.3 infighting: if the instigator is another enemy (not the
+		// player), start a grudge timer. After GrudgeDuration seconds, we
+		// revert to the player. Hazard damage (no instigator) doesn't
+		// trigger infighting.
+		if (InstigatorPawn->IsA(AQuakeEnemyBase::StaticClass()))
+		{
+			GrudgeTarget = InstigatorPawn;
+			if (const UWorld* World = GetWorld())
+			{
+				GrudgeExpireTime = World->GetTimeSeconds() + GrudgeDuration;
+			}
+		}
 	}
 
 	// Pain roll: SPEC 3.3 pain_chance = min(0.8, damage / max_health * 2).
@@ -281,6 +294,35 @@ void AQuakeEnemyAIController::Tick(float DeltaTime)
 	if (!Enemy || Enemy->IsDead())
 	{
 		return;
+	}
+
+	// --- Infighting grudge expiry (SPEC 3.3) ---
+	// If we have a grudge target and the timer expires (or the target
+	// died), revert to targeting the player. We find the player via the
+	// first local player controller's pawn — single-player assumption.
+	if (GrudgeTarget.IsValid())
+	{
+		const AQuakeEnemyBase* GrudgeEnemy = Cast<AQuakeEnemyBase>(GrudgeTarget.Get());
+		const bool bGrudgeExpired = GetWorld() && GetWorld()->GetTimeSeconds() >= GrudgeExpireTime;
+		const bool bGrudgeDead = GrudgeEnemy && GrudgeEnemy->IsDead();
+
+		if (bGrudgeExpired || bGrudgeDead)
+		{
+			GrudgeTarget.Reset();
+			// Revert to player target.
+			if (const UWorld* World = GetWorld())
+			{
+				if (APlayerController* PC = World->GetFirstPlayerController())
+				{
+					if (APawn* PlayerPawn = PC->GetPawn())
+					{
+						CurrentTarget = PlayerPawn;
+						LastKnownTargetLocation = PlayerPawn->GetActorLocation();
+						bHasLastKnownTargetLocation = true;
+					}
+				}
+			}
+		}
 	}
 
 	switch (CurrentState)
