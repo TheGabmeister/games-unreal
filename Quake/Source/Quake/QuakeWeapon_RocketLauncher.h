@@ -51,6 +51,8 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon|Rocket", meta = (ClampMin = "0.0"))
 	float MuzzleSpawnForwardOffset = 60.f;
 
+	virtual void ApplyStatsFromRow(const struct FQuakeWeaponStatsRow& Row) override;
+
 protected:
 	virtual bool CanActuallyFire(AActor* InInstigator) const override;
 	virtual void Fire(AActor* InInstigator) override;

@@ -1,5 +1,6 @@
 #include "QuakeWeapon_Shotgun.h"
 
+#include "QuakeBalanceRows.h"
 #include "QuakeCollisionChannels.h"
 #include "QuakeDamageType_Bullet.h"
 
@@ -17,6 +18,16 @@ AQuakeWeapon_Shotgun::AQuakeWeapon_Shotgun()
 	AmmoType = EQuakeAmmoType::Shells;
 	AmmoPerShot = 1;
 	DisplayName = NSLOCTEXT("QuakeWeapon", "ShotgunName", "Shotgun");
+	StatsRowName = TEXT("Shotgun");
+}
+
+void AQuakeWeapon_Shotgun::ApplyStatsFromRow(const FQuakeWeaponStatsRow& Row)
+{
+	Super::ApplyStatsFromRow(Row);
+	DamagePerPellet = Row.Damage;
+	PelletCount = Row.PelletCount;
+	SpreadHalfAngleDegrees = Row.SpreadHalfAngleDegrees;
+	Range = Row.Range;
 }
 
 void AQuakeWeapon_Shotgun::Fire(AActor* InInstigator)

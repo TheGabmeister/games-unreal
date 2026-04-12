@@ -1,5 +1,6 @@
 #include "QuakeWeapon_RocketLauncher.h"
 
+#include "QuakeBalanceRows.h"
 #include "QuakeProjectile.h"
 
 #include "Engine/World.h"
@@ -16,6 +17,16 @@ AQuakeWeapon_RocketLauncher::AQuakeWeapon_RocketLauncher()
 	AmmoType = EQuakeAmmoType::Rockets;
 	AmmoPerShot = 1;
 	DisplayName = NSLOCTEXT("QuakeWeapon", "RocketLauncherName", "Rocket Launcher");
+	StatsRowName = TEXT("RocketLauncher");
+}
+
+void AQuakeWeapon_RocketLauncher::ApplyStatsFromRow(const FQuakeWeaponStatsRow& Row)
+{
+	Super::ApplyStatsFromRow(Row);
+	MuzzleSpawnForwardOffset = Row.MuzzleSpawnForwardOffset;
+	// SplashRadius and BaseDamage live on AQuakeProjectile_Rocket.
+	// Row.SplashRadius is informational for designers; the weapon does not
+	// own that stat.
 }
 
 bool AQuakeWeapon_RocketLauncher::CanActuallyFire(AActor* /*InInstigator*/) const

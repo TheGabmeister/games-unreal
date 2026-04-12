@@ -326,14 +326,21 @@ The player always carries the Axe. Other weapons are found as pickups. Switching
 
 ### 2.2 General Weapon Rules
 
-- **Weapon switch time:** 0.2 seconds (lower) + 0.2 seconds (raise). During the raise, fire input is queued so the first shot fires the instant the weapon is ready.
+- **Weapon switch time (v1: instant).** The final target is a 0.2 s lower + 0.2 s raise animation with fire-input queueing during the raise (the first shot fires the instant the weapon is ready; rapid key presses restart the lower-raise sequence from zero, cancelling any in-progress swap). **For v1 (no animation assets) switching is instant** — calling `SwitchToWeaponSlot` hides the old weapon and shows the new one in the same frame, with no delay or queue. The animation timings and fire-queue logic will be added alongside the viewmodel animation phase (Phase 14); until then, all code may assume zero-latency swap.
 - **Auto-switch on first pickup:** picking up a weapon for the first time auto-switches to it.
 - **Duplicate weapon pickup:** if the player already owns the weapon, the pickup grants the weapon's ammo (equivalent to a small ammo pickup of the matching type) but does not switch weapons.
 - **Empty ammo behavior:** firing with insufficient ammo plays a "click" sound and auto-switches to the next-best owned weapon that has ammo, in priority order: RL → SNG → SSG → NG → SG → Axe. Thunderbolt and GL are skipped by auto-switch (kept manual to avoid accidental switching).
 - **Splash damage:** 120 unit radius for rockets and grenades. Damage falls off linearly from full at center to 0 at the radius edge.
 - **Self-damage scale:** 0.5 — the player takes 50% of self-inflicted splash damage. This makes rocket jumping survivable while still costing health.
 - **Knockback:** applied as an instantaneous impulse along the hit normal (or away from the explosion center). Splash knockback is full at center, falls off linearly to 0 at radius edge. Splash applies to the player as well, enabling rocket jumps.
-- **Grenades** bounce off surfaces (restitution 0.4) and explode after 2.5 seconds, or on direct enemy contact, or on direct player contact.
+- **Grenades** bounce off surfaces (restitution 0.4) and explode under one of three conditions (first to occur wins):
+  1. **Fuse timer expires (2.5 s from spawn).** The timer is set once in `BeginPlay` and is never reset or extended by bouncing. The `AQuakeProjectile_Grenade` schedules a deferred `Explode()` call via `SetLifeSpan(2.5)` or an equivalent `GetWorldTimerManager` timer.
+  2. **`OnComponentHit` with a Pawn-channel actor** — i.e. any `ACharacter` (player or enemy). This is a `USphereComponent::OnComponentHit` event where `OtherActor` is alive and on the `Pawn` channel. The grenade calls `Explode()` immediately and cancels the fuse timer.
+  3. **The firer's own pawn collides with the grenade.** Unlike rockets (which have a permanent `IgnoreActorWhenMoving` for the firer), grenades do **not** ignore the firer after a brief grace period (~0.25 s post-spawn). Walking into your own grenade detonates it — this matches original Quake and is an intentional self-damage risk. The 0.25 s grace period prevents the grenade from detonating inside the firer's capsule on launch.
+
+  Bouncing off world geometry (`WorldStatic` / `WorldDynamic` hits where `OtherActor` is null or is not a Pawn) triggers the `OnProjectileBounce` delegate for bounce sound playback but does **not** call `Explode()` — the grenade continues its arc. `HandleImpact` distinguishes the two cases: Pawn hit → explode; world hit → no-op (let the bounce happen).
+
+  `Explode()` calls `UGameplayStatics::ApplyRadialDamageWithFalloff` with the same parameters as the Rocket (BaseDamage 100, InnerRadius 0, OuterRadius 120, linear falloff, `UQuakeDamageType_Explosive`) and then `Destroy()`s. The Ogre's grenade (`AQuakeProjectile_OgreGrenade`) reuses the same base class with different stats (speed 600, damage 40, splash radius 120).
 - **Nails** are physical projectiles with travel time and gravity-free flight.
 - **Thunderbolt** is a continuous beam that deals damage in 0.1-second ticks while fire is held. Range is short (600 units) but it ignores armor for full damage.
 
@@ -505,12 +512,27 @@ All pickups are simple floating/rotating primitive shapes with a colored glow (p
 
 **Stacking and refresh rules:**
 
-- **Different powerups stack.** Quad + Pentagram = full invulnerability while dealing 4× damage. All effects apply simultaneously.
-- **Same powerup refreshes additively, capped at 60 seconds.** Picking up a Quad Damage with 20 seconds left grants 30 + 20 = 50 seconds. Picking up another with 50 seconds left grants 60 seconds (capped), not 80.
+- **Different powerups stack.** Quad + Pentagram = full invulnerability while dealing 4× damage. Each powerup type is a separate entry in `ActivePowerups` with its own independent timer.
+- **Same powerup refreshes additively, capped at 60 seconds.** On pickup, search `ActivePowerups` for an existing entry with the same `PowerupType`. The logic (implemented in `AQuakePlayerState::GivePowerup`):
+
+```
+GivePowerup(Type, PickupDuration):
+    MaxDuration = 60.0
+    for each Entry in ActivePowerups:
+        if Entry.PowerupType == Type:
+            Entry.RemainingTime = min(Entry.RemainingTime + PickupDuration, MaxDuration)
+            return   // refresh, done
+    // No existing entry — add a new one.
+    ActivePowerups.Add({ Type, min(PickupDuration, MaxDuration) })
+    EnablePowerupTick()
+```
+
+  Two pickups processed on the same frame are handled sequentially (each `GivePowerup` call sees the updated time from the prior call), so two Quads (30 s each) in one frame yield `min(30 + 30, 60) = 60 s`, not two separate 30 s entries.
+
 - Powerups expire on level transition (see 1.4).
 - The HUD displays each active powerup's remaining time independently (see section 7).
 
-**Storage: `AQuakePlayerState`.** Active powerups live as a `TArray<FQuakeActivePowerup>` on the PlayerState, where each entry holds the powerup type and remaining time. The PlayerState ticks the timers and removes entries when they reach zero. PlayerState is destroyed on level transition (matching the "expire on level transition" rule) and on death-restart (matching the "cleared on death" rule), so the lifecycle is automatic — no extra cleanup code is needed. Powerups are restored from `UQuakeSaveGame` when loading mid-level.
+**Storage: `AQuakePlayerState`.** Active powerups live as a `TArray<FQuakeActivePowerup>` on the PlayerState, where each entry holds the powerup type and remaining time. The PlayerState ticks the timers (only while powerups are active) and removes entries when they reach zero. PlayerState is destroyed on level transition (matching the "expire on level transition" rule) and on death-restart (matching the "cleared on death" rule), so the lifecycle is automatic — no extra cleanup code is needed. Powerups are restored from `UQuakeSaveGame` when loading mid-level.
 
 ### 4.4 Keys
 
@@ -1146,7 +1168,8 @@ UDamageType subclasses               — see section 1.5 for the full list
 IQuakeActivatable                    — UInterface; Activate(AActor* Instigator); implemented by Door, Trigger and subclasses, level exit; fired by Button targets and Trigger chains (see 5.5 / 5.6)
 IQuakeSaveable                       — interface for actors that persist in saves
 UQuakeSaveGame : public USaveGame    — save data container
-UQuakeSoundManager : public UGameInstanceSubsystem  — audio
+UQuakeProjectSettings : public UDeveloperSettings    — Project Settings > Game > Quake; holds DataTable refs (balance, audio)
+UQuakeSoundManager : public UGameInstanceSubsystem  — audio; reads SoundEventTable from UQuakeProjectSettings
 UQuakeGameInstance                   — owns inventory, snapshot, save/load, level transitions
 ```
 
@@ -1632,8 +1655,8 @@ This is what v1 ships, regardless of phasing:
 **Implements:**
 - `AQuakeEnemy_Knight` + `AQuakeAIController_Knight` (charge melee).
 - `AQuakeEnemy_Ogre` + `AQuakeAIController_Ogre` (grenade arc projectile attack).
-- `AQuakeProjectile_Grenade` (bouncing, fuse timer, 800 u/s, gravity 1.0).
-- `OnProjectileBounce` delegate hook for grenade bounce sound + fuse check.
+- `AQuakeProjectile_Grenade` per [section 2.2](SPEC.md) grenade lifecycle (bouncing, 2.5 s fuse, 800 u/s, gravity 1.0, explode-on-pawn-contact, 0.25 s firer grace period).
+- `OnProjectileBounce` delegate hook for grenade bounce sound (fuse is time-based, not bounce-based — see 2.2).
 - Drop table on `AQuakeEnemyBase`: `TArray<FQuakeDropEntry> DropTable` per [section 3.2](SPEC.md#L259).
 - Drop spawn logic in `AQuakeEnemyBase::Die` (only on non-gibbed deaths, per [section 3.4](SPEC.md#L382)).
 - Friendly fire & infighting target switch in the controller's `TakeDamage`-driven `OnDamaged` flow per [section 3.3](SPEC.md#L323).

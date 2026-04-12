@@ -47,6 +47,8 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon|Shotgun", meta = (ClampMin = "0.0"))
 	float Range = 4096.f;
 
+	virtual void ApplyStatsFromRow(const struct FQuakeWeaponStatsRow& Row) override;
+
 protected:
 	virtual void Fire(AActor* InInstigator) override;
 };

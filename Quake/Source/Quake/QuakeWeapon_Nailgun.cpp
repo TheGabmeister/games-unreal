@@ -1,5 +1,6 @@
 #include "QuakeWeapon_Nailgun.h"
 
+#include "QuakeBalanceRows.h"
 #include "QuakeProjectile.h"
 
 #include "Engine/World.h"
@@ -15,6 +16,15 @@ AQuakeWeapon_Nailgun::AQuakeWeapon_Nailgun()
 	AmmoType = EQuakeAmmoType::Nails;
 	AmmoPerShot = 1;
 	DisplayName = NSLOCTEXT("QuakeWeapon", "NailgunName", "Nailgun");
+	StatsRowName = TEXT("Nailgun");
+}
+
+void AQuakeWeapon_Nailgun::ApplyStatsFromRow(const FQuakeWeaponStatsRow& Row)
+{
+	Super::ApplyStatsFromRow(Row);
+	SpreadHalfAngleDegrees = Row.SpreadHalfAngleDegrees;
+	MuzzleSpawnForwardOffset = Row.MuzzleSpawnForwardOffset;
+	// Nailgun damage lives on AQuakeProjectile_Nail, not the weapon.
 }
 
 bool AQuakeWeapon_Nailgun::CanActuallyFire(AActor* /*InInstigator*/) const

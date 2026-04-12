@@ -22,6 +22,7 @@ public class Quake : ModuleRules
 			"EnhancedInput",
 			"NavigationSystem",
 			"AIModule",
+			"DeveloperSettings",
 			"Slate",
 			"SlateCore"
 		});

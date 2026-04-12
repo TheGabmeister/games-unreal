@@ -131,6 +131,20 @@ Attribution uses UE's built-in `EventInstigator` (the controller) and `DamageCau
 
 All three rules above are C++ defaults; BP subclasses (`BP_Pickup_Health15`, `BP_Pickup_Health25`, `BP_Pickup_Megahealth`, `BP_Pickup_AmmoShells`, etc.) only fill mesh + material + light color asset slots.
 
+## Architecture: Balance DataTables
+
+Enemy and weapon stats are centralized in two DataTables (`DT_EnemyStats` with `FQuakeEnemyStatsRow`, `DT_WeaponStats` with `FQuakeWeaponStatsRow`), referenced from [UQuakeProjectSettings](Source/Quake/QuakeProjectSettings.h) — a `UDeveloperSettings` subclass visible in **Project Settings > Game > Quake**. Row structs live in [QuakeBalanceRows.h](Source/Quake/QuakeBalanceRows.h) (header-only).
+
+**Loading order matters for enemies.** `AQuakeEnemyBase::PostInitializeComponents` loads DataTable stats *before* calling `Super::PostInitializeComponents()`. This is because `Super` triggers `SpawnDefaultController` → `OnPossess`, which reads the pawn's perception stats (`SightRadius`, `HearingRadius`, etc.) to configure the AI sense configs. If the DataTable load happened in `BeginPlay`, the AI controller would read stale C++ defaults. Weapons load in `BeginPlay` (no timing constraint — they're `AActor`s, not `ACharacter`s with auto-possess).
+
+**C++ constructor defaults are the fallback.** When no DataTable is configured in Project Settings, or a row is missing, the stats set in each leaf subclass constructor are used. Existing tests exercise pure static helpers and don't instantiate full actors, so they're unaffected.
+
+**Adding a new enemy.** Set `StatsRowName = TEXT("MyEnemy")` in the constructor, set C++ defaults as the fallback, and add a matching row in `DT_EnemyStats`. Same pattern for weapons via `StatsRowName` + `ApplyStatsFromRow` override.
+
+**Projectile damage is NOT in the weapon table.** Nailgun and Rocket Launcher damage lives on the projectile actor (`AQuakeProjectile_Nail::Damage`, `AQuakeProjectile_Rocket::BaseDamage`), not on the weapon. The weapon table's `Damage` column is informational for those rows. A future `FQuakeProjectileStatsRow` table can centralize projectile balance if needed.
+
+`UQuakeProjectSettings` also owns the `SoundEventTable` reference for the Phase 14 sound manager subsystem, replacing the earlier plan of putting it on `UQuakeGameInstance`.
+
 ## Architecture: AI Split
 
 AI is split between the body and the brain per standard UE convention:

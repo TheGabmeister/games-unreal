@@ -58,6 +58,8 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon|Nailgun", meta = (ClampMin = "0.0", ClampMax = "45.0"))
 	float SpreadHalfAngleDegrees = 1.f;
 
+	virtual void ApplyStatsFromRow(const struct FQuakeWeaponStatsRow& Row) override;
+
 protected:
 	virtual bool CanActuallyFire(AActor* InInstigator) const override;
 	virtual void Fire(AActor* InInstigator) override;

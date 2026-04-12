@@ -1,8 +1,10 @@
 #include "QuakeEnemyBase.h"
 
+#include "QuakeBalanceRows.h"
 #include "QuakeCollisionChannels.h"
 #include "QuakeDamageType.h"
 #include "QuakeEnemyAIController.h"
+#include "QuakeProjectSettings.h"
 
 #include "AIController.h"
 #include "Components/CapsuleComponent.h"
@@ -60,6 +62,17 @@ AQuakeEnemyBase::AQuakeEnemyBase()
 	// the per-enemy WalkSpeed property in BeginPlay.
 }
 
+void AQuakeEnemyBase::PostInitializeComponents()
+{
+	// Load balance data BEFORE Super. Super::PostInitializeComponents calls
+	// SpawnDefaultController -> OnPossess, which reads our perception stats
+	// (SightRadius, HearingRadius, etc.) to configure the AI sense configs.
+	// The stats must already reflect DataTable values at that point.
+	LoadStatsFromDataTable();
+
+	Super::PostInitializeComponents();
+}
+
 void AQuakeEnemyBase::BeginPlay()
 {
 	Super::BeginPlay();
@@ -73,6 +86,42 @@ void AQuakeEnemyBase::BeginPlay()
 	{
 		Move->MaxWalkSpeed = WalkSpeed;
 	}
+}
+
+void AQuakeEnemyBase::LoadStatsFromDataTable()
+{
+	if (StatsRowName.IsNone())
+	{
+		return;
+	}
+
+	const UQuakeProjectSettings* Settings = GetDefault<UQuakeProjectSettings>();
+	UDataTable* Table = Settings->EnemyStatsTable.LoadSynchronous();
+	if (!Table)
+	{
+		return;
+	}
+
+	const FQuakeEnemyStatsRow* Row = Table->FindRow<FQuakeEnemyStatsRow>(
+		StatsRowName, TEXT("AQuakeEnemyBase::LoadStatsFromDataTable"));
+	if (!Row)
+	{
+		UE_LOG(LogQuakeEnemy, Warning,
+			TEXT("%s: StatsRowName '%s' not found in EnemyStatsTable — using C++ defaults."),
+			*GetName(), *StatsRowName.ToString());
+		return;
+	}
+
+	MaxHealth                    = Row->MaxHealth;
+	WalkSpeed                    = Row->WalkSpeed;
+	SightRadius                  = Row->SightRadius;
+	LoseSightRadius              = Row->LoseSightRadius;
+	PeripheralVisionAngleDegrees = Row->PeripheralVisionAngleDegrees;
+	HearingRadius                = Row->HearingRadius;
+	SightMaxAge                  = Row->SightMaxAge;
+	AttackRange                  = Row->AttackRange;
+	AttackDamage                 = Row->AttackDamage;
+	AttackCooldown               = Row->AttackCooldown;
 }
 
 float AQuakeEnemyBase::ComputePainChance(float Damage, float InMaxHealth)

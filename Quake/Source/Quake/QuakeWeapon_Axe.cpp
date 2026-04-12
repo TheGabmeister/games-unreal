@@ -1,5 +1,6 @@
 #include "QuakeWeapon_Axe.h"
 
+#include "QuakeBalanceRows.h"
 #include "QuakeCollisionChannels.h"
 #include "QuakeDamageType_Melee.h"
 
@@ -17,6 +18,14 @@ AQuakeWeapon_Axe::AQuakeWeapon_Axe()
 	AmmoType = EQuakeAmmoType::None;
 	AmmoPerShot = 0;
 	DisplayName = NSLOCTEXT("QuakeWeapon", "AxeName", "Axe");
+	StatsRowName = TEXT("Axe");
+}
+
+void AQuakeWeapon_Axe::ApplyStatsFromRow(const FQuakeWeaponStatsRow& Row)
+{
+	Super::ApplyStatsFromRow(Row);
+	Damage = Row.Damage;
+	Range = Row.Range;
 }
 
 void AQuakeWeapon_Axe::Fire(AActor* InInstigator)

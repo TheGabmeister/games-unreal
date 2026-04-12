@@ -38,6 +38,14 @@ class QUAKE_API AQuakeEnemyBase : public ACharacter
 public:
 	AQuakeEnemyBase();
 
+	/**
+	 * Row name key into the EnemyStatsTable DataTable. Set in each leaf
+	 * subclass constructor (e.g. "Grunt", "Knight"). If empty or the
+	 * table is not configured, C++ constructor defaults are used.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Balance")
+	FName StatsRowName;
+
 	// --- Mesh component slots (primitive shapes per SPEC section 3.0) ---
 
 	/** Body capsule visual. Attached to the character capsule root. */
@@ -175,6 +183,7 @@ public:
 		AActor* DamageCauser) override;
 
 protected:
+	virtual void PostInitializeComponents() override;
 	virtual void BeginPlay() override;
 
 	/** Live HP. Mutated ONLY by TakeDamage / Die, per the SPEC rule. */
@@ -186,5 +195,9 @@ protected:
 	void OnCorpseChannelFlip();
 
 private:
+	/** Attempt to read stats from the EnemyStatsTable. No-op if the table
+	 *  is unconfigured or the row is missing — C++ defaults remain. */
+	void LoadStatsFromDataTable();
+
 	FTimerHandle CorpseFlipTimerHandle;
 };

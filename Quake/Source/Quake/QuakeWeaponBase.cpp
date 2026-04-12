@@ -1,9 +1,12 @@
 #include "QuakeWeaponBase.h"
 
+#include "QuakeBalanceRows.h"
 #include "QuakeCharacter.h"
 #include "QuakeGameInstance.h"
+#include "QuakeProjectSettings.h"
 
 #include "Components/StaticMeshComponent.h"
+#include "Engine/DataTable.h"
 #include "Engine/World.h"
 #include "Perception/AISense_Hearing.h"
 
@@ -20,6 +23,40 @@ AQuakeWeaponBase::AQuakeWeaponBase()
 	ViewModelMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	ViewModelMesh->SetGenerateOverlapEvents(false);
 	ViewModelMesh->SetCastShadow(false);
+}
+
+void AQuakeWeaponBase::BeginPlay()
+{
+	Super::BeginPlay();
+
+	if (StatsRowName.IsNone())
+	{
+		return;
+	}
+
+	const UQuakeProjectSettings* Settings = GetDefault<UQuakeProjectSettings>();
+	UDataTable* Table = Settings->WeaponStatsTable.LoadSynchronous();
+	if (!Table)
+	{
+		return;
+	}
+
+	const FQuakeWeaponStatsRow* Row = Table->FindRow<FQuakeWeaponStatsRow>(
+		StatsRowName, TEXT("AQuakeWeaponBase::BeginPlay"));
+	if (!Row)
+	{
+		UE_LOG(LogQuakeWeapon, Warning,
+			TEXT("%s: StatsRowName '%s' not found in WeaponStatsTable — using C++ defaults."),
+			*GetName(), *StatsRowName.ToString());
+		return;
+	}
+
+	ApplyStatsFromRow(*Row);
+}
+
+void AQuakeWeaponBase::ApplyStatsFromRow(const FQuakeWeaponStatsRow& Row)
+{
+	RateOfFire = Row.RateOfFire;
 }
 
 bool AQuakeWeaponBase::CanFire() const

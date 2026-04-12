@@ -11,9 +11,9 @@
 
 AQuakeEnemy_Grunt::AQuakeEnemy_Grunt()
 {
-	// SPEC section 3.1 Grunt row:
-	//   HP=30, Speed=300, Sight=2000, Hearing=1500,
-	//   AttackType=Hitscan rifle, Range=1500, AttackDamage=4, Cooldown=1.5s.
+	StatsRowName = TEXT("Grunt");
+
+	// SPEC section 3.1 Grunt row — C++ fallback when no DataTable is loaded.
 	MaxHealth = 30.f;
 	WalkSpeed = 300.f;
 

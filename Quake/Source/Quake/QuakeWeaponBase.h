@@ -121,13 +121,29 @@ protected:
 	virtual bool CanActuallyFire(AActor* InInstigator) const { return true; }
 
 	/**
+	 * Row name key into the WeaponStatsTable DataTable. Set in each leaf
+	 * subclass constructor (e.g. "Axe", "Shotgun"). If empty or the
+	 * table is not configured, C++ constructor defaults are used.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Balance")
+	FName StatsRowName;
+
+	/**
 	 * Resolve the firing pawn and world from the instigator. Returns false
 	 * if either is null — subclass Fire() implementations should early-return
 	 * in that case.
 	 */
 	bool GetFireContext(AActor* InInstigator, APawn*& OutPawn, UWorld*& OutWorld) const;
 
+	/**
+	 * Apply balance values from a DataTable row. Base sets RateOfFire;
+	 * subclasses override to read their specific fields (Damage, Range,
+	 * PelletCount, etc.). Always call Super.
+	 */
+	virtual void ApplyStatsFromRow(const struct FQuakeWeaponStatsRow& Row);
+
 protected:
+	virtual void BeginPlay() override;
 	/**
 	 * Subclass hook: do the actual hit logic (trace, projectile spawn,
 	 * splash, etc.). Called by TryFire after the cooldown gate. Pure
