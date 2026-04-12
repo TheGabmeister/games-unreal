@@ -477,6 +477,16 @@ When an enemy is killed by an attack whose damage exceeds their remaining health
 
 **Zombies** must be gibbed to be permanently killed. A non-gib death puts the Zombie into a `Down` state for 5 seconds, after which they revive at full health and re-enter Chase. A gibbed Zombie is permanently dead.
 
+### 3.5 Hit and Death Sounds
+
+Every enemy has two `UPROPERTY(EditDefaultsOnly) TObjectPtr<USoundBase>` slots on `AQuakeEnemyBase`: `PainSound` and `DeathSound`. BP subclasses (`BP_Enemy_Grunt`, etc.) assign the `.wav` / `.uasset` references.
+
+- `PainSound` plays from `TakeDamage` on every non-fatal hit that passes the self-damage gate and deals `ScaledDamage > 0`. It is independent of the pain-chance flinch roll (SPEC 3.3) — every hit audibly registers even when the FSM does not interrupt.
+- `DeathSound` plays from `Die()` exactly once, before the death/gib reaction branch, so it fires for both collapse and gib deaths.
+- Both calls go to `UGameplayStatics::PlaySoundAtLocation(this, Sound, GetActorLocation())` at the pawn's current location. Null slots are skipped silently, so enemies ship fine without assigned sounds.
+
+**Phase 14 migration.** These are direct `PlaySoundAtLocation` calls and predate the `UQuakeSoundManager` subsystem. Phase 14 catalogs them as `ESoundEvent::EnemyPain` / `ESoundEvent::EnemyDeath` and migrates the call sites to `SoundManager->PlaySound(...)`; the `UPROPERTY` slots move into `DT_SoundEvents` rows. Until then, direct calls are the authoritative implementation and the Phase 14 exit criterion does not yet bind.
+
 ---
 
 ## 4. Items and Pickups
@@ -1889,7 +1899,7 @@ This is what v1 ships, regardless of phasing:
 - Open settings, change sensitivity to 2.0 and back to 1.0, confirm the camera responds immediately.
 - Confirm volume slider exists and saves (no audible effect yet).
 
-**Exit criteria.** Every gameplay event reaches the sound manager; nothing in the codebase calls `UGameplayStatics::PlaySoundAtLocation` directly.
+**Exit criteria.** Every gameplay event reaches the sound manager; nothing in the codebase calls `UGameplayStatics::PlaySoundAtLocation` directly. This includes migrating the pre-Phase-14 `AQuakeEnemyBase::PainSound` / `DeathSound` direct calls (see [section 3.5](#35-hit-and-death-sounds)) to `ESoundEvent::EnemyPain` / `ESoundEvent::EnemyDeath` rows in `DT_SoundEvents`.
 
 #### Phase 15: Content Authoring
 

@@ -14,6 +14,8 @@
 #include "Engine/World.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/Controller.h"
+#include "Kismet/GameplayStatics.h"
+#include "Sound/SoundBase.h"
 #include "TimerManager.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogQuakeEnemy, Log, All);
@@ -166,8 +168,6 @@ void AQuakeEnemyBase::PlayDeathReaction()
 
 void AQuakeEnemyBase::Die(AController* Killer, bool bGibbed)
 {
-	if (IsDead()) return;
-
 	Health = 0.f;
 
 #if !UE_BUILD_SHIPPING
@@ -186,6 +186,13 @@ void AQuakeEnemyBase::Die(AController* Killer, bool bGibbed)
 		*GetName(),
 		bGibbed ? TEXT("gibbed") : TEXT("killed"),
 		Killer ? *Killer->GetName() : TEXT("<world>"));
+
+	// SPEC section 3.5: DeathSound fires once for both collapse and gib
+	// deaths. Placed before the reaction branch so it is unconditional.
+	if (DeathSound)
+	{
+		UGameplayStatics::PlaySoundAtLocation(this, DeathSound, GetActorLocation());
+	}
 
 	// SPEC 3.4: gibbed enemies do not drop loot.
 	if (!bGibbed)
@@ -335,6 +342,14 @@ float AQuakeEnemyBase::TakeDamage(
 	}
 
 	Health = FMath::Max(0.f, Health - ScaledDamage);
+
+	// SPEC section 3.5: PainSound on every non-fatal hit, independent of the
+	// pain-chance flinch roll. DeathSound is played from Die() to avoid a
+	// pain+death overlap on the fatal hit.
+	if (Health > 0.f && PainSound)
+	{
+		UGameplayStatics::PlaySoundAtLocation(this, PainSound, GetActorLocation());
+	}
 
 	// SPEC section 3.3: "damage as a perception trigger" — notify the
 	// controller unconditionally so it can promote the instigator to the
