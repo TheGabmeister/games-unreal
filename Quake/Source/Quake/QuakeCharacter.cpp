@@ -172,9 +172,11 @@ void AQuakeCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComp
 	}
 
 	// Weapon swap. Per SPEC 2.2 "instant via number keys (1-8)". IA_Weapon1 /
-	// IA_Weapon2 / IA_Weapon7 slots on BP_QuakePlayerController are authored
-	// in the editor and mapped to keyboard 1 / 2 / 7 in IMC_Default.
-	// Phase 6 will add IA_Weapon4 (Nailgun).
+	// IA_Weapon2 / IA_Weapon4 / IA_Weapon7 slots on BP_QuakePlayerController
+	// are authored in the editor and mapped to keyboard 1 / 2 / 4 / 7 in
+	// IMC_Default. These are the four v1 weapons (Axe, Shotgun, Nailgun,
+	// Rocket Launcher) — later phases will add slots for SSG / GL / SNG /
+	// Thunderbolt.
 	if (PC->Weapon1Action)
 	{
 		EnhancedInput->BindAction(PC->Weapon1Action, ETriggerEvent::Started, this, &AQuakeCharacter::OnWeapon1Pressed);
@@ -182,6 +184,10 @@ void AQuakeCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComp
 	if (PC->Weapon2Action)
 	{
 		EnhancedInput->BindAction(PC->Weapon2Action, ETriggerEvent::Started, this, &AQuakeCharacter::OnWeapon2Pressed);
+	}
+	if (PC->Weapon4Action)
+	{
+		EnhancedInput->BindAction(PC->Weapon4Action, ETriggerEvent::Started, this, &AQuakeCharacter::OnWeapon4Pressed);
 	}
 	if (PC->Weapon7Action)
 	{
@@ -230,6 +236,12 @@ void AQuakeCharacter::OnWeapon2Pressed(const FInputActionValue& /*Value*/)
 	SwitchToWeaponSlot(1);
 }
 
+void AQuakeCharacter::OnWeapon4Pressed(const FInputActionValue& /*Value*/)
+{
+	// Slot index 3 = SPEC 2.0 weapon number 4 = Nailgun.
+	SwitchToWeaponSlot(3);
+}
+
 void AQuakeCharacter::OnWeapon7Pressed(const FInputActionValue& /*Value*/)
 {
 	// Slot index 6 = SPEC 2.0 weapon number 7 = Rocket Launcher.
@@ -262,6 +274,84 @@ void AQuakeCharacter::GiveHealth(float Amount, bool bOvercharge)
 	}
 	const float Cap = bOvercharge ? GetOverchargeCap() : MaxHealth;
 	Health = FMath::Min(Health + Amount, Cap);
+}
+
+int32 AQuakeCharacter::PickAutoSwitchWeaponSlot(
+	const TArray<bool>& SlotOwnedMask,
+	const TArray<bool>& SlotHasAmmoMask,
+	int32 ExcludeSlot)
+{
+	// SPEC 2.2 empty-ammo priority: RL -> SNG -> SSG -> NG -> SG -> Axe.
+	// Thunderbolt (slot 8, index 7) and GL (slot 6, index 5) are
+	// deliberately NOT in the list — they are "kept manual to avoid
+	// accidental switching" per SPEC 2.2. Slot indices here are SPEC 2.0
+	// weapon numbers minus one.
+	static const int32 kPriorityOrder[] = { 6, 4, 2, 3, 1, 0 };
+
+	for (const int32 Slot : kPriorityOrder)
+	{
+		if (Slot == ExcludeSlot)
+		{
+			continue;
+		}
+		if (!SlotOwnedMask.IsValidIndex(Slot) || !SlotOwnedMask[Slot])
+		{
+			continue;
+		}
+		if (!SlotHasAmmoMask.IsValidIndex(Slot) || !SlotHasAmmoMask[Slot])
+		{
+			continue;
+		}
+		return Slot;
+	}
+	return -1;
+}
+
+bool AQuakeCharacter::AutoSwitchFromEmptyWeapon()
+{
+	UWorld* World = GetWorld();
+	UQuakeGameInstance* GameInstance = World ? World->GetGameInstance<UQuakeGameInstance>() : nullptr;
+	if (!GameInstance)
+	{
+		return false;
+	}
+
+	// Build the ownership + ammo masks for PickAutoSwitchWeaponSlot. The
+	// Axe (AmmoType::None) is always "has ammo" — it's the terminal
+	// fallback that guarantees we never auto-switch to an empty weapon
+	// when the player at least owns their starting axe.
+	TArray<bool> OwnedMask;
+	TArray<bool> HasAmmoMask;
+	OwnedMask.Init(false, 8);
+	HasAmmoMask.Init(false, 8);
+
+	const int32 NumInstances = FMath::Min(WeaponInstances.Num(), 8);
+	for (int32 Slot = 0; Slot < NumInstances; ++Slot)
+	{
+		const AQuakeWeaponBase* Weapon = WeaponInstances[Slot];
+		if (!Weapon)
+		{
+			continue;
+		}
+		OwnedMask[Slot] = true;
+
+		if (Weapon->AmmoType == EQuakeAmmoType::None)
+		{
+			// Axe: infinite ammo gate.
+			HasAmmoMask[Slot] = true;
+		}
+		else
+		{
+			HasAmmoMask[Slot] = GameInstance->GetAmmo(Weapon->AmmoType) >= Weapon->AmmoPerShot;
+		}
+	}
+
+	const int32 BestSlot = PickAutoSwitchWeaponSlot(OwnedMask, HasAmmoMask, CurrentWeaponSlot);
+	if (BestSlot < 0)
+	{
+		return false;
+	}
+	return SwitchToWeaponSlot(BestSlot);
 }
 
 void AQuakeCharacter::ApplyArmorAbsorption(

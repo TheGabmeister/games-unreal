@@ -97,6 +97,38 @@ public:
 	void GiveHealth(float Amount, bool bOvercharge);
 
 	/**
+	 * Auto-switch to the best owned weapon that has ammo when the current
+	 * weapon fires on empty. Walks the SPEC 2.2 priority list
+	 * (RL → SNG → SSG → NG → SG → Axe, explicitly NOT Thunderbolt or GL
+	 * which are "kept manual" per SPEC), skipping the current slot and any
+	 * slot that is unowned or has insufficient ammo. Returns true iff a
+	 * switch happened.
+	 *
+	 * Called from AQuakeWeaponBase::TryFire when ConsumeAmmo returns false,
+	 * right after PlayEmptyClick. The click still plays so the player gets
+	 * audible feedback for the failed shot before the swap.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Weapons")
+	bool AutoSwitchFromEmptyWeapon();
+
+	/**
+	 * Pure static helper behind AutoSwitchFromEmptyWeapon. Walks SPEC 2.2
+	 * priority [RL, SNG, SSG, NG, SG, Axe] and returns the first slot
+	 * index that is both owned and has fireable ammo, excluding
+	 * ExcludeSlot. Returns -1 if nothing is eligible.
+	 *
+	 * The inputs are parallel length-8 bool arrays (index i corresponds to
+	 * SPEC 2.0 weapon slot i+1). Extracted as a pure helper so tests can
+	 * exercise the priority table without spinning up a world, a character,
+	 * or a GameInstance — same pattern as ApplyArmorAbsorption,
+	 * ApplyQuakeAirAccel, ComputePainChance, and ComputeLinearFalloffDamage.
+	 */
+	static int32 PickAutoSwitchWeaponSlot(
+		const TArray<bool>& SlotOwnedMask,
+		const TArray<bool>& SlotHasAmmoMask,
+		int32 ExcludeSlot);
+
+	/**
 	 * Damage absorption math, extracted as a pure static helper so it can
 	 * be unit-tested without spinning up a world or a character. Implements
 	 * the original Quake formula:
@@ -152,6 +184,7 @@ private:
 	void OnFirePressed(const struct FInputActionValue& Value);
 	void OnWeapon1Pressed(const struct FInputActionValue& Value);
 	void OnWeapon2Pressed(const struct FInputActionValue& Value);
+	void OnWeapon4Pressed(const struct FInputActionValue& Value);
 	void OnWeapon7Pressed(const struct FInputActionValue& Value);
 
 	/**

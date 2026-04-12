@@ -1,5 +1,6 @@
 #include "QuakeWeaponBase.h"
 
+#include "QuakeCharacter.h"
 #include "QuakeGameInstance.h"
 
 #include "Components/StaticMeshComponent.h"
@@ -40,9 +41,11 @@ bool AQuakeWeaponBase::TryFire(AActor* InInstigator)
 
 	// Ammo gate. Weapons with AmmoType::None (the Axe) bypass this entirely
 	// — ConsumeAmmo(None, ...) returns true without touching the TMap. For
-	// ammo weapons, a failed consume plays the empty click and re-arms the
+	// ammo weapons, a failed consume plays the empty click, re-arms the
 	// cooldown so holding fire on empty spams click at the weapon's RoF
-	// (matching Quake) rather than at the input tick rate.
+	// (matching Quake) rather than at the input tick rate, and asks the
+	// firing character to auto-switch to the next best owned weapon per
+	// SPEC 2.2.
 	if (AmmoType != EQuakeAmmoType::None && AmmoPerShot > 0)
 	{
 		UQuakeGameInstance* GameInstance =
@@ -52,6 +55,15 @@ bool AQuakeWeaponBase::TryFire(AActor* InInstigator)
 		{
 			PlayEmptyClick(InInstigator);
 			LastFireWorldTime = GetWorld()->GetTimeSeconds();
+
+			// SPEC 2.2 auto-switch on empty: walk the priority list
+			// (RL → SNG → SSG → NG → SG → Axe) and swap to the first
+			// owned weapon with fireable ammo. The click still plays
+			// before the swap so the player gets the "out of ammo" cue.
+			if (AQuakeCharacter* Character = Cast<AQuakeCharacter>(InInstigator))
+			{
+				Character->AutoSwitchFromEmptyWeapon();
+			}
 			return false;
 		}
 	}
