@@ -21,14 +21,9 @@ AQuakeWeapon_Axe::AQuakeWeapon_Axe()
 
 void AQuakeWeapon_Axe::Fire(AActor* InInstigator)
 {
-	APawn* PawnInstigator = Cast<APawn>(InInstigator);
-	if (!PawnInstigator)
-	{
-		return;
-	}
-
-	UWorld* World = GetWorld();
-	if (!World)
+	APawn* PawnInstigator = nullptr;
+	UWorld* World = nullptr;
+	if (!GetFireContext(InInstigator, PawnInstigator, World))
 	{
 		return;
 	}

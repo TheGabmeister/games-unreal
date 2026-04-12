@@ -2,12 +2,6 @@
 
 #include "QuakeCharacter.h"
 
-AQuakePickup_Health::AQuakePickup_Health()
-{
-	// Defaults to a Health Pack (25 HP, normal). BP subclasses override for
-	// Small Health (15), Megahealth (100 + bIsOvercharge=true).
-}
-
 bool AQuakePickup_Health::CanBeConsumedBy(AQuakeCharacter* Character) const
 {
 	if (!Character || Character->IsDead())

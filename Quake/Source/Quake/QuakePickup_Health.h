@@ -22,8 +22,6 @@ class QUAKE_API AQuakePickup_Health : public AQuakePickupBase
 	GENERATED_BODY()
 
 public:
-	AQuakePickup_Health();
-
 	/** How much HP this pickup restores on consume. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Pickup|Health", meta = (ClampMin = "0.0"))
 	float HealthAmount = 25.f;

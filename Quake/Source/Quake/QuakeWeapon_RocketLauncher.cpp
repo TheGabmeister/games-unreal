@@ -38,14 +38,9 @@ void AQuakeWeapon_RocketLauncher::Fire(AActor* InInstigator)
 {
 	// ProjectileClass is guaranteed non-null here: TryFire routes through
 	// CanActuallyFire() before invoking Fire().
-	APawn* PawnInstigator = Cast<APawn>(InInstigator);
-	if (!PawnInstigator)
-	{
-		return;
-	}
-
-	UWorld* World = GetWorld();
-	if (!World)
+	APawn* PawnInstigator = nullptr;
+	UWorld* World = nullptr;
+	if (!GetFireContext(InInstigator, PawnInstigator, World))
 	{
 		return;
 	}

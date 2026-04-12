@@ -120,6 +120,13 @@ protected:
 	 */
 	virtual bool CanActuallyFire(AActor* InInstigator) const { return true; }
 
+	/**
+	 * Resolve the firing pawn and world from the instigator. Returns false
+	 * if either is null — subclass Fire() implementations should early-return
+	 * in that case.
+	 */
+	bool GetFireContext(AActor* InInstigator, APawn*& OutPawn, UWorld*& OutWorld) const;
+
 protected:
 	/**
 	 * Subclass hook: do the actual hit logic (trace, projectile spawn,

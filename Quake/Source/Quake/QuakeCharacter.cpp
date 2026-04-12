@@ -72,7 +72,7 @@ void AQuakeCharacter::SpawnOwnedWeapons()
 	// Mirror the GameInstance's 8-slot array so index i always maps to
 	// SPEC 2.0 weapon number i+1, regardless of how many slots are
 	// actually filled.
-	WeaponInstances.SetNum(8);
+	WeaponInstances.SetNum(NumWeaponSlots);
 
 	FActorSpawnParameters Params;
 	Params.Owner = this;
@@ -80,7 +80,7 @@ void AQuakeCharacter::SpawnOwnedWeapons()
 	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
 	int32 FirstOwnedSlot = -1;
-	for (int32 Slot = 0; Slot < 8 && Slot < GameInstance->OwnedWeaponClasses.Num(); ++Slot)
+	for (int32 Slot = 0; Slot < NumWeaponSlots && Slot < GameInstance->OwnedWeaponClasses.Num(); ++Slot)
 	{
 		TSubclassOf<AQuakeWeaponBase> Class = GameInstance->OwnedWeaponClasses[Slot];
 		if (!Class)
@@ -177,21 +177,22 @@ void AQuakeCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComp
 	// IMC_Default. These are the four v1 weapons (Axe, Shotgun, Nailgun,
 	// Rocket Launcher) — later phases will add slots for SSG / GL / SNG /
 	// Thunderbolt.
-	if (PC->Weapon1Action)
+	// Weapon swap bindings. Slot indices are SPEC 2.0 weapon numbers minus
+	// one. The variadic BindAction overload passes the slot index as an extra
+	// arg to OnWeaponSlotPressed. Later phases add slots for SSG / GL / SNG
+	// / Thunderbolt.
+	const TPair<UInputAction*, int32> WeaponBindings[] = {
+		{ PC->Weapon1Action, 0 },   // Axe
+		{ PC->Weapon2Action, 1 },   // Shotgun
+		{ PC->Weapon4Action, 3 },   // Nailgun
+		{ PC->Weapon7Action, 6 },   // Rocket Launcher
+	};
+	for (const auto& [Action, Slot] : WeaponBindings)
 	{
-		EnhancedInput->BindAction(PC->Weapon1Action, ETriggerEvent::Started, this, &AQuakeCharacter::OnWeapon1Pressed);
-	}
-	if (PC->Weapon2Action)
-	{
-		EnhancedInput->BindAction(PC->Weapon2Action, ETriggerEvent::Started, this, &AQuakeCharacter::OnWeapon2Pressed);
-	}
-	if (PC->Weapon4Action)
-	{
-		EnhancedInput->BindAction(PC->Weapon4Action, ETriggerEvent::Started, this, &AQuakeCharacter::OnWeapon4Pressed);
-	}
-	if (PC->Weapon7Action)
-	{
-		EnhancedInput->BindAction(PC->Weapon7Action, ETriggerEvent::Started, this, &AQuakeCharacter::OnWeapon7Pressed);
+		if (Action)
+		{
+			EnhancedInput->BindAction(Action, ETriggerEvent::Started, this, &AQuakeCharacter::OnWeaponSlotPressed, Slot);
+		}
 	}
 }
 
@@ -226,44 +227,30 @@ void AQuakeCharacter::OnFirePressed(const FInputActionValue& /*Value*/)
 	}
 }
 
-void AQuakeCharacter::OnWeapon1Pressed(const FInputActionValue& /*Value*/)
+void AQuakeCharacter::OnWeaponSlotPressed(const FInputActionValue& /*Value*/, int32 SlotIndex)
 {
-	SwitchToWeaponSlot(0);
-}
-
-void AQuakeCharacter::OnWeapon2Pressed(const FInputActionValue& /*Value*/)
-{
-	SwitchToWeaponSlot(1);
-}
-
-void AQuakeCharacter::OnWeapon4Pressed(const FInputActionValue& /*Value*/)
-{
-	// Slot index 3 = SPEC 2.0 weapon number 4 = Nailgun.
-	SwitchToWeaponSlot(3);
-}
-
-void AQuakeCharacter::OnWeapon7Pressed(const FInputActionValue& /*Value*/)
-{
-	// Slot index 6 = SPEC 2.0 weapon number 7 = Rocket Launcher.
-	SwitchToWeaponSlot(6);
+	SwitchToWeaponSlot(SlotIndex);
 }
 
 int32 AQuakeCharacter::GiveAmmo(EQuakeAmmoType Type, int32 Amount)
 {
-	UQuakeGameInstance* GameInstance = GetWorld() ? GetWorld()->GetGameInstance<UQuakeGameInstance>() : nullptr;
-	return GameInstance ? GameInstance->GiveAmmo(Type, Amount) : 0;
+	const UWorld* World = GetWorld();
+	UQuakeGameInstance* GI = World ? World->GetGameInstance<UQuakeGameInstance>() : nullptr;
+	return GI ? GI->GiveAmmo(Type, Amount) : 0;
 }
 
 bool AQuakeCharacter::ConsumeAmmo(EQuakeAmmoType Type, int32 Amount)
 {
-	UQuakeGameInstance* GameInstance = GetWorld() ? GetWorld()->GetGameInstance<UQuakeGameInstance>() : nullptr;
-	return GameInstance ? GameInstance->ConsumeAmmo(Type, Amount) : false;
+	const UWorld* World = GetWorld();
+	UQuakeGameInstance* GI = World ? World->GetGameInstance<UQuakeGameInstance>() : nullptr;
+	return GI ? GI->ConsumeAmmo(Type, Amount) : false;
 }
 
 int32 AQuakeCharacter::GetAmmo(EQuakeAmmoType Type) const
 {
-	UQuakeGameInstance* GameInstance = GetWorld() ? GetWorld()->GetGameInstance<UQuakeGameInstance>() : nullptr;
-	return GameInstance ? GameInstance->GetAmmo(Type) : 0;
+	const UWorld* World = GetWorld();
+	const UQuakeGameInstance* GI = World ? World->GetGameInstance<UQuakeGameInstance>() : nullptr;
+	return GI ? GI->GetAmmo(Type) : 0;
 }
 
 void AQuakeCharacter::GiveHealth(float Amount, bool bOvercharge)
@@ -322,10 +309,10 @@ bool AQuakeCharacter::AutoSwitchFromEmptyWeapon()
 	// when the player at least owns their starting axe.
 	TArray<bool> OwnedMask;
 	TArray<bool> HasAmmoMask;
-	OwnedMask.Init(false, 8);
-	HasAmmoMask.Init(false, 8);
+	OwnedMask.Init(false, NumWeaponSlots);
+	HasAmmoMask.Init(false, NumWeaponSlots);
 
-	const int32 NumInstances = FMath::Min(WeaponInstances.Num(), 8);
+	const int32 NumInstances = FMath::Min(WeaponInstances.Num(), NumWeaponSlots);
 	for (int32 Slot = 0; Slot < NumInstances; ++Slot)
 	{
 		const AQuakeWeaponBase* Weapon = WeaponInstances[Slot];

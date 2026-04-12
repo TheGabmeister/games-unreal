@@ -23,8 +23,6 @@ class QUAKE_API AQuakePickup_Ammo : public AQuakePickupBase
 	GENERATED_BODY()
 
 public:
-	AQuakePickup_Ammo();
-
 	/** Ammo type this pickup grants. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Pickup|Ammo")
 	EQuakeAmmoType AmmoType = EQuakeAmmoType::Shells;

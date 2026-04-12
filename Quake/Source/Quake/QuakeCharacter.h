@@ -17,6 +17,9 @@ class QUAKE_API AQuakeCharacter : public ACharacter
 public:
 	AQuakeCharacter(const FObjectInitializer& ObjectInitializer);
 
+	/** SPEC 2.0: 8 weapon slots indexed by their number key (1..8). */
+	static constexpr int32 NumWeaponSlots = 8;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")
 	TObjectPtr<UCameraComponent> FirstPersonCamera;
 
@@ -182,10 +185,7 @@ private:
 	void Move(const struct FInputActionValue& Value);
 	void Look(const struct FInputActionValue& Value);
 	void OnFirePressed(const struct FInputActionValue& Value);
-	void OnWeapon1Pressed(const struct FInputActionValue& Value);
-	void OnWeapon2Pressed(const struct FInputActionValue& Value);
-	void OnWeapon4Pressed(const struct FInputActionValue& Value);
-	void OnWeapon7Pressed(const struct FInputActionValue& Value);
+	void OnWeaponSlotPressed(const struct FInputActionValue& Value, int32 SlotIndex);
 
 	/**
 	 * Spawn all weapons the GameInstance says the player owns, one actor

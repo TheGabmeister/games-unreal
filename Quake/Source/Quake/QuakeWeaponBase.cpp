@@ -85,6 +85,17 @@ bool AQuakeWeaponBase::TryFire(AActor* InInstigator)
 	return true;
 }
 
+bool AQuakeWeaponBase::GetFireContext(AActor* InInstigator, APawn*& OutPawn, UWorld*& OutWorld) const
+{
+	OutPawn = Cast<APawn>(InInstigator);
+	if (!OutPawn)
+	{
+		return false;
+	}
+	OutWorld = GetWorld();
+	return OutWorld != nullptr;
+}
+
 void AQuakeWeaponBase::PlayEmptyClick(AActor* InInstigator)
 {
 	UE_LOG(LogQuakeWeapon, Verbose, TEXT("%s: *click* (empty)"), *GetName());

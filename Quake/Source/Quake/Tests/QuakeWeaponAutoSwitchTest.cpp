@@ -25,7 +25,7 @@ namespace
 	static TArray<bool> MakeMask(std::initializer_list<int32> TrueSlots)
 	{
 		TArray<bool> Mask;
-		Mask.Init(false, 8);
+		Mask.Init(false, AQuakeCharacter::NumWeaponSlots);
 		for (const int32 Slot : TrueSlots)
 		{
 			if (Slot >= 0 && Slot < Mask.Num())

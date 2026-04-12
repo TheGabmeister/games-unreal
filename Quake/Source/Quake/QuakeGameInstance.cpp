@@ -1,5 +1,6 @@
 #include "QuakeGameInstance.h"
 
+#include "QuakeCharacter.h"
 #include "QuakeWeaponBase.h"
 
 UQuakeGameInstance::UQuakeGameInstance()
@@ -8,7 +9,7 @@ UQuakeGameInstance::UQuakeGameInstance()
 	// Shotgun, ..., 8 = Thunderbolt). Pre-size the array so BP_QuakeGameInstance
 	// editor defaults can fill specific indices without worrying about
 	// array resizing.
-	OwnedWeaponClasses.SetNum(8);
+	OwnedWeaponClasses.SetNum(AQuakeCharacter::NumWeaponSlots);
 }
 
 void UQuakeGameInstance::Init()
