@@ -157,6 +157,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Enemy|Health")
 	bool IsDead() const { return Health <= 0.f; }
 
+#if WITH_DEV_AUTOMATION_TESTS
+	/** Test-only HP setter for the SPEC 5.9 IsSatisfied / level-clear suites. */
+	void SetHealthForTest(float NewHealth) { Health = NewHealth; }
+#endif
+
 	/**
 	 * Pain chance formula from SPEC section 3.3:
 	 *     chance = min(0.8, (damage / max_health) * 2)
@@ -202,6 +207,28 @@ public:
 	 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enemy|Drops")
 	TArray<FQuakeDropEntry> DropTable;
+
+	// --- Stats attribution (Phase 9, SPEC 5.9) ---
+
+	/**
+	 * True when this enemy was spawned by a marked AQuakeEnemySpawnPoint
+	 * (one with bIsMarkedKillTarget = true). The spawn point stamps this
+	 * flag after SpawnActor, so directly-placed BP_Enemy_* actors keep the
+	 * default of false and contribute nothing to KillsTotal per SPEC 5.1.
+	 * Read by Die() to decide whether to increment PlayerState.Kills.
+	 */
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Enemy|Stats")
+	bool bIsMarkedKillTarget = false;
+
+	/**
+	 * Set to true on the first TakeDamage call where the instigator is the
+	 * local player controller. Used by the SPEC 5.9 hazard-credit rule:
+	 * when the enemy dies from a world hazard (Killer is null, e.g. lava),
+	 * the player still earns credit iff they damaged the enemy at any
+	 * point during this level attempt.
+	 */
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Enemy|Stats")
+	bool bPlayerHasDamagedMe = false;
 
 	// --- Death ---
 

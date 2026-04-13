@@ -41,6 +41,30 @@ public:
 	/** Call after adding a powerup to start the expiry tick. */
 	void EnablePowerupTick();
 
+	/**
+	 * SPEC section 1.4 / 6.4: empty the per-life state (ActivePowerups, and
+	 * Keys once they land in Phase 10). Called from the death-restart flow
+	 * because UE's PlayerState persists across pawn respawn — powerups
+	 * would otherwise survive death.
+	 *
+	 * Does NOT reset Kills / Secrets / TimeElapsed / Deaths: those persist
+	 * across the level attempt and only clear on a true OpenLevel.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Lifecycle")
+	void ClearPerLifeState();
+
+	/** SPEC 5.9: +1 when the player kills a marked-kill-target enemy. */
+	UFUNCTION(BlueprintCallable, Category = "Stats")
+	void AddKillCredit() { ++Kills; }
+
+	/** SPEC 5.9: +1 on first entry into a AQuakeTrigger_Secret. */
+	UFUNCTION(BlueprintCallable, Category = "Stats")
+	void AddSecretCredit() { ++Secrets; }
+
+	/** SPEC 6.4: incremented once per death, before the snapshot restore. */
+	UFUNCTION(BlueprintCallable, Category = "Stats")
+	void AddDeath() { ++Deaths; }
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaSeconds) override;

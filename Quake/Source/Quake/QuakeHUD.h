@@ -38,6 +38,14 @@ public:
 	 */
 	void ShowMessage(const FText& InMessage, float Duration);
 
+	/**
+	 * Phase 9 level-end stats screen. Toggles the SQuakeHUDOverlay's
+	 * stats-mode display for Duration seconds so the exit trigger can show
+	 * Kills / Secrets / Time / Deaths before OpenLevel fires. Pure flip —
+	 * the widget polls PlayerState / GameMode for the actual values.
+	 */
+	void ShowLevelEndStats(float Duration);
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;

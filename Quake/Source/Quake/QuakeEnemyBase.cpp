@@ -4,6 +4,7 @@
 #include "QuakeCollisionChannels.h"
 #include "QuakeDamageType.h"
 #include "QuakeEnemyAIController.h"
+#include "QuakePlayerState.h"
 #include "QuakeProjectSettings.h"
 
 #include "AIController.h"
@@ -14,6 +15,7 @@
 #include "Engine/World.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/Controller.h"
+#include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
 #include "Sound/SoundBase.h"
 #include "TimerManager.h"
@@ -170,6 +172,39 @@ void AQuakeEnemyBase::Die(AController* Killer, bool bGibbed)
 {
 	Health = 0.f;
 
+	// SPEC 5.9 player-credit rules. Level-clear is independent of credit
+	// (it reads spawn-point satisfaction), so we only touch PlayerState
+	// when this enemy actually counts AND the player deserves the point:
+	//   - Normal kill: Killer is the player's controller.
+	//   - Hazard kill: Killer is null (world damage) AND the player
+	//     previously damaged this enemy during the level attempt.
+	// The infighting-chain 5-second rule is deferred — infighting kills
+	// currently credit nothing, which matches the conservative branch of
+	// the SPEC table ("dead but uncredited").
+	if (bIsMarkedKillTarget)
+	{
+		bool bCreditPlayer = false;
+		if (Killer && Killer->IsPlayerController())
+		{
+			bCreditPlayer = true;
+		}
+		else if (!Killer && bPlayerHasDamagedMe)
+		{
+			bCreditPlayer = true;
+		}
+
+		if (bCreditPlayer)
+		{
+			if (APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0))
+			{
+				if (AQuakePlayerState* PS = PC->GetPlayerState<AQuakePlayerState>())
+				{
+					PS->AddKillCredit();
+				}
+			}
+		}
+	}
+
 	// SPEC section 3.5: DeathSound fires once for both collapse and gib
 	// deaths. Placed before the reaction branch so it is unconditional.
 	if (DeathSound)
@@ -325,6 +360,14 @@ float AQuakeEnemyBase::TakeDamage(
 	}
 
 	Health = FMath::Max(0.f, Health - ScaledDamage);
+
+	// SPEC 5.9 hazard-credit rule: remember if the player ever damaged this
+	// enemy. A later lava / slime kill credits the player iff this flag is
+	// set at the moment of death.
+	if (EventInstigator && EventInstigator->IsPlayerController())
+	{
+		bPlayerHasDamagedMe = true;
+	}
 
 	// SPEC section 3.5: PainSound on every non-fatal hit, independent of the
 	// pain-chance flinch roll. DeathSound is played from Die() to avoid a

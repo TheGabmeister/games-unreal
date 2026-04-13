@@ -30,6 +30,15 @@ void AQuakePlayerState::EnablePowerupTick()
 	SetActorTickEnabled(true);
 }
 
+void AQuakePlayerState::ClearPerLifeState()
+{
+	ActivePowerups.Empty();
+	// Keys.Reset() lands in Phase 10 when the Keys member exists.
+	// Kills / Secrets / TimeElapsed / Deaths intentionally persist — see
+	// SPEC 6.4 restart sequence.
+	SetActorTickEnabled(false);
+}
+
 void AQuakePlayerState::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);

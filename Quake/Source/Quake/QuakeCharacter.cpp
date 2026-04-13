@@ -4,6 +4,7 @@
 #include "QuakeDamageType.h"
 #include "QuakeGameInstance.h"
 #include "QuakePlayerController.h"
+#include "QuakePlayerState.h"
 #include "QuakeWeaponBase.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogQuakeCharacter, Log, All);
@@ -453,9 +454,19 @@ float AQuakeCharacter::TakeDamage(
 
 	if (Health <= 0.f)
 	{
-		// Phase 2 stub: just clamp and stop. Death restart flow is built
-		// out in Phase 6 per SPEC section 6.4.
 		Health = 0.f;
+
+		// SPEC 6.4 / 5.9: increment the Deaths counter once per death. The
+		// full restart flow (snapshot restore, respawn at PlayerStart) lands
+		// with the failure-loop work; this is the stats half of that
+		// wiring, which Phase 9 requires independently for the HUD.
+		if (AController* C = GetController())
+		{
+			if (AQuakePlayerState* PS = C->GetPlayerState<AQuakePlayerState>())
+			{
+				PS->AddDeath();
+			}
+		}
 	}
 
 	return ScaledDamage;

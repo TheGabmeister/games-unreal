@@ -4,22 +4,28 @@
 #include "QuakeTrigger.h"
 #include "QuakeTrigger_Spawn.generated.h"
 
+class AQuakeEnemySpawnPoint;
+
 /**
- * Phase 8 spawn trigger per SPEC section 5.6. Placeholder for Phase 9 —
- * on activation, the spawn trigger will iterate a typed TArray of
- * AQuakeEnemySpawnPoint references and tell each to spawn its enemy
- * class.
+ * Spawn trigger per SPEC section 5.6. On activation, iterates the typed
+ * SpawnPoints array and calls Activate() on each — deferred spawn points
+ * treat Activate as their "spawn now" signal (see AQuakeEnemySpawnPoint).
+ * Then fires the base Targets chain so relays / messages / etc. wired to
+ * this same trigger still run.
  *
- * AQuakeEnemySpawnPoint does not exist yet (lands in Phase 9 Spawn Points
- * + Stats + Level Transitions). For Phase 8 the class only declares its
- * shell so buttons and relays can reference it in the editor; Activate()
- * falls back to the base Targets chain.
+ * The typed SpawnPoints array is separate from the base Targets array so
+ * the editor's actor picker filters the dropdown to AQuakeEnemySpawnPoint
+ * only — catches authoring typos at edit time instead of runtime.
  */
 UCLASS()
 class QUAKE_API AQuakeTrigger_Spawn : public AQuakeTrigger
 {
 	GENERATED_BODY()
 
-	// TODO Phase 9: add UPROPERTY TArray<TObjectPtr<AQuakeEnemySpawnPoint>>
-	// SpawnPoints and override Activate to iterate + call Spawn() on each.
+public:
+	/** Spawn points to fire on activation. Typed for editor picker filtering. */
+	UPROPERTY(EditInstanceOnly, Category = "Trigger|Spawn")
+	TArray<TObjectPtr<AQuakeEnemySpawnPoint>> SpawnPoints;
+
+	virtual void Activate(AActor* InInstigator) override;
 };

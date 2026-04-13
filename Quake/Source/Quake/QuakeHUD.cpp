@@ -118,3 +118,11 @@ void AQuakeHUD::ShowMessage(const FText& InMessage, float Duration)
 		MessageExpireWorldTime = World->GetTimeSeconds() + FMath::Max(0.1f, Duration);
 	}
 }
+
+void AQuakeHUD::ShowLevelEndStats(float Duration)
+{
+	if (OverlayWidget.IsValid())
+	{
+		OverlayWidget->ShowLevelEndStats(FMath::Max(0.1f, Duration));
+	}
+}
