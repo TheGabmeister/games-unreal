@@ -36,6 +36,19 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Projectile|Rocket", meta = (ClampMin = "0.0"))
 	float BaseDamage = 100.f;
 
+	/**
+	 * Full-damage plateau radius (unreal units). Everything within this
+	 * distance of the explosion takes full BaseDamage; falloff is linear
+	 * from DamageInnerRadius to SplashRadius. Non-zero to work around
+	 * UE's ApplyRadialDamageWithFalloff measuring distance to the victim's
+	 * component-location (capsule center), not the capsule surface — a
+	 * direct hit on a 35 u / 90 u capsule reports ~37 u of distance and
+	 * only ~69 damage without this plateau. See CLAUDE.md "Radial damage
+	 * measures to component center, not surface" for the full explanation.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Projectile|Rocket", meta = (ClampMin = "0.0"))
+	float DamageInnerRadius = 60.f;
+
 	/** Outer radius of the splash in unreal units. SPEC 2.2: 120. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Projectile|Rocket", meta = (ClampMin = "0.0"))
 	float SplashRadius = 120.f;

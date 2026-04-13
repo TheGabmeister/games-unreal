@@ -29,6 +29,15 @@ class QUAKE_API AQuakeHUD : public AHUD
 {
 	GENERATED_BODY()
 
+public:
+	/**
+	 * Phase 8 transient HUD message used by AQuakeTrigger_Message and
+	 * AQuakeTrigger_Secret. Text appears centered near the top of the
+	 * screen for Duration seconds via DrawHUD's Canvas path. Later calls
+	 * replace any currently-visible message.
+	 */
+	void ShowMessage(const FText& InMessage, float Duration);
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
@@ -36,4 +45,8 @@ protected:
 
 private:
 	TSharedPtr<SQuakeHUDOverlay> OverlayWidget;
+
+	// Transient HUD message state. MessageExpireWorldTime <= 0 means none.
+	FText Message;
+	float MessageExpireWorldTime = 0.f;
 };

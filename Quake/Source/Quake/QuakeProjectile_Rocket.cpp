@@ -78,22 +78,22 @@ void AQuakeProjectile_Rocket::HandleImpact(const FHitResult& Hit, AActor* /*Othe
 	APawn* FiringPawn = GetInstigator();
 	AController* InstigatorController = FiringPawn ? FiringPawn->GetController() : nullptr;
 
-	// Don't double-count the direct-hit victim: ApplyRadialDamageWithFalloff
-	// at InnerRadius=0 already gives them full BaseDamage because their
-	// distance to ExplosionOrigin is effectively 0. No separate
-	// ApplyPointDamage call is needed (and adding one would double the
-	// direct-hit damage, which is wrong).
-	//
-	// DamageFalloff = 1.0 is a LINEAR falloff (damage = BaseDamage * (1 - d/r)
-	// at InnerRadius 0). ComputeLinearFalloffDamage above mirrors this and
-	// is the function the unit tests exercise.
+	// DamageInnerRadius is non-zero on purpose: UE's ApplyRadialDamageWithFalloff
+	// measures distance from Origin to the victim's component-location (capsule
+	// center), not to the nearest surface point — so a direct hit on a Grunt's
+	// 35 u / 90 u capsule reports ~37 u of distance under the hood and only
+	// ~69 damage with InnerRadius=0. A 60 u plateau swallows that measurement
+	// quirk so direct hits land at full BaseDamage without needing a separate
+	// ApplyPointDamage call. Falloff stays linear from InnerRadius to SplashRadius.
+	// See CLAUDE.md "Radial damage measures to component center, not surface"
+	// for the full explanation.
 	const TArray<AActor*> IgnoreActors;
 	UGameplayStatics::ApplyRadialDamageWithFalloff(
 		this,
 		BaseDamage,
 		/*MinimumDamage*/ 0.f,
 		ExplosionOrigin,
-		/*DamageInnerRadius*/ 0.f,
+		DamageInnerRadius,
 		/*DamageOuterRadius*/ SplashRadius,
 		/*DamageFalloff*/     1.f,
 		UQuakeDamageType_Explosive::StaticClass(),

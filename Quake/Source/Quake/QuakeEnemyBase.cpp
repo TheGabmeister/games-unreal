@@ -170,23 +170,6 @@ void AQuakeEnemyBase::Die(AController* Killer, bool bGibbed)
 {
 	Health = 0.f;
 
-#if !UE_BUILD_SHIPPING
-	if (GEngine)
-	{
-		const FString KillerName = Killer ? Killer->GetName() : TEXT("<world>");
-		GEngine->AddOnScreenDebugMessage(
-			/*Key*/          -1,
-			/*TimeToDisplay*/ 5.f,
-			/*DisplayColor*/  FColor::Red,
-			FString::Printf(TEXT("[Quake] %s %s by %s"),
-				*GetName(), bGibbed ? TEXT("GIBBED") : TEXT("killed"), *KillerName));
-	}
-#endif
-	UE_LOG(LogQuakeEnemy, Log, TEXT("%s %s by %s"),
-		*GetName(),
-		bGibbed ? TEXT("gibbed") : TEXT("killed"),
-		Killer ? *Killer->GetName() : TEXT("<world>"));
-
 	// SPEC section 3.5: DeathSound fires once for both collapse and gib
 	// deaths. Placed before the reaction branch so it is unconditional.
 	if (DeathSound)

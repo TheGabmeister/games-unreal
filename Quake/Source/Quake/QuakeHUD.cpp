@@ -2,6 +2,7 @@
 
 #include "SQuakeHUDOverlay.h"
 
+#include "Engine/Canvas.h"
 #include "Engine/Engine.h"
 #include "Engine/Font.h"
 #include "Engine/GameViewportClient.h"
@@ -96,4 +97,24 @@ void AQuakeHUD::DrawHUD()
 	DrawText(LineSpeed, FLinearColor::White, 20.f, 20.f, Font);
 	DrawText(LineZ,     FLinearColor::White, 20.f, 38.f, Font);
 	DrawText(LineMode,  FLinearColor::White, 20.f, 56.f, Font);
+
+	// Transient HUD message (Phase 8 triggers). Draw centered near the top.
+	UWorld* World = GetWorld();
+	if (World && MessageExpireWorldTime > 0.f && World->GetTimeSeconds() < MessageExpireWorldTime)
+	{
+		const FString MessageStr = Message.ToString();
+		float TextW = 0.f, TextH = 0.f;
+		GetTextSize(MessageStr, TextW, TextH, Font);
+		const float ScreenW = Canvas ? Canvas->ClipX : 1280.f;
+		DrawText(MessageStr, FLinearColor::Yellow, (ScreenW - TextW) * 0.5f, 80.f, Font, 1.25f);
+	}
+}
+
+void AQuakeHUD::ShowMessage(const FText& InMessage, float Duration)
+{
+	Message = InMessage;
+	if (UWorld* World = GetWorld())
+	{
+		MessageExpireWorldTime = World->GetTimeSeconds() + FMath::Max(0.1f, Duration);
+	}
 }
