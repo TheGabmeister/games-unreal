@@ -178,13 +178,13 @@ void AQuakeEnemyBase::MoveToTarget(const FVector& TargetLocation)
 
 void AQuakeEnemyBase::PlayPainReaction()
 {
+	// Visual flinch only — the pain SOUND is emitted from TakeDamage's
+	// non-fatal branch so it fires once per hit. PlayPainReaction is gated
+	// by the SPEC 3.3 pain_chance roll AND can fire on the killing hit
+	// (the FSM transitions to Pain before Die overrides it), so emitting
+	// sound here would double up on non-fatal hits and play pain on top of
+	// the death sound on fatal hits.
 	UE_LOG(LogQuakeEnemy, Verbose, TEXT("%s: PlayPainReaction"), *GetName());
-
-	// Phase 14: route through the sound manager. The legacy PainSound asset
-	// slot is gone; rows in DT_SoundEvents drive playback. Per-enemy pain
-	// variations come from per-row Pitch/Volume overrides, not per-pawn
-	// SoundBase fields.
-	UQuakeSoundManager::PlaySoundEvent(this, EQuakeSoundEvent::EnemyPain, GetActorLocation());
 }
 
 void AQuakeEnemyBase::PlayDeathReaction()
