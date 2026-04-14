@@ -24,7 +24,11 @@
       "Bash(grep -E \"\\\\.\\(cpp|h\\)$\")",
       "Bash(grep -n \"class AQuakeWeapon\\\\|class AQuakeEnemy\" /c/dev/games-unreal/Quake/Source/Quake/*.h)",
       "Bash(ls -1 /c/dev/games-unreal/Quake/Source/Quake/QuakeWeapon*.cpp /c/dev/games-unreal/Quake/Source/Quake/QuakeEnemy*.cpp)",
-      "Bash(xargs basename:*)"
+      "Bash(xargs basename:*)",
+      "Bash(git -C \"c:/dev/games-unreal/Quake\" mv ROADMAP.md docs/history/ROADMAP.md)",
+      "Bash(git -C \"c:/dev/games-unreal/Quake\" mv SPEC.md docs/history/SPEC.md)",
+      "Bash(git -C \"c:/dev/games-unreal/Quake\" status --short docs ROADMAP.md SPEC.md DESIGN.md)",
+      "Bash(git -C \"c:/dev/games-unreal/Quake\" status --short)"
     ],
     "additionalDirectories": [
       "\\tmp"

@@ -4,19 +4,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Unreal Engine 5.7 single-player FPS recreating original Quake gameplay with primitive shapes. The design is split across three docs indexed by [SPEC.md](SPEC.md):
+Unreal Engine 5.7 single-player FPS recreating original Quake gameplay with primitive shapes. v1 is feature-complete in code; remaining work is editor-side map authoring (Phase 15) tracked in [TODO.md](TODO.md).
 
 - **[DESIGN.md](DESIGN.md)** — durable "what the game is" (movement/damage formulas, class hierarchy, collision, game rules). Read this before non-trivial gameplay changes.
-- **[ROADMAP.md](ROADMAP.md)** — v1 phase plan (0–15) with per-phase checklists.
 - **[HUD.md](HUD.md)** — HUD layout, wireframe, data sources.
+- **[TODO.md](TODO.md)** — v2 backlog.
+- **[docs/history/](docs/history/)** — frozen v1 phase plan ([ROADMAP.md](docs/history/ROADMAP.md)) and the original SPEC index ([SPEC.md](docs/history/SPEC.md)). Reference for understanding why the code is shaped the way it is; do not edit.
 
-Module name: `Quake`. Current scope: the v1 milestone in ROADMAP.md.
+Module name: `Quake`.
 
-**DESIGN is the design source of truth.** When DESIGN and this file disagree on gameplay or data ownership, DESIGN wins — update CLAUDE.md to match. CLAUDE.md is working notes for build/tooling/conventions, not a design doc. When ROADMAP and DESIGN disagree, DESIGN wins.
+**DESIGN is the design source of truth.** When DESIGN and this file disagree on gameplay or data ownership, DESIGN wins — update CLAUDE.md to match. CLAUDE.md is working notes for build/tooling/conventions, not a design doc.
 
-**Read surgically.** Code comments use section numbers like "SPEC 3.3" / "DESIGN 3.3" — they're the same and stable; grep `^### <N>\.<M>` in DESIGN.md for the section. Phase blocks live in ROADMAP.md; grep `^## Phase <N>`. Read with tight `limit=30-50` windows — prefer targeted reads over top-to-bottom.
-
-**Implementation phases.** v1 is built in 16 phases (Phase 0–15) defined in [ROADMAP.md](ROADMAP.md). Each has explicit exit criteria. Find the current phase and stay within its scope. **Phase 1 (the strafe-jumping CMC) is the highest-risk item** — do not build combat code on top of an unverified CMC.
+**Read surgically.** Code comments use section numbers like "SPEC 3.3" / "DESIGN 3.3" interchangeably — they're stable; grep `^### <N>\.<M>` in DESIGN.md for the section. For phase history, grep `^## Phase <N>` in [docs/history/ROADMAP.md](docs/history/ROADMAP.md). Read with tight `limit=30-50` windows — prefer targeted reads over top-to-bottom.
 
 ## Build Commands
 

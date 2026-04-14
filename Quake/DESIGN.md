@@ -1,8 +1,31 @@
 # Quake — Design Reference
 
-Single-player FPS inspired by original Quake (1996), rebuilt in Unreal 5.7 with primitive shapes. This doc is the **durable "what the game is"** reference — state, formulas, tables, class hierarchy, collision rules. It describes the v1+ target; v1 scoping lives in [ROADMAP.md](ROADMAP.md). HUD layout lives in [HUD.md](HUD.md). Architecture rationale lives in [CLAUDE.md](CLAUDE.md).
+Single-player FPS inspired by original Quake (1996), rebuilt in Unreal 5.7 with primitive shapes. This doc is the **durable "what the game is"** reference — state, formulas, tables, class hierarchy, collision rules. HUD layout lives in [HUD.md](HUD.md). v2 backlog in [TODO.md](TODO.md). Architecture rationale + working notes in [CLAUDE.md](CLAUDE.md). Frozen v1 phase plan + section-map index live in [docs/history/](docs/history/).
 
-**Cross-reference convention.** Code comments use SPEC / DESIGN section numbers (e.g. "SPEC 3.3", "DESIGN 1.5"). Numbers are stable; treat them as interface. [SPEC.md](SPEC.md) is a thin redirect index for historical refs.
+**Cross-reference convention.** Code comments use SPEC / DESIGN section numbers (e.g. "SPEC 3.3", "DESIGN 1.5") interchangeably — section numbers below are the stable interface.
+
+## Section Map
+
+| Section   | Topic                                          |
+|-----------|------------------------------------------------|
+| 1.1       | Movement                                       |
+| 1.2       | Health and Armor                               |
+| 1.3       | Death and Respawn                              |
+| 1.4       | Inventory Persistence                          |
+| 1.5       | Damage Pipeline                                |
+| 1.6       | Collision Model                                |
+| 2.0       | Weapon Table                                   |
+| 2.1       | Ammo                                           |
+| 2.2       | General Weapon Rules                           |
+| 2.3       | Underwater Discharge                           |
+| 3.1–3.5   | Enemies                                        |
+| 4.1–4.4   | Items and Pickups                              |
+| 5.1–5.9   | Level Structure                                |
+| 6.1–6.4   | Game Rules (difficulty, saves, win, failure)   |
+| 7         | HUD — see [HUD.md](HUD.md)                     |
+| 8.1–8.2   | Audio System                                   |
+| 9.1–9.4   | Technical Architecture                         |
+| 10.1–10.5 | Project Layout & Editor Config                 |
 
 ## Constraints
 
