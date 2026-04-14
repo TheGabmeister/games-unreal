@@ -196,6 +196,21 @@ public:
 
 	virtual void Init() override;
 
+	/**
+	 * Resolve the UQuakeGameInstance off any WorldContext and assert it
+	 * exists as the right subclass. Replaces the "null-tolerant facade"
+	 * pattern that silently degraded when GameInstanceClass was
+	 * misconfigured in DefaultEngine.ini — a wrong-class config is an
+	 * authoring error that should crash immediately, not produce
+	 * empty-inventory gameplay. Returns a non-null pointer or hits checkf.
+	 *
+	 * Safe to call from any game-thread site that has a valid WorldContext.
+	 * Display / polling paths (HUD, menu) that legitimately run outside a
+	 * configured game (e.g. loading screens) should keep using the
+	 * null-tolerant GetGameInstance<>() directly.
+	 */
+	static UQuakeGameInstance* GetChecked(const UObject* WorldContext);
+
 private:
 	/** Live ammo counts. Keyed on uint8(EQuakeAmmoType) so reflection is unnecessary. */
 	TMap<EQuakeAmmoType, int32> AmmoCounts;

@@ -77,13 +77,7 @@ void AQuakeCharacter::SpawnOwnedWeapons()
 	{
 		return;
 	}
-	UQuakeGameInstance* GameInstance = World->GetGameInstance<UQuakeGameInstance>();
-	if (!GameInstance)
-	{
-		UE_LOG(LogQuakeCharacter, Warning,
-			TEXT("SpawnOwnedWeapons: no UQuakeGameInstance — set Game Instance Class in Project Settings"));
-		return;
-	}
+	UQuakeGameInstance* GameInstance = UQuakeGameInstance::GetChecked(this);
 
 	// Mirror the GameInstance's 8-slot array so index i always maps to
 	// SPEC 2.0 weapon number i+1, regardless of how many slots are
@@ -258,23 +252,17 @@ void AQuakeCharacter::OnWeaponSlotPressed(const FInputActionValue& /*Value*/, in
 
 int32 AQuakeCharacter::GiveAmmo(EQuakeAmmoType Type, int32 Amount)
 {
-	const UWorld* World = GetWorld();
-	UQuakeGameInstance* GI = World ? World->GetGameInstance<UQuakeGameInstance>() : nullptr;
-	return GI ? GI->GiveAmmo(Type, Amount) : 0;
+	return UQuakeGameInstance::GetChecked(this)->GiveAmmo(Type, Amount);
 }
 
 bool AQuakeCharacter::ConsumeAmmo(EQuakeAmmoType Type, int32 Amount)
 {
-	const UWorld* World = GetWorld();
-	UQuakeGameInstance* GI = World ? World->GetGameInstance<UQuakeGameInstance>() : nullptr;
-	return GI ? GI->ConsumeAmmo(Type, Amount) : false;
+	return UQuakeGameInstance::GetChecked(this)->ConsumeAmmo(Type, Amount);
 }
 
 int32 AQuakeCharacter::GetAmmo(EQuakeAmmoType Type) const
 {
-	const UWorld* World = GetWorld();
-	const UQuakeGameInstance* GI = World ? World->GetGameInstance<UQuakeGameInstance>() : nullptr;
-	return GI ? GI->GetAmmo(Type) : 0;
+	return UQuakeGameInstance::GetChecked(this)->GetAmmo(Type);
 }
 
 void AQuakeCharacter::GiveHealth(float Amount, bool bOvercharge)
@@ -346,11 +334,11 @@ bool AQuakeCharacter::GiveWeaponPickup(int32 SlotIndexZeroBased, TSubclassOf<AQu
 	}
 
 	UWorld* World = GetWorld();
-	UQuakeGameInstance* GameInstance = World ? World->GetGameInstance<UQuakeGameInstance>() : nullptr;
-	if (!World || !GameInstance)
+	if (!World)
 	{
 		return false;
 	}
+	UQuakeGameInstance* GameInstance = UQuakeGameInstance::GetChecked(this);
 
 	// Write the ownership into the persistent inventory so a death-respawn
 	// re-seeds the slot via SpawnOwnedWeapons.
@@ -420,12 +408,7 @@ int32 AQuakeCharacter::PickAutoSwitchWeaponSlot(
 
 bool AQuakeCharacter::AutoSwitchFromEmptyWeapon()
 {
-	UWorld* World = GetWorld();
-	UQuakeGameInstance* GameInstance = World ? World->GetGameInstance<UQuakeGameInstance>() : nullptr;
-	if (!GameInstance)
-	{
-		return false;
-	}
+	UQuakeGameInstance* GameInstance = UQuakeGameInstance::GetChecked(this);
 
 	// Build the ownership + ammo masks for PickAutoSwitchWeaponSlot. The
 	// Axe (AmmoType::None) is always "has ammo" — it's the terminal
@@ -533,18 +516,15 @@ float AQuakeCharacter::TakeDamage(
 	}
 
 	// Armor absorption — only if the damage type does not bypass armor.
-	UQuakeGameInstance* GameInstance = GetWorld() ? GetWorld()->GetGameInstance<UQuakeGameInstance>() : nullptr;
+	UQuakeGameInstance* GameInstance = UQuakeGameInstance::GetChecked(this);
 	float NewHealth = Health;
-	float NewArmor = GameInstance ? GameInstance->Armor : 0.f;
-	const float Absorption = (DT && !DT->bIgnoresArmor && GameInstance) ? GameInstance->ArmorAbsorption : 0.f;
+	float NewArmor = GameInstance->Armor;
+	const float Absorption = (DT && !DT->bIgnoresArmor) ? GameInstance->ArmorAbsorption : 0.f;
 
 	ApplyArmorAbsorption(Health, NewArmor, Absorption, ScaledDamage, NewHealth, NewArmor);
 
 	SetHealth(NewHealth);
-	if (GameInstance)
-	{
-		GameInstance->Armor = NewArmor;
-	}
+	GameInstance->Armor = NewArmor;
 
 	// Knockback. Quake's knockback magnitude scales with damage AND with the
 	// damage type's KnockbackScale (4.0 for explosives = rocket jumps, 1.0

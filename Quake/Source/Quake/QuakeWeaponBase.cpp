@@ -98,9 +98,8 @@ bool AQuakeWeaponBase::TryFire(AActor* InInstigator)
 	// SPEC 2.2.
 	if (AmmoType != EQuakeAmmoType::None && AmmoPerShot > 0)
 	{
-		UQuakeGameInstance* GameInstance =
-			GetWorld() ? GetWorld()->GetGameInstance<UQuakeGameInstance>() : nullptr;
-		const bool bHasAmmo = GameInstance && GameInstance->ConsumeAmmo(AmmoType, AmmoPerShot);
+		UQuakeGameInstance* GameInstance = UQuakeGameInstance::GetChecked(this);
+		const bool bHasAmmo = GameInstance->ConsumeAmmo(AmmoType, AmmoPerShot);
 		if (!bHasAmmo)
 		{
 			PlayEmptyClick(InInstigator);

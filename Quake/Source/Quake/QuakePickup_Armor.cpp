@@ -34,14 +34,7 @@ bool AQuakePickup_Armor::CanBeConsumedBy(AQuakeCharacter* Character) const
 	{
 		return false;
 	}
-	const UWorld* World = Character->GetWorld();
-	const UQuakeGameInstance* GI = World ? World->GetGameInstance<UQuakeGameInstance>() : nullptr;
-	if (!GI)
-	{
-		// No GameInstance yet — nothing to compare against; let the pickup
-		// through so authoring issues in the editor don't silently deny it.
-		return true;
-	}
+	const UQuakeGameInstance* GI = UQuakeGameInstance::GetChecked(Character);
 
 	// SPEC 1.2: consume if the new tier absorbs more than current, OR if
 	// current armor has drained below this pickup's value. The second clause
@@ -61,12 +54,7 @@ void AQuakePickup_Armor::ApplyPickupEffectTo(AQuakeCharacter* Character)
 	{
 		return;
 	}
-	const UWorld* World = Character->GetWorld();
-	UQuakeGameInstance* GI = World ? World->GetGameInstance<UQuakeGameInstance>() : nullptr;
-	if (!GI)
-	{
-		return;
-	}
+	UQuakeGameInstance* GI = UQuakeGameInstance::GetChecked(Character);
 	GI->Armor = GetAmountForTier(Tier);
 	GI->ArmorAbsorption = GetAbsorptionForTier(Tier);
 }

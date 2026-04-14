@@ -5,10 +5,27 @@
 #include "QuakeSaveGame.h"
 #include "QuakeWeaponBase.h"
 
+#include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogQuakeSave, Log, All);
+
+UQuakeGameInstance* UQuakeGameInstance::GetChecked(const UObject* WorldContext)
+{
+	// UObject* overload rather than UWorld* so callers don't have to unwrap
+	// GetWorld() themselves — matches the shape of other engine helpers.
+	UWorld* World = GEngine
+		? GEngine->GetWorldFromContextObject(WorldContext, EGetWorldErrorMode::ReturnNull)
+		: nullptr;
+	UGameInstance* Raw = World ? World->GetGameInstance() : nullptr;
+	UQuakeGameInstance* GI = Cast<UQuakeGameInstance>(Raw);
+	checkf(GI != nullptr,
+		TEXT("UQuakeGameInstance::GetChecked: GameInstance is %s — set GameInstanceClass "
+		     "to BP_QuakeGameInstance (or UQuakeGameInstance) in Project Settings > Maps & Modes."),
+		Raw ? *Raw->GetClass()->GetName() : TEXT("null"));
+	return GI;
+}
 
 UQuakeGameInstance::UQuakeGameInstance()
 {
