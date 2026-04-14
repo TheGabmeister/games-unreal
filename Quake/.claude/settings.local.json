@@ -28,7 +28,12 @@
       "Bash(git -C \"c:/dev/games-unreal/Quake\" mv ROADMAP.md docs/history/ROADMAP.md)",
       "Bash(git -C \"c:/dev/games-unreal/Quake\" mv SPEC.md docs/history/SPEC.md)",
       "Bash(git -C \"c:/dev/games-unreal/Quake\" status --short docs ROADMAP.md SPEC.md DESIGN.md)",
-      "Bash(git -C \"c:/dev/games-unreal/Quake\" status --short)"
+      "Bash(git -C \"c:/dev/games-unreal/Quake\" status --short)",
+      "Bash(git -C \"c:/dev/games-unreal/Quake\" rm -r docs/history)",
+      "Bash(git -C \"c:/dev/games-unreal/Quake\" diff --stat HEAD -- DESIGN.md)",
+      "Bash(git -C \"c:/dev/games-unreal/Quake\" show HEAD:DESIGN.md)",
+      "Bash(git -C \"c:/dev/games-unreal/Quake\" show HEAD:./DESIGN.md)",
+      "Bash(git -C \"c:/dev/games-unreal/Quake\" diff --stat)"
     ],
     "additionalDirectories": [
       "\\tmp"

@@ -16,7 +16,7 @@
  * That dot-product clamp is what lets the player accumulate horizontal
  * speed indefinitely by air-strafing.
  *
- * See SPEC.md section 1.1 and CLAUDE.md "Risk Note: Strafe-Jumping CMC".
+ * See DESIGN.md section 1.1 and CLAUDE.md "Risk Note: Strafe-Jumping CMC".
  */
 UCLASS()
 class QUAKE_API UQuakeCharacterMovementComponent : public UCharacterMovementComponent

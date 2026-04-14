@@ -9,13 +9,12 @@ Unreal Engine 5.7 single-player FPS recreating original Quake gameplay with prim
 - **[DESIGN.md](DESIGN.md)** — durable "what the game is" (movement/damage formulas, class hierarchy, collision, game rules). Read this before non-trivial gameplay changes.
 - **[HUD.md](HUD.md)** — HUD layout, wireframe, data sources.
 - **[TODO.md](TODO.md)** — v2 backlog.
-- **[docs/history/](docs/history/)** — frozen v1 phase plan ([ROADMAP.md](docs/history/ROADMAP.md)) and the original SPEC index ([SPEC.md](docs/history/SPEC.md)). Reference for understanding why the code is shaped the way it is; do not edit.
 
 Module name: `Quake`.
 
 **DESIGN is the design source of truth.** When DESIGN and this file disagree on gameplay or data ownership, DESIGN wins — update CLAUDE.md to match. CLAUDE.md is working notes for build/tooling/conventions, not a design doc.
 
-**Read surgically.** Code comments use section numbers like "SPEC 3.3" / "DESIGN 3.3" interchangeably — they're stable; grep `^### <N>\.<M>` in DESIGN.md for the section. For phase history, grep `^## Phase <N>` in [docs/history/ROADMAP.md](docs/history/ROADMAP.md). Read with tight `limit=30-50` windows — prefer targeted reads over top-to-bottom.
+**Read surgically.** Code comments use section numbers like "SPEC 3.3" / "DESIGN 3.3" interchangeably — they're stable; grep `^### <N>\.<M>` in DESIGN.md for the section. Read with tight `limit=30-50` windows — prefer targeted reads over top-to-bottom.
 
 ## Build Commands
 

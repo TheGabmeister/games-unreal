@@ -1,9 +1,8 @@
 # TODO — v2 and beyond
 
-Captured from [docs/history/ROADMAP.md](docs/history/ROADMAP.md) "Content Scope" deferred column,
-[HUD.md](HUD.md) "v1 vs v2", and inline `// later phase` / `// future` /
-`// v2` markers. v1 (Phases 0–15) is feature-complete in code; this file
-is the next-milestone backlog.
+Captured from [HUD.md](HUD.md) "v1 vs v2" and inline `// later phase` /
+`// future` / `// v2` markers in the codebase. v1 is feature-complete in
+code; this file is the next-milestone backlog.
 
 ## Content
 
@@ -27,7 +26,7 @@ is the next-milestone backlog.
 
 - **Fiend** — leaping melee enemy. Per-type AIController for the leap state.
 - **Shambler** — high-HP heavy with ranged lightning attack. Add `EQuakeSoundEvent::EnemyPain_Shambler` row if a unique asset is needed (per CLAUDE.md migration note).
-- **Zombie** — Down-state revive timer. `FQuakeDifficultyMultipliers::ZombieReviveScale` exists but unused; see [Source/Quake/QuakeDifficultyMultipliers.h:37](Source/Quake/QuakeDifficultyMultipliers.h#L37) and the `AQuakeAIController_Zombie::ApplyDifficultyScaling` slot called out in [docs/history/ROADMAP.md](docs/history/ROADMAP.md).
+- **Zombie** — Down-state revive timer. `FQuakeDifficultyMultipliers::ZombieReviveScale` exists but unused; see [Source/Quake/QuakeDifficultyMultipliers.h:37](Source/Quake/QuakeDifficultyMultipliers.h#L37) — needs an `AQuakeAIController_Zombie::ApplyDifficultyScaling` override to consume it.
 - **Flying enemies** — DESIGN explicitly defers (`Wizard`, `Scrag`). Will require pathfinding-on-flight-volume work.
 - **Enforcer** (future v2) — referenced in [Source/Quake/QuakeWeapon_Shotgun.cpp:61](Source/Quake/QuakeWeapon_Shotgun.cpp#L61) as the example of an enemy reading the firer's `GetOutgoingDamageScale()`.
 - **Infighting 5-second chain credit rule** — currently deferred; infighting kills credit nothing. See [Source/Quake/QuakeEnemyBase.cpp:212](Source/Quake/QuakeEnemyBase.cpp#L212).
@@ -65,7 +64,7 @@ is the next-milestone backlog.
 
 ## Engineering
 
-- **Functional / world-spinup tests** — every `// (deferred to manual)` checklist item in [docs/history/ROADMAP.md](docs/history/ROADMAP.md). Especially the per-map Phase 15 tests (load `.umap` → assert PlayerStart, NavMeshBoundsVolume, exit, pathfind).
+- **Functional / world-spinup tests** — convert "deferred to manual" checks (PIE-walkthrough verifications) into automation tests once the v1 maps exist. Especially per-map Phase 15 coverage: load `.umap` → assert PlayerStart, NavMeshBoundsVolume, exit, pathfind.
 - **Per-map automation tests** for E1M1 / E1M2 / E1M3 / Hub once the maps exist (see Phase 15 checklist).
 - **Gamepad input** — Enhanced Input mapping context for controller. Out of v1 scope.
 
