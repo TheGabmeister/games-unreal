@@ -182,6 +182,8 @@ Buttons, triggers, doors, spawn points, and the level exit communicate via `IQua
 
 **Trigger hierarchy.** `AQuakeTrigger` is the `UCLASS(Abstract)` base with `UBoxComponent TriggerVolume` (query-only, overlap Pawn) and `TArray<TObjectPtr<AActor>> Targets`. Default `Activate` calls `FireTargets` (iterate, cast to `IQuakeActivatable`, log on null/non-impl). `BeginPlay` binds `OnComponentBeginOverlap` → `Activate`. Subclasses override `Activate` and call `Super::Activate(InInstigator)` to fire the chain (or omit Super for self-contained triggers like `_Hurt`).
 
+**Overlap filter: player-only by default** (Quake `SF_TRIGGER_ALLOWMONSTERS` = off). `AQuakeTrigger::OnTriggerBeginOverlap` rejects any actor that isn't `AQuakeCharacter` unless `bAllowMonsters` is true, so an enemy chasing the player can't open the exit, burn a secret, or fire a message. Type-based check (`Cast<AQuakeCharacter>`) rather than controller-based so the filter is stable across possession timing — enemies subclass `AQuakeEnemyBase`, not `AQuakeCharacter`. `_Hurt` and `_Teleport` flip `bAllowMonsters = true` in their constructors (kill floors and teleporters affect monsters in original Quake). `Activate()` calls from a chain bypass the filter — a relay fired by any source still propagates.
+
 | Subclass | Behavior |
 |----------|----------|
 | `_Relay` | No-op override — fan-out only. |
@@ -192,7 +194,7 @@ Buttons, triggers, doors, spawn points, and the level exit communicate via `IQua
 | `_Spawn` | Fires the typed `SpawnPoints` list (deferred spawn points spawn now), then Super. |
 | `_Exit` | See **Stats and Level-Clear** above for gating + stats-screen flow. |
 
-**Buttons are input sources, not chainables.** `AQuakeButton` does NOT implement `IQuakeActivatable`. It holds its own `Targets` and fires on Touch-overlap or Shoot-hit. For "fire on signal" relays use `AQuakeTrigger_Relay`. Collision supports both touch and shoot simultaneously (overlap Pawn, block Weapon + Visibility); `ActivationMode` gates which signal calls `Fire`.
+**Buttons are input sources, not chainables.** `AQuakeButton` does NOT implement `IQuakeActivatable`. It holds its own `Targets` and fires on Touch-overlap or Shoot-hit. For "fire on signal" relays use `AQuakeTrigger_Relay`. Collision supports both touch and shoot simultaneously (overlap Pawn, block Weapon + Visibility); `ActivationMode` gates which signal calls `Fire`. Same player-only default as triggers via its own `bAllowMonsters` flag — Touch-overlap and Shoot-damage paths both route the instigator through `AQuakeTrigger::IsPlayerPawn` before firing.
 
 ## Architecture: Doors
 
