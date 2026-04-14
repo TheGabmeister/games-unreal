@@ -9,6 +9,7 @@
 
 class UCameraComponent;
 class UPostProcessComponent;
+class UQuakeInventoryComponent;
 class AQuakeWeaponBase;
 
 UCLASS()
@@ -27,6 +28,18 @@ public:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")
 	TObjectPtr<UPostProcessComponent> DamageFlashPostProcess;
+
+	/**
+	 * Ammo, armor, and owned-weapon-classes. MP-ready: living on the pawn
+	 * means replication is a drop-in follow-up (UPROPERTY(Replicated) +
+	 * GetLifetimeReplicatedProps on the component). See
+	 * [QuakeInventoryComponent.h](QuakeInventoryComponent.h).
+	 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Inventory")
+	TObjectPtr<UQuakeInventoryComponent> InventoryComponent;
+
+	UFUNCTION(BlueprintCallable, Category = "Inventory")
+	UQuakeInventoryComponent* GetInventoryComponent() const { return InventoryComponent; }
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Movement")
 	float LookSensitivity = 0.5f;
@@ -296,7 +309,7 @@ private:
 
 	/**
 	 * Spawn all weapons the GameInstance says the player owns, one actor
-	 * per non-null slot in GameInstance->OwnedWeaponClasses. Called from
+	 * per non-null slot in InventoryComponent->OwnedWeaponClasses. Called from
 	 * BeginPlay. Auto-equips the lowest-index owned weapon.
 	 */
 	void SpawnOwnedWeapons();

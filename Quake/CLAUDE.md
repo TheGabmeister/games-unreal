@@ -46,6 +46,8 @@ IntelliSense errors like `cannot open source file "InputModifiers.h"` are usuall
 
 Tests live under `Source/Quake/Tests/` and use `IMPLEMENT_SIMPLE_AUTOMATION_TEST` with `EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter`, guarded by `#if WITH_DEV_AUTOMATION_TESTS`. Run via **Session Frontend → Automation tab → filter `Quake.*`** — the runtime discovery is the test inventory; one test file per phase / subsystem.
 
+**Single test / suite.** The Automation filter is substring-matched against the test name declared in `IMPLEMENT_SIMPLE_AUTOMATION_TEST`. Type the full name for one test (`Quake.Movement.AirAccel.HighSpeedStrafe`) or a prefix for a suite (`Quake.Ammo` runs every ammo-inventory test). Click *Start Tests*.
+
 **Prefer pure static helpers over world-spinup tests.** `ApplyQuakeAirAccel`, `ApplyArmorAbsorption`, `ComputePainChance`, `ComputeLinearFalloffDamage`, `PickAutoSwitchWeaponSlot`, `IsLevelClearedForSet`, `ComputeScaledEnemyStats`, `ComputeConsumedNames`, `CanQuickSave`, `ShouldRouteToWinScreen`, `UQuakeSoundManager::ResolveRowName` are the templates. Functional tests requiring a world are deferred to manual sandbox-map verification.
 
 **Test seams.** Test-only setters (e.g., `AQuakeEnemyBase::SetHealthForTest`) wrap in `#if WITH_DEV_AUTOMATION_TESTS` so they don't ship.
@@ -60,13 +62,31 @@ Tests live under `Source/Quake/Tests/` and use `IMPLEMENT_SIMPLE_AUTOMATION_TEST
 
 Where data lives is determined by lifecycle. Wrong placement breaks respawn, level transitions, or the HUD.
 
-- **`UQuakeGameInstance`** — inventory (weapons, ammo, armor), `LevelEntrySnapshot`, `CurrentDifficulty`, save plumbing. Survives `OpenLevel` and Character respawn. Gameplay paths (Character facade, weapon ammo gate, pickups) resolve the instance via `UQuakeGameInstance::GetChecked(this)` — `checkf` fires if the project's `GameInstanceClass` isn't set to `BP_QuakeGameInstance` (or a subclass). Null-tolerant `GetGameInstance<>()` is reserved for HUD/menu polling paths that can legitimately run outside a configured game.
+- **`UQuakeGameInstance`** — passive mailbox (`TransitSnapshot`, `LevelEntrySnapshot`), `PendingLoad`, `CurrentDifficulty`, `SoundEventTable`, save plumbing. No live inventory. Survives `OpenLevel` and Character respawn. Paths that need it resolve via `UQuakeGameInstance::GetChecked(this)` — `checkf` fires if the project's `GameInstanceClass` isn't set to `BP_QuakeGameInstance` (or a subclass). Null-tolerant `GetGameInstance<>()` is reserved for HUD/menu polling paths that can legitimately run outside a configured game.
+- **`UQuakeInventoryComponent`** — ammo counts, armor, owned weapon classes. Attached to `AQuakeCharacter` as `CreateDefaultSubobject`. MP-ready: living on the pawn means replication is a drop-in follow-up (add `UPROPERTY(Replicated)` + `GetLifetimeReplicatedProps`).
 - **`AQuakePlayerState`** — per-attempt stats (Kills/Secrets/Deaths/Time), powerups, keys. Auto-cleared on `OpenLevel`; **NOT** cleared on pawn respawn (UE preserves PlayerState across death) — death-restart must call `ClearPerLifeState()`, which deliberately preserves the score counters.
-- **`AQuakeCharacter`** — live health, weapon instances, pain/death flags. Dies with the body. Facade methods forward to GameInstance/PlayerState. **`Move`/`Look`/`OnFirePressed` early-return when `bAwaitingRestart`** so the death screen can consume Fire for the restart prompt. Use `static constexpr NumWeaponSlots` everywhere — never hardcode `8`; `static_assert` guards in [QuakePickup_Weapon.h](Source/Quake/QuakePickup_Weapon.h) and `PickAutoSwitchWeaponSlot` catch drift against that constant at compile time.
+- **`AQuakeCharacter`** — live health, weapon instances, pain/death flags. Dies with the body. Facade methods forward to `InventoryComponent` (ammo, armor, weapons) and `PlayerState` (keys, powerups). **`Move`/`Look`/`OnFirePressed` early-return when `bAwaitingRestart`** so the death screen can consume Fire for the restart prompt. Use `static constexpr NumWeaponSlots` everywhere — never hardcode `8`; `static_assert` guards in [QuakePickup_Weapon.h](Source/Quake/QuakePickup_Weapon.h) and `PickAutoSwitchWeaponSlot` catch drift against that constant at compile time.
 - **`AQuakeGameMode`** — level denominators, spawn rules, win routing, restart orchestration. `GetDifficulty()` forwards to GameInstance — GameMode does not own the field.
 - **`AQuakeHUD`** — paints from all of the above; Slate widget caches weak pointers and reads them on paint. Three viewport overlays: main HUD (z=10), death (z=20), win (z=30).
 
-Do not put inventory on Character. Do not put per-level stats on Character or GameMode. Do not put settings (sensitivity, volume) on PlayerState.
+Do not put live inventory on the GameInstance (that was the pre-refactor design; no MP analog). Do not put per-level stats on Character or GameMode. Do not put settings (sensitivity, volume) on PlayerState.
+
+## Architecture: Inventory Component
+
+`UQuakeInventoryComponent` attached to `AQuakeCharacter` owns live ammo, armor, and `OwnedWeaponClasses`. The pawn dies on `OpenLevel`; the GameInstance survives and holds `FQuakeInventorySnapshot TransitSnapshot` as a **one-shot mailbox**. The next-spawned pawn's component consumes the snapshot in `InitializeComponent` (pre-BeginPlay, so GameMode::BeginPlay's auto-save + level-entry snapshot see the hydrated state) and clears `bValid`. Matches Quake 1's `parm1..parm16` globals pattern.
+
+**Mailbox writers:**
+- `AQuakeTrigger_Exit::OnStatsScreenTimeout` → serializes live component into `GI->TransitSnapshot` just before `OpenLevel` (level-to-level handoff).
+- `UQuakeGameInstance::ApplyInventorySnapshot` (called by `LoadFromSlot`) → copies from `UQuakeSaveGame::InventorySnapshot` (quickload).
+- `UQuakeGameInstance::RestoreFromLevelEntrySnapshot` (called by `RequestRestartFromDeath`) → copies from `LevelEntrySnapshot` (death-restart).
+
+**Mailbox reader**: `UQuakeInventoryComponent::InitializeComponent`. If invalid, falls back to UPROPERTY defaults (the `BP_QuakeCharacter` authored starting loadout + `StartingShells`).
+
+**BP authoring point:** `BP_QuakeCharacter → InventoryComponent → OwnedWeaponClasses` slots. Pre-refactor these lived on `BP_QuakeGameInstance`; the migration step is to copy the slot references over. An empty array at runtime logs a `LogQuakeInventory` warning and the player spawns weaponless until authored.
+
+**Tests** construct the component standalone via `NewObject<UQuakeInventoryComponent>()` — same shape as the pre-refactor GameInstance tests. Snapshot round-trip uses `SerializeTo` / `DeserializeFrom` and needs no world.
+
+**MP future**: add `UPROPERTY(Replicated)` on `Armor` / `ArmorAbsorption` / `OwnedWeaponClasses` / `AmmoCounts` + `GetLifetimeReplicatedProps` + `SetIsReplicated(true)` in ctor. `TransitSnapshot` and `LevelEntrySnapshot` go unused (MP respawn = default loadout per match), harmlessly.
 
 ## Architecture: Damage Pipeline
 
@@ -86,7 +106,7 @@ Attribution uses UE's built-in `EventInstigator` (controller) and `DamageCauser`
 
 ## Architecture: Weapons
 
-`AQuakeWeaponBase` is the `UCLASS(Abstract)` base. Public entry: `TryFire(InInstigator)`. It enforces `RateOfFire` cooldown via `LastFireWorldTime`, runs the SPEC 2.1 ammo gate (`ConsumeAmmo`), then calls subclass `Fire`. Weapons with `AmmoType == None` (Axe) bypass the ammo gate. Subclasses only override `Fire`. Stats live on the C++ class as `UPROPERTY` defaults; thin `BP_Weapon_*` only fills asset slots and `ProjectileClass`.
+`AQuakeWeaponBase` is the `UCLASS(Abstract)` base. Public entry: `TryFire(InInstigator)`. It enforces `RateOfFire` cooldown via `LastFireWorldTime`, runs the SPEC 2.1 ammo gate through the firer's `UQuakeInventoryComponent::ConsumeAmmo` (the instigator is cast to `AQuakeCharacter`; a `checkf` fires if something non-player tries to use an ammo weapon), then calls subclass `Fire`. Weapons with `AmmoType == None` (Axe) bypass the ammo gate. Subclasses only override `Fire`. Stats live on the C++ class as `UPROPERTY` defaults; thin `BP_Weapon_*` only fills asset slots and `ProjectileClass`.
 
 **`Fire` preamble is centralized.** Every subclass `Fire` starts with `if (!GetFireContext(InInstigator, PawnInstigator, World)) return;`. Don't reimplement the boilerplate.
 
@@ -158,7 +178,7 @@ Per-enemy variations live on AIController subclasses, not pawn subclasses — ke
 
 **Drop table** is a `TArray<FQuakeDropEntry> DropTable` UPROPERTY on `AQuakeEnemyBase`. Each entry: `{ TSubclassOf<AQuakePickupBase> PickupClass, int32 Quantity, float Chance }`. Filled per-enemy-type in BP. `SpawnDrops` rolls `FMath::FRand()` per entry against `Chance`. Drops only spawn on non-gib deaths.
 
-**`TSubclassOf<AQuakePickupBase>` in `FQuakeDropEntry` requires the full `AQuakePickupBase` header in `QuakeEnemyBase.h`** — same gotcha as `TSubclassOf<AQuakeWeaponBase>` in `QuakeGameInstance.h`. The include must come *before* `QuakeEnemyBase.generated.h` (UHT rejects includes after generated.h).
+**`TSubclassOf<AQuakePickupBase>` in `FQuakeDropEntry` requires the full `AQuakePickupBase` header in `QuakeEnemyBase.h`** — same gotcha as `TSubclassOf<AQuakeWeaponBase>` in [QuakeInventoryComponent.h](Source/Quake/QuakeInventoryComponent.h). The include must come *before* `QuakeEnemyBase.generated.h` (UHT rejects includes after generated.h).
 
 **Gib detection** at the end of `TakeDamage` before `Die`: `Overkill = ScaledDamage - HealthBefore`; gib when `Overkill >= HealthBefore * 2`. `HealthBefore = Health + ScaledDamage` since Health is already decremented. `Die(Killer, bGibbed)` dispatches to `PlayGibReaction` vs `PlayDeathReaction` and skips drops on gib. Player death is **not** gib-aware.
 
@@ -248,7 +268,7 @@ Difficulty stored on `UQuakeGameInstance` (survives `OpenLevel`); `AQuakeGameMod
 
 ## Architecture: Failure + Win Flow (Phase 13)
 
-**Inventory snapshot is captured AFTER any pending-load restore.** The snapshot reflects "what the player walked in with this attempt", not the prior level's exit inventory. **Health is NOT in the snapshot** per DESIGN 6.4 — death always restores full HP; the snapshot only handles inventory.
+Inventory handoff on death-restart: see **Architecture: Inventory Component** above. Health is intentionally NOT in the snapshot (DESIGN 6.4: death always restores full HP).
 
 **Win routing is the pure predicate** `AQuakeGameMode::ShouldRouteToWinScreen(bIsFinal, NextMapName)` — final-level always wins regardless of NextMapName; non-final never does. Test target.
 
@@ -304,7 +324,7 @@ Per SPEC section 10, these can't be created from C++ alone:
 
 - **Levels** (`.umap`) under `Content/Maps/` — World Partition disabled per level. `MainMenu.umap` (Phase 13) uses `BP_QuakeMenuGameMode` as its World Settings GameMode override; pick it as the project default in **Project Settings → Maps & Modes → Game Default Map**. `Hub.umap` is a thin level holding one `BP_Trigger_Teleport` per episode portal.
 - **BP framework subclasses** under `Content/Blueprints/Framework/` — thin BPs holding asset/slot defaults C++ can't reference directly:
-  - `BP_QuakeGameMode`, `BP_QuakeGameInstance` (owns `OwnedWeaponClasses[8]` slots — empty all-slots = weaponless spawn + warning), `BP_QuakePlayerController` (owns IA/IMC slots, including Phase 11 `IA_QuickSave`/`IA_QuickLoad` mapped to F5/F9 in `IMC_Default`), `BP_QuakeCharacter` (mesh slots; watch the BP-shadows-C++ gotcha).
+  - `BP_QuakeGameMode`, `BP_QuakeGameInstance` (no more `OwnedWeaponClasses` slots post inventory-component refactor — `SoundEventTable` + BP-subclass presence for `GetChecked` assertion is all that remains), `BP_QuakePlayerController` (owns IA/IMC slots, including Phase 11 `IA_QuickSave`/`IA_QuickLoad` mapped to F5/F9 in `IMC_Default`), `BP_QuakeCharacter` (mesh slots + `InventoryComponent->OwnedWeaponClasses` slots — empty all-slots logs warning and spawns weaponless; watch the BP-shadows-C++ gotcha).
   - `BP_QuakeMenuGameMode` + `BP_QuakeMenuHUD` (Phase 13) for `MainMenu.umap`. The HUD BP sets `HubMapName` — the map opened after difficulty selection. **Setting it on the C++ class doesn't expose it**, so a BP subclass is required.
   - For an episode-final level: a `BP_QuakeGameMode_*` with `bIsFinalLevel = true` and `MainMenuMapName = "MainMenu"`. Used as the level's World Settings GameMode override.
 - **Enemy placements** — always `AQuakeEnemySpawnPoint` actors with `EnemyClass` set to a `BP_Enemy_*` (Grunt/Knight/Ogre). Direct `BP_Enemy_*` placements are decoration and don't count toward `KillsTotal` (SPEC 5.1). `BP_Enemy_Ogre` must have `GrenadeClass` set to `BP_Projectile_Grenade` or grenade lobs no-op.

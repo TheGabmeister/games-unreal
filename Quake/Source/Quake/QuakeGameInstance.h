@@ -9,27 +9,23 @@
 
 class AQuakeWeaponBase;
 class UDataTable;
+class UQuakeInventoryComponent;
 class UQuakeSaveGame;
 
 /**
- * Persistent state owner that survives OpenLevel and Character respawn.
+ * Persistent object that survives OpenLevel and Character respawn.
  *
- * Per SPEC section 1.4 and [CLAUDE.md](CLAUDE.md) "Architecture: State
- * Ownership", this is the home for:
- *   - Inventory: weapons owned, ammo counts, armor
- *   - Level-entry snapshot (FQuakeInventorySnapshot) restored on death
- *   - Save-game reference
- *   - Player profile, difficulty
+ * Role after the inventory-component refactor: passive mailbox + save
+ * plumbing + difficulty + sound-table reference. Live inventory (ammo,
+ * armor, weapon classes) lives on UQuakeInventoryComponent attached to
+ * AQuakeCharacter; the pawn dies on OpenLevel, but this GameInstance
+ * survives and holds `TransitSnapshot` as a one-shot handoff that the
+ * next pawn's component consumes in InitializeComponent. Matches the
+ * Quake 1 `parm1..parm16` globals pattern and keeps MP migration small
+ * (the component replicates on the pawn; this object stays local).
  *
- * Phase 2: added armor fields for the damage-pipeline math.
- * Phase 4: adds ammo TMap + per-type caps (SPEC 2.1), weapon-owned slot
- *          array (SPEC 2.0 weapon-number slots 1..8), starting-loadout
- *          seeding, and the facade helpers GiveAmmo / ConsumeAmmo / GetAmmo.
- *
- * Difficulty is Phase 12; save/profile is Phase 11/13.
- *
- * Do NOT put keys, powerups, or per-level stats here — those live on
- * AQuakePlayerState (they reset on level transition; inventory does not).
+ * Do NOT put gameplay state here. Do NOT put keys, powerups, or per-level
+ * stats here either — those live on AQuakePlayerState.
  */
 UCLASS()
 class QUAKE_API UQuakeGameInstance : public UGameInstance
@@ -39,81 +35,18 @@ class QUAKE_API UQuakeGameInstance : public UGameInstance
 public:
 	UQuakeGameInstance();
 
-	// --- Armor (Phase 2) ---
+	// --- Cross-level inventory handoff ---
 
 	/**
-	 * Current armor points. Replaced (not stacked) on pickup of a higher
-	 * tier per SPEC section 1.2. Caps at 200 (Red Armor max).
+	 * Passive mailbox consumed by UQuakeInventoryComponent::InitializeComponent
+	 * on the next-spawned pawn. Populated by:
+	 *   - AQuakeTrigger_Exit before OpenLevel (level transition)
+	 *   - LoadFromSlot from save-game (quickload)
+	 *   - RestoreFromLevelEntrySnapshot (death-restart, copies LevelEntrySnapshot)
+	 * Cleared (`bValid = false`) after the component reads it.
 	 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Inventory|Armor")
-	float Armor = 0.f;
-
-	/**
-	 * Current armor absorption ratio. Set on pickup to 0.3 (Green),
-	 * 0.6 (Yellow), or 0.8 (Red) per SPEC section 1.2. Zero means no
-	 * armor — TakeDamage skips the absorption step entirely when this is
-	 * zero, even if Armor somehow has a value.
-	 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Inventory|Armor")
-	float ArmorAbsorption = 0.f;
-
-	// --- Weapons owned (Phase 4) ---
-
-	/**
-	 * Weapon slot array, one entry per SPEC 2.0 weapon number. Index 0 =
-	 * slot 1 (Axe), index 1 = slot 2 (Shotgun), index 3 = slot 4 (Nailgun),
-	 * index 6 = slot 7 (Rocket Launcher), etc. Null entries mean "not
-	 * owned" and are skipped at Character spawn-time.
-	 *
-	 * Populated from BP_QuakeGameInstance defaults in the editor per the
-	 * project's "asset slots in BP subclasses" convention. The array is
-	 * pre-sized to 8 in the C++ constructor so editing the BP only requires
-	 * filling the slots you want.
-	 *
-	 * SPEC 1.4 starting loadout is "Axe, 25 shells, no other weapons" —
-	 * Phase 4 grants the Shotgun by default too (slot 2) as a development
-	 * convenience until weapon pickups land in a later phase. Revert to
-	 * Axe-only when AQuakePickup_Weapon exists.
-	 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Inventory|Weapons")
-	TArray<TSubclassOf<AQuakeWeaponBase>> OwnedWeaponClasses;
-
-	/** Grant a weapon to the player. Stores into the slot index matching its weapon number (1-based → 0-based). */
-	UFUNCTION(BlueprintCallable, Category = "Inventory|Weapons")
-	void GiveWeapon(int32 SlotNumberOneBased, TSubclassOf<AQuakeWeaponBase> WeaponClass);
-
-	UFUNCTION(BlueprintCallable, Category = "Inventory|Weapons")
-	bool OwnsWeaponInSlot(int32 SlotIndexZeroBased) const;
-
-	// --- Ammo (Phase 4) ---
-
-	/**
-	 * Current ammo counts keyed by type. Entries for None are ignored.
-	 * Values are clamped to GetAmmoCap on every Give.
-	 *
-	 * Not a UPROPERTY because TMap<EQuakeAmmoType, int32> is reflection-
-	 * supported BUT editing defaults from BP is clunky; we seed it in
-	 * Init() from the starting loadout instead.
-	 */
-	UFUNCTION(BlueprintCallable, Category = "Inventory|Ammo")
-	int32 GetAmmo(EQuakeAmmoType Type) const;
-
-	/** Add ammo, clamped to GetAmmoCap(Type). Returns the amount actually added. */
-	UFUNCTION(BlueprintCallable, Category = "Inventory|Ammo")
-	int32 GiveAmmo(EQuakeAmmoType Type, int32 Amount);
-
-	/** Try to consume ammo. Returns true iff the full amount was available and deducted. */
-	UFUNCTION(BlueprintCallable, Category = "Inventory|Ammo")
-	bool ConsumeAmmo(EQuakeAmmoType Type, int32 Amount);
-
-	/**
-	 * Max carry for the given ammo type per SPEC section 2.1:
-	 *     Shells 100, Nails 200, Rockets 100, Cells 100.
-	 * Returns 0 for None so callers can loop over all types without a
-	 * special case.
-	 */
-	UFUNCTION(BlueprintCallable, Category = "Inventory|Ammo")
-	static int32 GetAmmoCap(EQuakeAmmoType Type);
+	UPROPERTY()
+	FQuakeInventorySnapshot TransitSnapshot;
 
 	// --- Phase 11: save/load ---
 
@@ -150,15 +83,20 @@ public:
 	// --- Phase 13: level-entry inventory snapshot (DESIGN 6.4 step 3) ---
 
 	/**
-	 * Capture current inventory into LevelEntrySnapshot. Called by
+	 * Capture the live component's state into LevelEntrySnapshot. Called by
 	 * AQuakeGameMode::BeginPlay after any save-load restore so the snapshot
-	 * reflects "what the player walked in with this level."
+	 * reflects "what the player walked in with this level." The argument is
+	 * the player pawn's inventory component (lookup lives on the caller so
+	 * this method stays testable without a world).
 	 */
-	void SnapshotForLevelEntry();
+	void SnapshotForLevelEntry(const UQuakeInventoryComponent* Comp);
 
 	/**
-	 * Restore inventory from LevelEntrySnapshot. Called by the death-restart
-	 * flow before the new pawn is spawned. No-op on an invalid snapshot.
+	 * Queue LevelEntrySnapshot into TransitSnapshot so the next-spawned
+	 * pawn's component consumes it on InitializeComponent. Called by the
+	 * death-restart flow BEFORE the new pawn spawns. No-op on an invalid
+	 * snapshot (fresh-game death before the first level-entry capture —
+	 * component falls back to UPROPERTY defaults, same as new-game start).
 	 */
 	void RestoreFromLevelEntrySnapshot();
 
@@ -212,9 +150,6 @@ public:
 	static UQuakeGameInstance* GetChecked(const UObject* WorldContext);
 
 private:
-	/** Live ammo counts. Keyed on uint8(EQuakeAmmoType) so reflection is unnecessary. */
-	TMap<EQuakeAmmoType, int32> AmmoCounts;
-
 	/** DESIGN 6.1 difficulty state. Defaults to Normal; set via SetDifficulty. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Difficulty",
 		meta = (AllowPrivateAccess = "true"))

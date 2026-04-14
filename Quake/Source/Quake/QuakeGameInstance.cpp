@@ -2,11 +2,13 @@
 
 #include "QuakeCharacter.h"
 #include "QuakeGameMode.h"
+#include "QuakeInventoryComponent.h"
 #include "QuakeSaveGame.h"
 #include "QuakeWeaponBase.h"
 
 #include "Engine/Engine.h"
 #include "Engine/World.h"
+#include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogQuakeSave, Log, All);
@@ -27,101 +29,12 @@ UQuakeGameInstance* UQuakeGameInstance::GetChecked(const UObject* WorldContext)
 	return GI;
 }
 
-UQuakeGameInstance::UQuakeGameInstance()
-{
-	// SPEC 2.0: 8 weapon slots indexed by their number key (1 = Axe, 2 =
-	// Shotgun, ..., 8 = Thunderbolt). Pre-size the array so BP_QuakeGameInstance
-	// editor defaults can fill specific indices without worrying about
-	// array resizing.
-	OwnedWeaponClasses.SetNum(AQuakeCharacter::NumWeaponSlots);
-}
+UQuakeGameInstance::UQuakeGameInstance() = default;
 
 void UQuakeGameInstance::Init()
 {
 	Super::Init();
-
-	// SPEC 1.4 starting loadout: 25 shells. Seed the TMap so GetAmmo works
-	// without a prior Give. Other ammo types start at 0.
-	AmmoCounts.Add(EQuakeAmmoType::Shells,  25);
-	AmmoCounts.Add(EQuakeAmmoType::Nails,   0);
-	AmmoCounts.Add(EQuakeAmmoType::Rockets, 0);
-	AmmoCounts.Add(EQuakeAmmoType::Cells,   0);
-}
-
-int32 UQuakeGameInstance::GetAmmoCap(EQuakeAmmoType Type)
-{
-	// SPEC section 2.1 ammo table.
-	switch (Type)
-	{
-	case EQuakeAmmoType::Shells:  return 100;
-	case EQuakeAmmoType::Nails:   return 200;
-	case EQuakeAmmoType::Rockets: return 100;
-	case EQuakeAmmoType::Cells:   return 100;
-	default:                      return 0;
-	}
-}
-
-int32 UQuakeGameInstance::GetAmmo(EQuakeAmmoType Type) const
-{
-	if (Type == EQuakeAmmoType::None)
-	{
-		return 0;
-	}
-	const int32* Found = AmmoCounts.Find(Type);
-	return Found ? *Found : 0;
-}
-
-int32 UQuakeGameInstance::GiveAmmo(EQuakeAmmoType Type, int32 Amount)
-{
-	if (Type == EQuakeAmmoType::None || Amount <= 0)
-	{
-		return 0;
-	}
-	const int32 Cap = GetAmmoCap(Type);
-	int32& Current = AmmoCounts.FindOrAdd(Type);
-	const int32 Before = Current;
-	Current = FMath::Min(Current + Amount, Cap);
-	return Current - Before;
-}
-
-bool UQuakeGameInstance::ConsumeAmmo(EQuakeAmmoType Type, int32 Amount)
-{
-	if (Type == EQuakeAmmoType::None)
-	{
-		// Weapons with no ammo type (Axe) always succeed — they can fire
-		// without consuming anything.
-		return true;
-	}
-	if (Amount <= 0)
-	{
-		return true;
-	}
-	int32& Current = AmmoCounts.FindOrAdd(Type);
-	if (Current < Amount)
-	{
-		return false;
-	}
-	Current -= Amount;
-	return true;
-}
-
-void UQuakeGameInstance::GiveWeapon(int32 SlotNumberOneBased, TSubclassOf<AQuakeWeaponBase> WeaponClass)
-{
-	const int32 Index = SlotNumberOneBased - 1;
-	if (Index < 0 || Index >= OwnedWeaponClasses.Num())
-	{
-		return;
-	}
-	OwnedWeaponClasses[Index] = WeaponClass;
-}
-
-bool UQuakeGameInstance::OwnsWeaponInSlot(int32 SlotIndexZeroBased) const
-{
-	if (SlotIndexZeroBased < 0 || SlotIndexZeroBased >= OwnedWeaponClasses.Num())
-	{
-		return false;
-	}
-	return OwnedWeaponClasses[SlotIndexZeroBased] != nullptr;
+	// Inventory lives on UQuakeInventoryComponent; no GI-side seeding.
 }
 
 // --- Phase 11: save/load ---
@@ -140,27 +53,30 @@ FString UQuakeGameInstance::BuildQuickSlotName()
 
 void UQuakeGameInstance::CaptureInventorySnapshot(UQuakeSaveGame& Out) const
 {
-	Out.Armor              = Armor;
-	Out.ArmorAbsorption    = ArmorAbsorption;
-	Out.OwnedWeaponClasses = OwnedWeaponClasses;
-	Out.AmmoCounts         = AmmoCounts;
+	// Resolve the live player's component and serialize directly. No live
+	// inventory fields on the GI post-refactor — if there's no pawn (e.g.
+	// a save triggered pre-pawn), write an invalid snapshot and let the
+	// next load fall back to UPROPERTY defaults.
+	const UWorld* World = GetWorld();
+	APlayerController* PC = World ? UGameplayStatics::GetPlayerController(World, 0) : nullptr;
+	const AQuakeCharacter* Char = PC ? Cast<AQuakeCharacter>(PC->GetPawn()) : nullptr;
+	const UQuakeInventoryComponent* Comp = Char ? Char->GetInventoryComponent() : nullptr;
+
+	if (Comp)
+	{
+		Comp->SerializeTo(Out.InventorySnapshot);
+	}
+	else
+	{
+		Out.InventorySnapshot = FQuakeInventorySnapshot{};  // bValid=false
+	}
 }
 
 void UQuakeGameInstance::ApplyInventorySnapshot(const UQuakeSaveGame& In)
 {
-	Armor              = In.Armor;
-	ArmorAbsorption    = In.ArmorAbsorption;
-	OwnedWeaponClasses = In.OwnedWeaponClasses;
-
-	// Pre-seed keys so GetAmmo without a prior Give still works. Copy the
-	// saved counts, then union in any missing keys so downstream code can
-	// rely on all four ammo types being present.
-	AmmoCounts = In.AmmoCounts;
-	for (EQuakeAmmoType Type : { EQuakeAmmoType::Shells, EQuakeAmmoType::Nails,
-								  EQuakeAmmoType::Rockets, EQuakeAmmoType::Cells })
-	{
-		AmmoCounts.FindOrAdd(Type);
-	}
+	// Queue for the next-spawned pawn's component to consume on
+	// InitializeComponent (see UQuakeInventoryComponent::InitializeComponent).
+	TransitSnapshot = In.InventorySnapshot;
 }
 
 bool UQuakeGameInstance::SaveCurrentState(const FString& SlotName)
@@ -179,7 +95,7 @@ bool UQuakeGameInstance::SaveCurrentState(const FString& SlotName)
 		return false;
 	}
 
-	// 1) Inventory + profile straight from the GameInstance.
+	// 1) Inventory straight from the live pawn's component.
 	CaptureInventorySnapshot(*Save);
 
 	// 2) Per-level state: the authoritative GameMode owns the iteration
@@ -212,8 +128,8 @@ bool UQuakeGameInstance::LoadFromSlot(const FString& SlotName)
 		return false;
 	}
 
-	// DESIGN 6.2 step 2: restore GameInstance fields BEFORE OpenLevel so
-	// the fresh Character's BeginPlay reads the restored inventory.
+	// DESIGN 6.2 step 2: queue the inventory for the next pawn BEFORE OpenLevel
+	// so the fresh Character's InventoryComponent::InitializeComponent reads it.
 	ApplyInventorySnapshot(*Save);
 
 	// Stash for the new world's GameMode to pick up in BeginPlay.
@@ -232,13 +148,12 @@ UQuakeSaveGame* UQuakeGameInstance::ConsumePendingLoad()
 	return Out;
 }
 
-void UQuakeGameInstance::SnapshotForLevelEntry()
+void UQuakeGameInstance::SnapshotForLevelEntry(const UQuakeInventoryComponent* Comp)
 {
-	LevelEntrySnapshot.Armor              = Armor;
-	LevelEntrySnapshot.ArmorAbsorption    = ArmorAbsorption;
-	LevelEntrySnapshot.OwnedWeaponClasses = OwnedWeaponClasses;
-	LevelEntrySnapshot.AmmoCounts         = AmmoCounts;
-	LevelEntrySnapshot.bValid             = true;
+	if (Comp)
+	{
+		Comp->SerializeTo(LevelEntrySnapshot);
+	}
 }
 
 void UQuakeGameInstance::RestoreFromLevelEntrySnapshot()
@@ -247,13 +162,9 @@ void UQuakeGameInstance::RestoreFromLevelEntrySnapshot()
 	{
 		return;
 	}
-	Armor              = LevelEntrySnapshot.Armor;
-	ArmorAbsorption    = LevelEntrySnapshot.ArmorAbsorption;
-	OwnedWeaponClasses = LevelEntrySnapshot.OwnedWeaponClasses;
-	AmmoCounts         = LevelEntrySnapshot.AmmoCounts;
-	for (EQuakeAmmoType Type : { EQuakeAmmoType::Shells, EQuakeAmmoType::Nails,
-								  EQuakeAmmoType::Rockets, EQuakeAmmoType::Cells })
-	{
-		AmmoCounts.FindOrAdd(Type);
-	}
+	// Queue for the next-spawned pawn's component to consume on
+	// InitializeComponent. The pawn has already been destroyed by the caller
+	// (RequestRestartFromDeath); the fresh pawn's component hydrates from
+	// this mailbox, producing byte-identical inventory to level entry.
+	TransitSnapshot = LevelEntrySnapshot;
 }

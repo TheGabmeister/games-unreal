@@ -1,13 +1,13 @@
 // Phase 13 unit tests — DESIGN 6.3 / 6.4. The full death → restart loop
 // requires a world (PIE), so it lives in the Manual checklist; this file
-// covers the pure-static predicates (final-level routing, inventory
-// snapshot round-trip).
+// covers the pure-static predicates (final-level routing) and the
+// inventory-component snapshot round-trip.
 
 #include "Misc/AutomationTest.h"
 
 #include "QuakeAmmoType.h"
-#include "QuakeGameInstance.h"
 #include "QuakeGameMode.h"
+#include "QuakeInventoryComponent.h"
 #include "QuakeInventorySnapshot.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -34,8 +34,10 @@ bool FQuakeWinScreenRoutingTest::RunTest(const FString&)
 }
 
 // -----------------------------------------------------------------------------
-// DESIGN 6.4 step 3: inventory snapshot round-trip. Snapshot at level entry,
-// mutate inventory mid-level, restore, confirm the snapshot's values come back.
+// DESIGN 6.4 step 3: inventory snapshot round-trip. Serialize the "walked
+// in with" state, mutate the live component mid-level, deserialize the
+// snapshot onto a fresh component (mimicking the new-pawn respawn path),
+// and confirm the values come back byte-identical.
 // -----------------------------------------------------------------------------
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FQuakeInventorySnapshotRoundTripTest,
@@ -43,44 +45,51 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 bool FQuakeInventorySnapshotRoundTripTest::RunTest(const FString&)
 {
-	UQuakeGameInstance* GI = NewObject<UQuakeGameInstance>();
-	GI->Init(); // seeds AmmoCounts.
+	// Live inventory: 100 Yellow armor + 50 shells at level entry.
+	UQuakeInventoryComponent* Live = NewObject<UQuakeInventoryComponent>();
+	Live->SetArmor(100.f, 0.6f);
+	Live->GiveAmmo(EQuakeAmmoType::Shells, 50);
 
-	// Walk in with 50 armor + 50 shells, take Yellow on the way in.
-	GI->Armor           = 100.f;
-	GI->ArmorAbsorption = 0.6f;
-	GI->GiveAmmo(EQuakeAmmoType::Shells, 25); // 25 + 25 = 50 cap-clamped no-op past cap
-	GI->SnapshotForLevelEntry();
+	FQuakeInventorySnapshot LevelEntry;
+	Live->SerializeTo(LevelEntry);
+	TestTrue(TEXT("Snapshot marked valid on serialize"), LevelEntry.bValid);
 
-	// Mid-level: drain armor + ammo.
-	GI->Armor           = 0.f;
-	GI->ArmorAbsorption = 0.f;
-	GI->ConsumeAmmo(EQuakeAmmoType::Shells, 49);
-	TestEqual(TEXT("Pre-restore shells"), GI->GetAmmo(EQuakeAmmoType::Shells), 1);
+	// Mid-level: drain armor + ammo on the same component.
+	Live->SetArmor(0.f, 0.f);
+	Live->ConsumeAmmo(EQuakeAmmoType::Shells, 49);
+	TestEqual(TEXT("Pre-restore shells"), Live->GetAmmo(EQuakeAmmoType::Shells), 1);
 
-	// Death-restart restores.
-	GI->RestoreFromLevelEntrySnapshot();
-	TestEqual(TEXT("Armor restored"),       GI->Armor,           100.f);
-	TestEqual(TEXT("Absorption restored"),  GI->ArmorAbsorption, 0.6f);
-	TestEqual(TEXT("Shells restored to 50"), GI->GetAmmo(EQuakeAmmoType::Shells), 50);
+	// Death-restart: fresh pawn spawned, fresh component deserializes the
+	// saved snapshot. (In production the fresh component is also fresh-allocated.)
+	UQuakeInventoryComponent* Respawned = NewObject<UQuakeInventoryComponent>();
+	Respawned->DeserializeFrom(LevelEntry);
+	TestEqual(TEXT("Armor restored"),       Respawned->GetArmor(),           100.f);
+	TestEqual(TEXT("Absorption restored"),  Respawned->GetArmorAbsorption(), 0.6f);
+	TestEqual(TEXT("Shells restored to 50"), Respawned->GetAmmo(EQuakeAmmoType::Shells), 50);
 	return true;
 }
 
 // -----------------------------------------------------------------------------
-// Invalid (never-snapshotted) restore is a no-op — defensive against the case
-// where the death flow runs before BeginPlay's snapshot fires.
+// Deserializing an invalid (never-captured) snapshot is a no-op shape: the
+// call completes without crashing and the unseeded ammo keys are safely
+// added via FindOrAdd so GetAmmo returns 0 rather than a missing-key error.
+// Mirrors the "fresh game, never walked into a level" edge case.
 // -----------------------------------------------------------------------------
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FQuakeInventorySnapshotInvalidNoOpTest,
-	"Quake.Phase13.InventorySnapshot.InvalidIsNoOp",
+	FQuakeInventorySnapshotInvalidRestoreTest,
+	"Quake.Phase13.InventorySnapshot.InvalidRestore",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-bool FQuakeInventorySnapshotInvalidNoOpTest::RunTest(const FString&)
+bool FQuakeInventorySnapshotInvalidRestoreTest::RunTest(const FString&)
 {
-	UQuakeGameInstance* GI = NewObject<UQuakeGameInstance>();
-	GI->Init();
-	GI->Armor = 42.f;
-	GI->RestoreFromLevelEntrySnapshot(); // bValid is false
-	TestEqual(TEXT("Armor untouched on no-op restore"), GI->Armor, 42.f);
+	UQuakeInventoryComponent* Inv = NewObject<UQuakeInventoryComponent>();
+
+	FQuakeInventorySnapshot Empty;  // bValid = false by default
+	Inv->DeserializeFrom(Empty);
+
+	TestEqual(TEXT("Armor defaults to 0"),       Inv->GetArmor(),           0.f);
+	TestEqual(TEXT("Absorption defaults to 0"),  Inv->GetArmorAbsorption(), 0.f);
+	TestEqual(TEXT("Shells defaults to 0"),      Inv->GetAmmo(EQuakeAmmoType::Shells), 0);
+	TestEqual(TEXT("Nails defaults to 0"),       Inv->GetAmmo(EQuakeAmmoType::Nails),  0);
 	return true;
 }
 

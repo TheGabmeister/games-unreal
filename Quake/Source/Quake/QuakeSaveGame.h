@@ -2,14 +2,12 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/SaveGame.h"
-#include "QuakeAmmoType.h"
 #include "QuakeDifficulty.h"
+#include "QuakeInventorySnapshot.h"
 #include "QuakeKeyColor.h"
 #include "QuakePlayerState.h"
 #include "QuakeSaveable.h"
 #include "QuakeSaveGame.generated.h"
-
-class AQuakeWeaponBase;
 
 /**
  * Phase 11 save payload per DESIGN 6.2.
@@ -37,19 +35,10 @@ public:
 	UPROPERTY()
 	EQuakeDifficulty Difficulty = EQuakeDifficulty::Normal;
 
-	// --- Inventory (from GameInstance) ---
+	// --- Inventory (from the player's UQuakeInventoryComponent) ---
 
 	UPROPERTY()
-	float Armor = 0.f;
-
-	UPROPERTY()
-	float ArmorAbsorption = 0.f;
-
-	UPROPERTY()
-	TArray<TSubclassOf<AQuakeWeaponBase>> OwnedWeaponClasses;
-
-	UPROPERTY()
-	TMap<EQuakeAmmoType, int32> AmmoCounts;
+	FQuakeInventorySnapshot InventorySnapshot;
 
 	// --- Level ---
 

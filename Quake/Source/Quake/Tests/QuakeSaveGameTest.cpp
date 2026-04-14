@@ -143,26 +143,30 @@ bool FQuakeSaveGameFieldsRetainTest::RunTest(const FString&)
 {
 	UQuakeSaveGame* Save = NewObject<UQuakeSaveGame>();
 	Save->ProfileName      = TEXT("default");
-	Save->Armor            = 100.f;
-	Save->ArmorAbsorption  = 0.3f;
 	Save->Health           = 73.5f;
 	Save->CurrentLevelName = TEXT("E1M1");
 	Save->Kills            = 12;
 	Save->Secrets          = 2;
 	Save->Deaths           = 1;
 	Save->ElapsedAtSave    = 145.2f;
-	Save->AmmoCounts.Add(EQuakeAmmoType::Shells,  25);
-	Save->AmmoCounts.Add(EQuakeAmmoType::Rockets, 8);
+
+	// Inventory is now nested under FQuakeInventorySnapshot — matches the
+	// component's Serialize/Deserialize round-trip shape.
+	Save->InventorySnapshot.Armor           = 100.f;
+	Save->InventorySnapshot.ArmorAbsorption = 0.3f;
+	Save->InventorySnapshot.AmmoCounts.Add(EQuakeAmmoType::Shells,  25);
+	Save->InventorySnapshot.AmmoCounts.Add(EQuakeAmmoType::Rockets, 8);
+	Save->InventorySnapshot.bValid = true;
 	Save->Keys.Add(EQuakeKeyColor::Silver);
 
 	TestEqual(TEXT("ProfileName"),  Save->ProfileName,      FString(TEXT("default")));
-	TestEqual(TEXT("Armor"),        Save->Armor,            100.f);
-	TestEqual(TEXT("Absorption"),   Save->ArmorAbsorption,  0.3f);
+	TestEqual(TEXT("Armor"),        Save->InventorySnapshot.Armor,           100.f);
+	TestEqual(TEXT("Absorption"),   Save->InventorySnapshot.ArmorAbsorption, 0.3f);
 	TestEqual(TEXT("Health"),       Save->Health,           73.5f);
 	TestEqual(TEXT("Level"),        Save->CurrentLevelName, FString(TEXT("E1M1")));
 	TestEqual(TEXT("Kills"),        Save->Kills,            12);
-	TestEqual(TEXT("Shells"),       Save->AmmoCounts.FindRef(EQuakeAmmoType::Shells),  25);
-	TestEqual(TEXT("Rockets"),      Save->AmmoCounts.FindRef(EQuakeAmmoType::Rockets), 8);
+	TestEqual(TEXT("Shells"),       Save->InventorySnapshot.AmmoCounts.FindRef(EQuakeAmmoType::Shells),  25);
+	TestEqual(TEXT("Rockets"),      Save->InventorySnapshot.AmmoCounts.FindRef(EQuakeAmmoType::Rockets), 8);
 	TestTrue (TEXT("Silver key"),   Save->Keys.Contains(EQuakeKeyColor::Silver));
 	return true;
 }

@@ -2,8 +2,8 @@
 
 #include "QuakeAmmoType.h"
 #include "QuakeCharacter.h"
-#include "QuakeGameInstance.h"
 #include "QuakeGameMode.h"
+#include "QuakeInventoryComponent.h"
 #include "QuakePlayerState.h"
 #include "QuakePowerup.h"
 #include "QuakeWeaponBase.h"
@@ -373,29 +373,26 @@ namespace
 FText SQuakeHUDOverlay::GetArmorText() const
 {
 	const AQuakeCharacter* Char = ResolvePlayerCharacter();
-	const UWorld* World = Char ? Char->GetWorld() : nullptr;
-	const UQuakeGameInstance* GI = World ? World->GetGameInstance<UQuakeGameInstance>() : nullptr;
-	if (!GI)
+	const UQuakeInventoryComponent* Inv = Char ? Char->GetInventoryComponent() : nullptr;
+	if (!Inv)
 	{
 		return FText::GetEmpty();
 	}
-	return FText::FromString(FString::Printf(TEXT("AR %d"), FMath::RoundToInt(GI->Armor)));
+	return FText::FromString(FString::Printf(TEXT("AR %d"), FMath::RoundToInt(Inv->GetArmor())));
 }
 
 FSlateColor SQuakeHUDOverlay::GetArmorColor() const
 {
 	const AQuakeCharacter* Char = ResolvePlayerCharacter();
-	const UWorld* World = Char ? Char->GetWorld() : nullptr;
-	const UQuakeGameInstance* GI = World ? World->GetGameInstance<UQuakeGameInstance>() : nullptr;
-	return FSlateColor(ArmorColorFromAbsorption(GI ? GI->ArmorAbsorption : 0.f));
+	const UQuakeInventoryComponent* Inv = Char ? Char->GetInventoryComponent() : nullptr;
+	return FSlateColor(ArmorColorFromAbsorption(Inv ? Inv->GetArmorAbsorption() : 0.f));
 }
 
 EVisibility SQuakeHUDOverlay::GetArmorVisibility() const
 {
 	const AQuakeCharacter* Char = ResolvePlayerCharacter();
-	const UWorld* World = Char ? Char->GetWorld() : nullptr;
-	const UQuakeGameInstance* GI = World ? World->GetGameInstance<UQuakeGameInstance>() : nullptr;
-	return (GI && GI->Armor > 0.f) ? EVisibility::Visible : EVisibility::Collapsed;
+	const UQuakeInventoryComponent* Inv = Char ? Char->GetInventoryComponent() : nullptr;
+	return (Inv && Inv->GetArmor() > 0.f) ? EVisibility::Visible : EVisibility::Collapsed;
 }
 
 FText SQuakeHUDOverlay::GetSilverKeyText() const

@@ -4,6 +4,7 @@
 #include "QuakeEnemySpawnPoint.h"
 #include "QuakeGameInstance.h"
 #include "QuakeHUD.h"
+#include "QuakeInventoryComponent.h"
 #include "QuakePickupBase.h"
 #include "QuakePlayerController.h"
 #include "QuakePlayerState.h"
@@ -172,8 +173,12 @@ void AQuakeGameMode::BeginPlay()
 
 		// DESIGN 6.4 step 3: capture the level-entry snapshot AFTER any save
 		// restore so death-restart returns to "what the player walked in
-		// with this attempt", not the prior level's exit inventory.
-		GI->SnapshotForLevelEntry();
+		// with this attempt", not the prior level's exit inventory. Reads
+		// the live pawn's component (hydrated pre-BeginPlay via
+		// InitializeComponent, so this ordering is safe).
+		APlayerController* PC = UGameplayStatics::GetPlayerController(GetWorld(), 0);
+		const AQuakeCharacter* Char = PC ? Cast<AQuakeCharacter>(PC->GetPawn()) : nullptr;
+		GI->SnapshotForLevelEntry(Char ? Char->GetInventoryComponent() : nullptr);
 	}
 }
 

@@ -1,9 +1,7 @@
 #include "QuakePickup_Armor.h"
 
 #include "QuakeCharacter.h"
-#include "QuakeGameInstance.h"
-
-#include "Engine/World.h"
+#include "QuakeInventoryComponent.h"
 
 float AQuakePickup_Armor::GetAmountForTier(EQuakeArmorTier InTier)
 {
@@ -34,18 +32,19 @@ bool AQuakePickup_Armor::CanBeConsumedBy(AQuakeCharacter* Character) const
 	{
 		return false;
 	}
-	const UQuakeGameInstance* GI = UQuakeGameInstance::GetChecked(Character);
+	const UQuakeInventoryComponent* Inv = Character->GetInventoryComponent();
+	check(Inv);
 
 	// SPEC 1.2: consume if the new tier absorbs more than current, OR if
 	// current armor has drained below this pickup's value. The second clause
 	// is the "Green re-up when you've used up your Yellow" path.
 	const float NewAbsorb = GetAbsorptionForTier(Tier);
 	const float NewAmount = GetAmountForTier(Tier);
-	if (NewAbsorb > GI->ArmorAbsorption)
+	if (NewAbsorb > Inv->GetArmorAbsorption())
 	{
 		return true;
 	}
-	return GI->Armor < NewAmount;
+	return Inv->GetArmor() < NewAmount;
 }
 
 void AQuakePickup_Armor::ApplyPickupEffectTo(AQuakeCharacter* Character)
@@ -54,7 +53,7 @@ void AQuakePickup_Armor::ApplyPickupEffectTo(AQuakeCharacter* Character)
 	{
 		return;
 	}
-	UQuakeGameInstance* GI = UQuakeGameInstance::GetChecked(Character);
-	GI->Armor = GetAmountForTier(Tier);
-	GI->ArmorAbsorption = GetAbsorptionForTier(Tier);
+	UQuakeInventoryComponent* Inv = Character->GetInventoryComponent();
+	check(Inv);
+	Inv->SetArmor(GetAmountForTier(Tier), GetAbsorptionForTier(Tier));
 }

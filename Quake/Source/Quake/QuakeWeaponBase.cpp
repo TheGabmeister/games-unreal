@@ -2,7 +2,7 @@
 
 #include "QuakeBalanceRows.h"
 #include "QuakeCharacter.h"
-#include "QuakeGameInstance.h"
+#include "QuakeInventoryComponent.h"
 #include "QuakeProjectSettings.h"
 #include "QuakeSoundManager.h"
 
@@ -98,8 +98,16 @@ bool AQuakeWeaponBase::TryFire(AActor* InInstigator)
 	// SPEC 2.2.
 	if (AmmoType != EQuakeAmmoType::None && AmmoPerShot > 0)
 	{
-		UQuakeGameInstance* GameInstance = UQuakeGameInstance::GetChecked(this);
-		const bool bHasAmmo = GameInstance->ConsumeAmmo(AmmoType, AmmoPerShot);
+		// Route through the firing pawn's inventory component. Non-character
+		// instigators (test dummies, hypothetical turret enemies) can't fire
+		// ammo weapons — fail the gate loud rather than silently consuming
+		// from a nonexistent component.
+		AQuakeCharacter* CharacterInstigator = Cast<AQuakeCharacter>(InInstigator);
+		UQuakeInventoryComponent* Inv = CharacterInstigator ? CharacterInstigator->GetInventoryComponent() : nullptr;
+		checkf(Inv != nullptr,
+			TEXT("AQuakeWeaponBase::TryFire: ammo weapon fired without a player-inventory instigator (%s)"),
+			*GetNameSafe(InInstigator));
+		const bool bHasAmmo = Inv->ConsumeAmmo(AmmoType, AmmoPerShot);
 		if (!bHasAmmo)
 		{
 			PlayEmptyClick(InInstigator);

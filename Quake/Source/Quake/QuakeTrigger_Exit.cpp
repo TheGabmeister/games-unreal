@@ -1,7 +1,10 @@
 #include "QuakeTrigger_Exit.h"
 
+#include "QuakeCharacter.h"
+#include "QuakeGameInstance.h"
 #include "QuakeGameMode.h"
 #include "QuakeHUD.h"
+#include "QuakeInventoryComponent.h"
 
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
@@ -9,6 +12,33 @@
 #include "TimerManager.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogQuakeExit, Log, All);
+
+namespace
+{
+	/**
+	 * Serialize the live pawn's inventory into GI->TransitSnapshot just
+	 * before OpenLevel. The new world's Character spawns, and its
+	 * InventoryComponent::InitializeComponent consumes this mailbox.
+	 * Without this handoff, the next pawn starts with UPROPERTY defaults
+	 * (starting loadout) — which is what we want for new-game flow but
+	 * not for level-to-level transitions.
+	 */
+	void HandoffInventoryToNextLevel(UWorld* World)
+	{
+		APlayerController* PC = World ? UGameplayStatics::GetPlayerController(World, 0) : nullptr;
+		const AQuakeCharacter* Char = PC ? Cast<AQuakeCharacter>(PC->GetPawn()) : nullptr;
+		const UQuakeInventoryComponent* Inv = Char ? Char->GetInventoryComponent() : nullptr;
+		UQuakeGameInstance* GI = UQuakeGameInstance::GetChecked(World);
+		if (Inv)
+		{
+			Inv->SerializeTo(GI->TransitSnapshot);
+		}
+		else
+		{
+			GI->TransitSnapshot.bValid = false;
+		}
+	}
+}
 
 AQuakeTrigger_Exit::AQuakeTrigger_Exit() = default;
 
@@ -103,13 +133,18 @@ void AQuakeTrigger_Exit::Activate(AActor* InInstigator)
 
 void AQuakeTrigger_Exit::OnStatsScreenTimeout()
 {
-	const AQuakeGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AQuakeGameMode>() : nullptr;
+	UWorld* World = GetWorld();
+	const AQuakeGameMode* GM = World ? World->GetAuthGameMode<AQuakeGameMode>() : nullptr;
 	if (GM && GM->bIsFinalLevel && !GM->MainMenuMapName.IsNone())
 	{
 		UE_LOG(LogQuakeExit, Log, TEXT("%s: win → %s"), *GetName(), *GM->MainMenuMapName.ToString());
+		// Win-to-menu: no handoff. The menu map runs with default inventory,
+		// and a "new game" press wipes everything anyway.
 		UGameplayStatics::OpenLevel(this, GM->MainMenuMapName);
 		return;
 	}
 	UE_LOG(LogQuakeExit, Log, TEXT("%s: exiting to %s"), *GetName(), *NextMapName.ToString());
+	// Hand off live inventory to the next level via GI->TransitSnapshot.
+	HandoffInventoryToNextLevel(World);
 	UGameplayStatics::OpenLevel(this, NextMapName);
 }
