@@ -5,6 +5,7 @@
 #include "QuakeGameInstance.h"
 #include "QuakePlayerController.h"
 #include "QuakePlayerState.h"
+#include "QuakePowerup.h"
 #include "QuakeWeaponBase.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogQuakeCharacter, Log, All);
@@ -262,6 +263,97 @@ void AQuakeCharacter::GiveHealth(float Amount, bool bOvercharge)
 	}
 	const float Cap = bOvercharge ? GetOverchargeCap() : MaxHealth;
 	Health = FMath::Min(Health + Amount, Cap);
+}
+
+float AQuakeCharacter::GetOutgoingDamageScale() const
+{
+	// SPEC 4.3: Quad = 4× outgoing. Pentagram / Ring / Biosuit don't affect
+	// outgoing damage — none of them have a multiplier to apply here.
+	if (const AController* C = GetController())
+	{
+		if (const AQuakePlayerState* PS = C->GetPlayerState<AQuakePlayerState>())
+		{
+			if (PS->HasPowerup(EQuakePowerup::Quad))
+			{
+				return 4.f;
+			}
+		}
+	}
+	return 1.f;
+}
+
+void AQuakeCharacter::GiveKey(EQuakeKeyColor Color)
+{
+	if (AController* C = GetController())
+	{
+		if (AQuakePlayerState* PS = C->GetPlayerState<AQuakePlayerState>())
+		{
+			PS->GiveKey(Color);
+		}
+	}
+}
+
+bool AQuakeCharacter::HasKey(EQuakeKeyColor Color) const
+{
+	if (const AController* C = GetController())
+	{
+		if (const AQuakePlayerState* PS = C->GetPlayerState<AQuakePlayerState>())
+		{
+			return PS->HasKey(Color);
+		}
+	}
+	return false;
+}
+
+bool AQuakeCharacter::GiveWeaponPickup(int32 SlotIndexZeroBased, TSubclassOf<AQuakeWeaponBase> WeaponClass)
+{
+	if (!WeaponClass || SlotIndexZeroBased < 0 || SlotIndexZeroBased >= NumWeaponSlots)
+	{
+		return false;
+	}
+	if (WeaponInstances.IsValidIndex(SlotIndexZeroBased) && WeaponInstances[SlotIndexZeroBased])
+	{
+		// Already owned — SPEC 2.2: subsequent pickup grants only ammo.
+		// The pickup caller applies the ammo grant; we just report "no switch".
+		return false;
+	}
+
+	UWorld* World = GetWorld();
+	UQuakeGameInstance* GameInstance = World ? World->GetGameInstance<UQuakeGameInstance>() : nullptr;
+	if (!World || !GameInstance)
+	{
+		return false;
+	}
+
+	// Write the ownership into the persistent inventory so a death-respawn
+	// re-seeds the slot via SpawnOwnedWeapons.
+	GameInstance->GiveWeapon(SlotIndexZeroBased + 1, WeaponClass);
+
+	FActorSpawnParameters Params;
+	Params.Owner = this;
+	Params.Instigator = this;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+	AQuakeWeaponBase* Weapon = World->SpawnActor<AQuakeWeaponBase>(WeaponClass, Params);
+	if (!Weapon)
+	{
+		UE_LOG(LogQuakeCharacter, Warning, TEXT("GiveWeaponPickup: spawn failed for slot %d (%s)"),
+			SlotIndexZeroBased + 1, *GetNameSafe(WeaponClass));
+		return false;
+	}
+	Weapon->AttachToComponent(
+		FirstPersonCamera,
+		FAttachmentTransformRules::SnapToTargetNotIncludingScale);
+	Weapon->SetActorHiddenInGame(true);
+
+	if (!WeaponInstances.IsValidIndex(SlotIndexZeroBased))
+	{
+		WeaponInstances.SetNum(NumWeaponSlots);
+	}
+	WeaponInstances[SlotIndexZeroBased] = Weapon;
+
+	SwitchToWeaponSlot(SlotIndexZeroBased);
+	return true;
 }
 
 int32 AQuakeCharacter::PickAutoSwitchWeaponSlot(

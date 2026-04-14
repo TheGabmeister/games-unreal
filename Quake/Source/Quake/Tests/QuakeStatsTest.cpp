@@ -16,6 +16,7 @@
 #include "QuakeEnemySpawnPoint.h"
 #include "QuakeGameMode.h"
 #include "QuakePlayerState.h"
+#include "QuakePowerup.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -289,7 +290,7 @@ bool FQuakeStatsPlayerStateClearPerLifeTest::RunTest(const FString&)
 	PS->AddKillCredit();
 	PS->AddSecretCredit();
 	PS->AddDeath();
-	PS->ActivePowerups.Add(FQuakeActivePowerup{ FName(TEXT("Quad")), 30.f });
+	PS->GivePowerup(EQuakePowerup::Quad, 30.f);
 
 	PS->ClearPerLifeState();
 

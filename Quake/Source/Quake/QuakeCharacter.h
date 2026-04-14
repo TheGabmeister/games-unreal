@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "QuakeAmmoType.h"
+#include "QuakeKeyColor.h"
 #include "QuakeCharacter.generated.h"
 
 class UCameraComponent;
@@ -98,6 +99,44 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Health")
 	void GiveHealth(float Amount, bool bOvercharge);
+
+	/**
+	 * SPEC 4.3: Quad Damage multiplies outgoing weapon damage by 4 for 30 s.
+	 * Weapons query this right before calling ApplyPointDamage /
+	 * ApplyRadialDamageWithFalloff — projectile weapons (RL, Nailgun) also
+	 * bake the scale into the spawned projectile's DamageScale at launch
+	 * time so the multiplier is frozen on the shot, not re-sampled at impact
+	 * (matches Quake: a rocket fired during Quad lands at 4× even if the
+	 * timer ticks out mid-flight). Returns 1.0 when no Quad entry is active
+	 * or when no PlayerState exists yet.
+	 *
+	 * "Does not affect splash self-damage scale" per SPEC 4.3 — the
+	 * projectile's DamageScale scales BaseDamage; self-damage multiplies
+	 * that further by UQuakeDamageType::SelfDamageScale inside TakeDamage,
+	 * so the behavior comes out of the existing pipeline for free.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Combat")
+	float GetOutgoingDamageScale() const;
+
+	/** Facade to PlayerState->GiveKey; called from AQuakePickup_Key. */
+	UFUNCTION(BlueprintCallable, Category = "Keys")
+	void GiveKey(EQuakeKeyColor Color);
+
+	/** Facade to PlayerState->HasKey — lets callers route through the pawn. */
+	UFUNCTION(BlueprintCallable, Category = "Keys")
+	bool HasKey(EQuakeKeyColor Color) const;
+
+	/**
+	 * Pickup-driven weapon grant. SPEC 2.2 "first pickup grants weapon +
+	 * ammo and auto-switches; subsequent pickup grants only ammo". Returns
+	 * true iff this was the first time the slot was filled (i.e. the
+	 * weapon actor was spawned and the player auto-switched).
+	 *
+	 * Writes the class to the GameInstance so death-respawn re-seeds from
+	 * the persisted inventory rather than the starting loadout.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Weapons")
+	bool GiveWeaponPickup(int32 SlotIndexZeroBased, TSubclassOf<class AQuakeWeaponBase> WeaponClass);
 
 	/**
 	 * Auto-switch to the best owned weapon that has ammo when the current

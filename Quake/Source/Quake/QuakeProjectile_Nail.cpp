@@ -54,7 +54,7 @@ void AQuakeProjectile_Nail::HandleImpact(const FHitResult& Hit, AActor* OtherAct
 
 		UGameplayStatics::ApplyPointDamage(
 			OtherActor,
-			BaseDamage,
+			BaseDamage * DamageScale,
 			ShotDirection,
 			Hit,
 			InstigatorController,

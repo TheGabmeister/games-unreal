@@ -62,6 +62,21 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Projectile")
 	TObjectPtr<UProjectileMovementComponent> ProjectileMovement;
 
+	/**
+	 * Multiplier on the projectile's damage output at impact. Set by the
+	 * firing weapon's Fire() to AQuakeCharacter::GetOutgoingDamageScale() at
+	 * spawn time so Quad (4×) is baked onto the shot, not re-sampled on
+	 * hit. Default 1.0 for non-powered-up shots and for enemy projectiles
+	 * (Ogre grenades) — enemies don't read PlayerState.
+	 *
+	 * SPEC 4.3: "does not affect splash self-damage scale". That requirement
+	 * is satisfied automatically — the self-damage scale is pulled off
+	 * UQuakeDamageType inside TakeDamage, so it multiplies on top of
+	 * whatever DamageScale produced here.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Projectile", meta = (ClampMin = "0.0"))
+	float DamageScale = 1.f;
+
 protected:
 	virtual void BeginPlay() override;
 

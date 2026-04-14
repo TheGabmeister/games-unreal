@@ -2,8 +2,10 @@
 
 #include "QuakeAmmoType.h"
 #include "QuakeCharacter.h"
+#include "QuakeGameInstance.h"
 #include "QuakeGameMode.h"
 #include "QuakePlayerState.h"
+#include "QuakePowerup.h"
 #include "QuakeWeaponBase.h"
 
 #include "Engine/World.h"
@@ -37,28 +39,31 @@ void SQuakeHUDOverlay::Construct(const FArguments& InArgs)
 		[
 			SNew(SVerticalBox)
 
-			// Top-left stats strip (Phase 9).
+			// Top-right stats strip (Phase 9). Right-aligned so it doesn't
+			// collide with the Phase 1 debug speedometer DrawHUD paints at
+			// top-left. Move back to HAlign_Left once the speedometer is
+			// removed (see CLAUDE.md Risk Note: Strafe-Jumping CMC).
 			+ SVerticalBox::Slot()
 			.AutoHeight()
-			.Padding(20.f, 20.f, 0.f, 0.f)
-			.HAlign(HAlign_Left)
+			.Padding(0.f, 20.f, 20.f, 0.f)
+			.HAlign(HAlign_Right)
 			[
 				SNew(SVerticalBox)
-				+ SVerticalBox::Slot().AutoHeight()
+				+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Right)
 				[
 					SNew(STextBlock)
 					.Font(StatsFont)
 					.ColorAndOpacity(FLinearColor(1.f, 1.f, 1.f))
 					.Text(this, &SQuakeHUDOverlay::GetKillsText)
 				]
-				+ SVerticalBox::Slot().AutoHeight()
+				+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Right)
 				[
 					SNew(STextBlock)
 					.Font(StatsFont)
 					.ColorAndOpacity(FLinearColor(1.f, 1.f, 1.f))
 					.Text(this, &SQuakeHUDOverlay::GetSecretsText)
 				]
-				+ SVerticalBox::Slot().AutoHeight()
+				+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Right)
 				[
 					SNew(STextBlock)
 					.Font(StatsFont)
@@ -73,7 +78,22 @@ void SQuakeHUDOverlay::Construct(const FArguments& InArgs)
 				SNew(SBox)
 			]
 
-			// Bottom row: HP + weapon name on the left, ammo on the right.
+			// Top-center Quad timer (Phase 10). SPEC 7: "Powerup Timer —
+			// top-center — active powerup icon + countdown". Collapsed when
+			// no Quad is active.
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.HAlign(HAlign_Center)
+			.Padding(0.f, 20.f, 0.f, 0.f)
+			[
+				SNew(STextBlock)
+				.Font(EndBodyFont)
+				.ColorAndOpacity(FLinearColor(0.4f, 0.6f, 1.f))  // Blue for Quad.
+				.Visibility(this, &SQuakeHUDOverlay::GetQuadTimerVisibility)
+				.Text(this, &SQuakeHUDOverlay::GetQuadTimerText)
+			]
+
+			// Bottom row: HP/armor/keys on the left, ammo on the right.
 			+ SVerticalBox::Slot()
 			.AutoHeight()
 			.Padding(40.f, 0.f, 40.f, 40.f)
@@ -84,6 +104,27 @@ void SQuakeHUDOverlay::Construct(const FArguments& InArgs)
 					SNew(SVerticalBox)
 					+ SVerticalBox::Slot().AutoHeight()
 					[
+						// Silver / Gold key indicators on a single line.
+						SNew(SHorizontalBox)
+						+ SHorizontalBox::Slot().AutoWidth().Padding(0.f, 0.f, 8.f, 0.f)
+						[
+							SNew(STextBlock)
+							.Font(WeaponFont)
+							.ColorAndOpacity(FLinearColor(0.8f, 0.8f, 0.85f))
+							.Visibility(this, &SQuakeHUDOverlay::GetSilverKeyVisibility)
+							.Text(this, &SQuakeHUDOverlay::GetSilverKeyText)
+						]
+						+ SHorizontalBox::Slot().AutoWidth()
+						[
+							SNew(STextBlock)
+							.Font(WeaponFont)
+							.ColorAndOpacity(FLinearColor(1.f, 0.84f, 0.f))
+							.Visibility(this, &SQuakeHUDOverlay::GetGoldKeyVisibility)
+							.Text(this, &SQuakeHUDOverlay::GetGoldKeyText)
+						]
+					]
+					+ SVerticalBox::Slot().AutoHeight()
+					[
 						SNew(STextBlock)
 						.Font(WeaponFont)
 						.ColorAndOpacity(FLinearColor(0.8f, 0.8f, 0.8f))
@@ -91,10 +132,22 @@ void SQuakeHUDOverlay::Construct(const FArguments& InArgs)
 					]
 					+ SVerticalBox::Slot().AutoHeight()
 					[
-						SNew(STextBlock)
-						.Font(HealthFont)
-						.ColorAndOpacity(FLinearColor(1.f, 0.85f, 0.4f))
-						.Text(this, &SQuakeHUDOverlay::GetHealthText)
+						SNew(SHorizontalBox)
+						+ SHorizontalBox::Slot().AutoWidth()
+						[
+							SNew(STextBlock)
+							.Font(HealthFont)
+							.ColorAndOpacity(FLinearColor(1.f, 0.85f, 0.4f))
+							.Text(this, &SQuakeHUDOverlay::GetHealthText)
+						]
+						+ SHorizontalBox::Slot().AutoWidth().Padding(30.f, 0.f, 0.f, 0.f)
+						[
+							SNew(STextBlock)
+							.Font(HealthFont)
+							.ColorAndOpacity(this, &SQuakeHUDOverlay::GetArmorColor)
+							.Visibility(this, &SQuakeHUDOverlay::GetArmorVisibility)
+							.Text(this, &SQuakeHUDOverlay::GetArmorText)
+						]
 					]
 				]
 				+ SHorizontalBox::Slot().FillWidth(1.f).HAlign(HAlign_Right).VAlign(VAlign_Bottom)
@@ -304,6 +357,80 @@ FText SQuakeHUDOverlay::GetLevelEndDeathsText() const
 	const AQuakePlayerState* PS = ResolvePlayerState();
 	const int32 D = PS ? PS->Deaths : 0;
 	return FText::FromString(FString::Printf(TEXT("Deaths  %d"), D));
+}
+
+namespace
+{
+	// SPEC 4.2 tier thresholds: absorption ratio → HUD color.
+	FLinearColor ArmorColorFromAbsorption(float Absorption)
+	{
+		if (Absorption >= 0.75f) { return FLinearColor(1.f, 0.25f, 0.25f); }  // Red
+		if (Absorption >= 0.55f) { return FLinearColor(1.f, 0.9f,  0.2f);  }  // Yellow
+		return FLinearColor(0.3f, 1.f, 0.3f);                                 // Green
+	}
+}
+
+FText SQuakeHUDOverlay::GetArmorText() const
+{
+	const AQuakeCharacter* Char = ResolvePlayerCharacter();
+	const UWorld* World = Char ? Char->GetWorld() : nullptr;
+	const UQuakeGameInstance* GI = World ? World->GetGameInstance<UQuakeGameInstance>() : nullptr;
+	if (!GI)
+	{
+		return FText::GetEmpty();
+	}
+	return FText::FromString(FString::Printf(TEXT("AR %d"), FMath::RoundToInt(GI->Armor)));
+}
+
+FSlateColor SQuakeHUDOverlay::GetArmorColor() const
+{
+	const AQuakeCharacter* Char = ResolvePlayerCharacter();
+	const UWorld* World = Char ? Char->GetWorld() : nullptr;
+	const UQuakeGameInstance* GI = World ? World->GetGameInstance<UQuakeGameInstance>() : nullptr;
+	return FSlateColor(ArmorColorFromAbsorption(GI ? GI->ArmorAbsorption : 0.f));
+}
+
+EVisibility SQuakeHUDOverlay::GetArmorVisibility() const
+{
+	const AQuakeCharacter* Char = ResolvePlayerCharacter();
+	const UWorld* World = Char ? Char->GetWorld() : nullptr;
+	const UQuakeGameInstance* GI = World ? World->GetGameInstance<UQuakeGameInstance>() : nullptr;
+	return (GI && GI->Armor > 0.f) ? EVisibility::Visible : EVisibility::Collapsed;
+}
+
+FText SQuakeHUDOverlay::GetSilverKeyText() const
+{
+	return NSLOCTEXT("QuakeHUD", "KeySilver", "[SILVER]");
+}
+
+EVisibility SQuakeHUDOverlay::GetSilverKeyVisibility() const
+{
+	const AQuakePlayerState* PS = ResolvePlayerState();
+	return (PS && PS->HasKey(EQuakeKeyColor::Silver)) ? EVisibility::Visible : EVisibility::Collapsed;
+}
+
+FText SQuakeHUDOverlay::GetGoldKeyText() const
+{
+	return NSLOCTEXT("QuakeHUD", "KeyGold", "[GOLD]");
+}
+
+EVisibility SQuakeHUDOverlay::GetGoldKeyVisibility() const
+{
+	const AQuakePlayerState* PS = ResolvePlayerState();
+	return (PS && PS->HasKey(EQuakeKeyColor::Gold)) ? EVisibility::Visible : EVisibility::Collapsed;
+}
+
+FText SQuakeHUDOverlay::GetQuadTimerText() const
+{
+	const AQuakePlayerState* PS = ResolvePlayerState();
+	const float Remaining = PS ? PS->GetPowerupRemaining(EQuakePowerup::Quad) : 0.f;
+	return FText::FromString(FString::Printf(TEXT("QUAD  %d"), FMath::CeilToInt(Remaining)));
+}
+
+EVisibility SQuakeHUDOverlay::GetQuadTimerVisibility() const
+{
+	const AQuakePlayerState* PS = ResolvePlayerState();
+	return (PS && PS->HasPowerup(EQuakePowerup::Quad)) ? EVisibility::HitTestInvisible : EVisibility::Collapsed;
 }
 
 #undef LOCTEXT_NAMESPACE

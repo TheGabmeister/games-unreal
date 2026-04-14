@@ -2,13 +2,43 @@
 
 #include "QuakeGameMode.h"
 
+#include "Components/SceneComponent.h"
 #include "Engine/World.h"
+
+#if WITH_EDITORONLY_DATA
+#include "Components/ArrowComponent.h"
+#include "Components/BillboardComponent.h"
+#endif
 
 DEFINE_LOG_CATEGORY_STATIC(LogQuakeSpawnPoint, Log, All);
 
 AQuakeEnemySpawnPoint::AQuakeEnemySpawnPoint()
 {
 	PrimaryActorTick.bCanEverTick = false;
+
+	// Empty SceneComponent as root gives the actor a movable transform
+	// handle in the Editor — without a root the actor is still placeable
+	// but awkward to select and rotate. Runtime-cheap (no rendering).
+	SceneRoot = CreateDefaultSubobject<USceneComponent>(TEXT("SceneRoot"));
+	SetRootComponent(SceneRoot);
+
+#if WITH_EDITORONLY_DATA
+	EditorSprite = CreateDefaultSubobject<UBillboardComponent>(TEXT("EditorSprite"));
+	if (EditorSprite)
+	{
+		EditorSprite->SetupAttachment(SceneRoot);
+		EditorSprite->bIsEditorOnly = true;
+	}
+
+	EditorArrow = CreateDefaultSubobject<UArrowComponent>(TEXT("EditorArrow"));
+	if (EditorArrow)
+	{
+		EditorArrow->SetupAttachment(SceneRoot);
+		EditorArrow->ArrowColor = FColor(255, 180, 0);
+		EditorArrow->ArrowSize = 1.f;
+		EditorArrow->bIsEditorOnly = true;
+	}
+#endif
 }
 
 bool AQuakeEnemySpawnPoint::IsEligibleForDifficulty(EQuakeDifficulty Current) const

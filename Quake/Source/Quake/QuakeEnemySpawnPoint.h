@@ -10,6 +10,12 @@
 #include "QuakeEnemyBase.h"
 #include "QuakeEnemySpawnPoint.generated.h"
 
+class USceneComponent;
+#if WITH_EDITORONLY_DATA
+class UArrowComponent;
+class UBillboardComponent;
+#endif
+
 /**
  * Phase 9 spawn-point marker per SPEC section 5.1. The **only** authoring
  * path for enemies that count toward KillsTotal and the level-clear check:
@@ -101,4 +107,19 @@ protected:
 	 * EnemyClass is null. Returns the spawned pawn or nullptr.
 	 */
 	AQuakeEnemyBase* TrySpawn();
+
+private:
+	/** Empty root so the actor has a movable transform handle in the Editor. */
+	UPROPERTY(VisibleAnywhere, Category = "Components")
+	TObjectPtr<USceneComponent> SceneRoot;
+
+#if WITH_EDITORONLY_DATA
+	/** Editor-only sprite so designers can see the marker in the viewport. */
+	UPROPERTY()
+	TObjectPtr<UBillboardComponent> EditorSprite;
+
+	/** Editor-only arrow showing the facing the spawned enemy will inherit. */
+	UPROPERTY()
+	TObjectPtr<UArrowComponent> EditorArrow;
+#endif
 };

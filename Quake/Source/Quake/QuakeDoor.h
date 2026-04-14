@@ -3,18 +3,11 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "QuakeActivatable.h"
+#include "QuakeKeyColor.h"
 #include "QuakeDoor.generated.h"
 
 class UBoxComponent;
 class UStaticMeshComponent;
-
-UENUM(BlueprintType)
-enum class EQuakeKeyColor : uint8
-{
-	None   UMETA(DisplayName = "None"),
-	Silver UMETA(DisplayName = "Silver"),
-	Gold   UMETA(DisplayName = "Gold")
-};
 
 /**
  * Phase 8 door per SPEC section 5.4. Moves a UStaticMeshComponent between

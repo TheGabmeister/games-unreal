@@ -90,7 +90,7 @@ void AQuakeProjectile_Rocket::HandleImpact(const FHitResult& Hit, AActor* /*Othe
 	const TArray<AActor*> IgnoreActors;
 	UGameplayStatics::ApplyRadialDamageWithFalloff(
 		this,
-		BaseDamage,
+		BaseDamage * DamageScale,
 		/*MinimumDamage*/ 0.f,
 		ExplosionOrigin,
 		DamageInnerRadius,

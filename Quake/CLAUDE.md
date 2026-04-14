@@ -49,6 +49,7 @@ Tests live under `Source/Quake/Tests/` and use `IMPLEMENT_SIMPLE_AUTOMATION_TEST
 - `Quake.Weapon.RocketSplash.*` — linear splash falloff.
 - `Quake.Weapon.AutoSwitch.*` — SPEC 2.2 auto-switch priority picker.
 - `Quake.Stats.*` — SPEC 5.1/5.9 spawn-point eligibility, IsSatisfied, IsLevelClearedForSet, PlayerState credit.
+- `Quake.Powerup.*` / `Quake.Key.*` / `Quake.Armor.*` — SPEC 4.3/4.4/4.2 PlayerState powerup grant + refresh cap, key storage, armor tier table.
 
 **Prefer pure static helpers over world-spinup tests.** `ApplyQuakeAirAccel`, `ApplyArmorAbsorption`, `ComputePainChance`, `ComputeLinearFalloffDamage`, `PickAutoSwitchWeaponSlot`, `IsLevelClearedForSet` are the templates. Functional tests requiring a world are deferred to manual sandbox-map verification.
 
@@ -69,8 +70,8 @@ Per SPEC "Constraints", **all gameplay logic in C++**. Blueprints are thin subcl
 Where data lives is determined by lifecycle. Wrong placement breaks respawn, level transitions, or the HUD.
 
 - **`UQuakeGameInstance`** — inventory (weapons owned, ammo, armor), level-entry snapshot, save reference, profile, difficulty. Survives `OpenLevel` and Character respawn. Ammo is a private `TMap<EQuakeAmmoType, int32>` accessed via `GetAmmo`/`GiveAmmo`/`ConsumeAmmo`; SPEC 2.1 caps live in pure-static `GetAmmoCap`. `OwnedWeaponClasses[8]` is filled in BP_QuakeGameInstance; the Character spawns one actor per non-null slot at `BeginPlay`.
-- **`AQuakePlayerState`** — per-attempt stats (`Kills`, `Secrets`, `Deaths`, `GetTimeElapsed()` from world time) and `ActivePowerups`. Auto-cleared on `OpenLevel`; **NOT** auto-cleared on pawn respawn (UE preserves PlayerState across death). Death-restart must call `ClearPerLifeState()` (empties `ActivePowerups`; will also empty `Keys` once Phase 10 lands). That call deliberately preserves Kills/Secrets/TimeElapsed/Deaths — those are score, not life-bound. Mutators: `AddKillCredit`/`AddSecretCredit`/`AddDeath`. Tick stays disabled unless powerups are active (`EnablePowerupTick()` arms it; Tick disables itself when the array empties).
-- **`AQuakeCharacter`** — live health, `WeaponInstances[NumWeaponSlots]`, `CurrentWeapon`/`CurrentWeaponSlot`. Dies with the body. Facade methods `GiveAmmo`/`ConsumeAmmo`/`GetAmmo` forward to GameInstance; `GiveHealth(Amount, bOvercharge)` is self-owned (caps at `MaxHealth` or `GetOverchargeCap()` = 200). Use the `static constexpr NumWeaponSlots` (= 8) everywhere — never hardcode `8`.
+- **`AQuakePlayerState`** — per-attempt stats (`Kills`, `Secrets`, `Deaths`, `GetTimeElapsed()` from world time), `ActivePowerups` (typed `TArray<FQuakeActivePowerup>`), and `Keys` (typed `TArray<EQuakeKeyColor>`). Auto-cleared on `OpenLevel`; **NOT** auto-cleared on pawn respawn (UE preserves PlayerState across death). Death-restart must call `ClearPerLifeState()` which empties both `ActivePowerups` and `Keys`. That call deliberately preserves Kills/Secrets/TimeElapsed/Deaths — those are score, not life-bound. Mutators: `AddKillCredit`/`AddSecretCredit`/`AddDeath`; `GivePowerup(Type, Duration)` is additive-capped at `GetPowerupMaxDuration()` (60s per SPEC 4.3); `GiveKey(Color)` is idempotent (re-pickup is silent per SPEC 4.4). Tick stays disabled unless powerups are active (`EnablePowerupTick()` arms it; Tick disables itself when the array empties).
+- **`AQuakeCharacter`** — live health, `WeaponInstances[NumWeaponSlots]`, `CurrentWeapon`/`CurrentWeaponSlot`. Dies with the body. Facade methods `GiveAmmo`/`ConsumeAmmo`/`GetAmmo` forward to GameInstance; `GiveKey`/`HasKey` forward to PlayerState; `GiveHealth(Amount, bOvercharge)` is self-owned (caps at `MaxHealth` or `GetOverchargeCap()` = 200). `GetOutgoingDamageScale()` returns 4.0 when PlayerState reports an active Quad (SPEC 4.3) and 1.0 otherwise. `GiveWeaponPickup(Slot, Class)` is the SPEC 2.2 "first pickup grants + auto-switches" path — returns true only when the slot was previously empty; subsequent pickups of the same slot return false and the caller grants ammo only. Use the `static constexpr NumWeaponSlots` (= 8) everywhere — never hardcode `8`.
 - **`AQuakeGameMode`** — level totals (`KillsTotal`, `SecretsTotal`), spawn rules, win conditions, current difficulty (Phase 12 moves storage to GameInstance).
 - **`AQuakeHUD`** — reads from all of the above; Slate widget caches weak pointers and reads them on paint.
 
@@ -120,6 +121,8 @@ Attribution uses UE's built-in `EventInstigator` (controller) and `DamageCauser`
 
 **Rocket-jumping needs zero extra TakeDamage code** because the knockback path already reads `DT->SelfDamageScale` and `DT->KnockbackScale` via the CDO cast. New splash weapon = new damage-type subclass + new projectile subclass. `TakeDamage` is closed to modification for damage-type metadata.
 
+**Quad damage is frozen at launch, not impact.** `AQuakeProjectile::DamageScale` (default 1.0) is set by the firing weapon's `Fire` to `AQuakeCharacter::GetOutgoingDamageScale()` — the multiplier baked on the shot. Rocket / Nail / Grenade multiply `BaseDamage * DamageScale` inside their `HandleImpact`. Matches Quake: a rocket fired during Quad lands at 4× even if the timer expires mid-flight. Self-damage scale is applied on top inside `TakeDamage` via `UQuakeDamageType::SelfDamageScale`, so SPEC 4.3's "Quad does not affect splash self-damage scale" comes out of the existing pipeline for free. Enemy projectiles (Ogre grenades) default `DamageScale = 1.0` — enemies don't read PlayerState.
+
 **Nails are point-damage** — `AQuakeProjectile_Nail::HandleImpact` calls `ApplyPointDamage` with the velocity-normalized direction, then destroys. World hits skip damage but still destroy. Damage-scaled knockback compounds naturally with sustained fire.
 
 **Grenades** explode on `ACharacter` contact, no-op on world hits (letting `bShouldBounce = true`, `Bounciness = 0.4` handle the bounce). 2.5s fuse via `FTimerHandle` set in `BeginPlay`, never reset by bouncing. 0.25s firer-grace via `FirerGraceEndTime` — after that, walking into your own grenade detonates it. Splash uses `UQuakeDamageType_Explosive` and the same `ApplyRadialDamageWithFalloff` call as the rocket.
@@ -130,8 +133,12 @@ Attribution uses UE's built-in `EventInstigator` (controller) and `DamageCauser`
 
 - **`AQuakePickup_Health`** — `HealthAmount` + `bIsOvercharge`. Non-overcharge variants refuse at max HP; Megahealth consumes up to `GetOverchargeCap()` (200).
 - **`AQuakePickup_Ammo`** — `AmmoType` + `AmmoAmount`. Always consumed even when at cap (matches original Quake — excess wasted).
+- **`AQuakePickup_Armor`** — `Tier` (Green/Yellow/Red). `GetAmountForTier`/`GetAbsorptionForTier` are pure static lookups (100/0.3, 150/0.6, 200/0.8). SPEC 1.2 "replace if higher tier OR current drained below new value" lives in `CanBeConsumedBy` — a Green pickup on top of fresh Yellow is refused; the Green pickup actor persists so the player can grab it after the Yellow drains.
+- **`AQuakePickup_Powerup`** — `Type` (`EQuakePowerup::Quad` etc.) + `Duration`. Always consumed; the SPEC 4.3 refresh cap (additive, max 60 s) lives in `AQuakePlayerState::GivePowerup`, not on the pickup. `HasPowerup` / `GetPowerupRemaining` are the PlayerState reads the HUD and `AQuakeCharacter::GetOutgoingDamageScale()` pull from.
+- **`AQuakePickup_Key`** — `KeyColor`. Re-pickup is silent per SPEC 4.4: `CanBeConsumedBy` checks `Character->HasKey` first so the actor stays placed when the player already holds the color.
+- **`AQuakePickup_Weapon`** — `WeaponClass` + `SlotNumberOneBased` + `AmmoType` + `AmmoAmount`. Always grants ammo first; then calls `Character->GiveWeaponPickup` which is idempotent on the weapon spawn (returns true iff this was the first pickup). SPEC 2.2 "first pickup auto-switches" is enforced inside `GiveWeaponPickup` — don't re-implement the branch in the pickup.
 
-BP subclasses (`BP_Pickup_*`) only fill mesh/material/light asset slots.
+BP subclasses (`BP_Pickup_*`) only fill mesh/material/light asset slots + the UPROPERTY defaults listed above.
 
 ## Architecture: Balance DataTables
 
@@ -218,7 +225,7 @@ Buttons, triggers, doors, spawn points, and the level exit communicate via `IQua
 
 **Closing safety is two-layer.** (1) Before transitioning `Open → Closing`, `TryStartClosing()` queries `BlockingZone->GetOverlappingActors(..., ACharacter::StaticClass())`; if anyone's in the doorway, re-arm the auto-close timer for 0.5s and retry. Prevents starting to close around a walking pawn. (2) Once `Closing`, the mesh's `SetRelativeLocation(..., bSweep=true)` fires `OnComponentHit` → `HandleCrushHit` applies 10000 damage with `UQuakeDamageType_Telefrag`; the move completes (stopping would trap the corpse). Pre-close = gate, mid-close = crush; both needed.
 
-**Keys are a Phase 10 stub.** `RequiredKey` exists but `CanOpenFor(AActor*)` always returns false for any non-None key (PlayerState key query doesn't exist yet). Locked doors are permanently locked until Phase 10. The locked-feedback `GEngine->AddOnScreenDebugMessage` is a stub — Phase 10 swaps to `AQuakeHUD::ShowMessage`.
+**Keys.** `CanOpenFor(AActor*)` casts the instigator to `AQuakeCharacter` and calls `HasKey(RequiredKey)`. A non-player activator (trigger relay, enemy overlap) on a locked door is refused — keeps "a dying Grunt brushed the door open" from happening. Locked feedback uses `AQuakeHUD::ShowMessage` ("You need the silver/gold key." for 2 s) per SPEC 10.
 
 ## Architecture: Hazard Volumes
 

@@ -1,6 +1,7 @@
 #include "QuakeWeapon_Axe.h"
 
 #include "QuakeBalanceRows.h"
+#include "QuakeCharacter.h"
 #include "QuakeCollisionChannels.h"
 #include "QuakeDamageType_Melee.h"
 
@@ -93,9 +94,17 @@ void AQuakeWeapon_Axe::Fire(AActor* InInstigator)
 	// these standard parameters.
 	AController* InstigatorController = PawnInstigator->GetController();
 
+	// SPEC 4.3: Quad = 4× outgoing weapon damage. Read off the firer so
+	// enemy axe-equivalents (Knight melee) don't inherit the player's Quad.
+	float ScaledDamage = Damage;
+	if (const AQuakeCharacter* QuakePawn = Cast<AQuakeCharacter>(PawnInstigator))
+	{
+		ScaledDamage *= QuakePawn->GetOutgoingDamageScale();
+	}
+
 	UGameplayStatics::ApplyPointDamage(
 		Hit.GetActor(),
-		Damage,
+		ScaledDamage,
 		ShotDir,
 		Hit,
 		InstigatorController,

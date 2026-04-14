@@ -30,12 +30,78 @@ void AQuakePlayerState::EnablePowerupTick()
 	SetActorTickEnabled(true);
 }
 
+void AQuakePlayerState::GivePowerup(EQuakePowerup Type, float Duration)
+{
+	if (Type == EQuakePowerup::None || Duration <= 0.f)
+	{
+		return;
+	}
+
+	const float Cap = GetPowerupMaxDuration();
+
+	for (FQuakeActivePowerup& Entry : ActivePowerups)
+	{
+		if (Entry.Type == Type)
+		{
+			// SPEC 4.3: additive refresh capped at 60 s.
+			Entry.RemainingTime = FMath::Min(Entry.RemainingTime + Duration, Cap);
+			return;
+		}
+	}
+
+	FQuakeActivePowerup NewEntry;
+	NewEntry.Type = Type;
+	NewEntry.RemainingTime = FMath::Min(Duration, Cap);
+	ActivePowerups.Add(NewEntry);
+	EnablePowerupTick();
+}
+
+bool AQuakePlayerState::HasPowerup(EQuakePowerup Type) const
+{
+	if (Type == EQuakePowerup::None)
+	{
+		return false;
+	}
+	for (const FQuakeActivePowerup& Entry : ActivePowerups)
+	{
+		if (Entry.Type == Type && Entry.RemainingTime > 0.f)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+float AQuakePlayerState::GetPowerupRemaining(EQuakePowerup Type) const
+{
+	for (const FQuakeActivePowerup& Entry : ActivePowerups)
+	{
+		if (Entry.Type == Type)
+		{
+			return Entry.RemainingTime;
+		}
+	}
+	return 0.f;
+}
+
+bool AQuakePlayerState::HasKey(EQuakeKeyColor Color) const
+{
+	return Color != EQuakeKeyColor::None && Keys.Contains(Color);
+}
+
+void AQuakePlayerState::GiveKey(EQuakeKeyColor Color)
+{
+	if (Color == EQuakeKeyColor::None)
+	{
+		return;
+	}
+	Keys.AddUnique(Color);
+}
+
 void AQuakePlayerState::ClearPerLifeState()
 {
 	ActivePowerups.Empty();
-	// Keys.Reset() lands in Phase 10 when the Keys member exists.
-	// Kills / Secrets / TimeElapsed / Deaths intentionally persist — see
-	// SPEC 6.4 restart sequence.
+	Keys.Empty();
 	SetActorTickEnabled(false);
 }
 

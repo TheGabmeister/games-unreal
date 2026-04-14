@@ -1,12 +1,14 @@
 #include "QuakeDoor.h"
 
+#include "QuakeCharacter.h"
 #include "QuakeDamageType_Telefrag.h"
+#include "QuakeHUD.h"
 
 #include "Components/BoxComponent.h"
 #include "Components/StaticMeshComponent.h"
-#include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "GameFramework/Character.h"
+#include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
 #include "TimerManager.h"
 
@@ -51,17 +53,20 @@ void AQuakeDoor::Activate(AActor* InInstigator)
 {
 	if (!CanOpenFor(InInstigator))
 	{
-		// Locked feedback. Phase 10 replaces the on-screen debug message
-		// with a proper HUD "You need the [color] key" line.
-#if !UE_BUILD_SHIPPING
-		if (GEngine)
+		// SPEC 10 locked feedback: show the HUD message "You need the [color]
+		// key" for 2 s.
+		if (APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0))
 		{
-			const TCHAR* KeyName = RequiredKey == EQuakeKeyColor::Silver ? TEXT("silver")
-				: (RequiredKey == EQuakeKeyColor::Gold ? TEXT("gold") : TEXT("???"));
-			GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Yellow,
-				FString::Printf(TEXT("You need the %s key."), KeyName));
+			if (AQuakeHUD* HUD = Cast<AQuakeHUD>(PC->GetHUD()))
+			{
+				const FText Msg = RequiredKey == EQuakeKeyColor::Silver
+					? NSLOCTEXT("QuakeDoor", "NeedSilverKey", "You need the silver key.")
+					: (RequiredKey == EQuakeKeyColor::Gold
+						? NSLOCTEXT("QuakeDoor", "NeedGoldKey", "You need the gold key.")
+						: NSLOCTEXT("QuakeDoor", "NeedKey", "You need a key."));
+				HUD->ShowMessage(Msg, 2.f);
+			}
 		}
-#endif
 		UE_LOG(LogQuakeDoor, Log, TEXT("%s: locked — instigator %s lacks required key."),
 			*GetName(), *GetNameSafe(InInstigator));
 		return;
@@ -175,10 +180,12 @@ bool AQuakeDoor::CanOpenFor(AActor* InInstigator) const
 	{
 		return true;
 	}
-	// Phase 10 will query PlayerState->HasKey(RequiredKey). For now, doors
-	// with a non-None RequiredKey are permanently locked so the test
-	// sandbox can exercise the locked-feedback path.
-	(void)InInstigator;
+	if (const AQuakeCharacter* Character = Cast<AQuakeCharacter>(InInstigator))
+	{
+		return Character->HasKey(RequiredKey);
+	}
+	// Non-player activator (trigger relay, enemy overlap) — refuse. Keeps
+	// "a dying Grunt brushed the door open" from happening by accident.
 	return false;
 }
 

@@ -1,6 +1,7 @@
 #include "QuakeWeapon_RocketLauncher.h"
 
 #include "QuakeBalanceRows.h"
+#include "QuakeCharacter.h"
 #include "QuakeProjectile.h"
 
 #include "Engine/World.h"
@@ -79,11 +80,22 @@ void AQuakeWeapon_RocketLauncher::Fire(AActor* InInstigator)
 	// next frame, which is the correct Quake behavior.
 	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
-	World->SpawnActor<AQuakeProjectile>(
+	AQuakeProjectile* Rocket = World->SpawnActor<AQuakeProjectile>(
 		ProjectileClass,
 		SpawnLocation,
 		SpawnRotation,
 		SpawnParams);
+
+	// SPEC 4.3: bake Quad scale onto the rocket at launch — self-damage scale
+	// is applied separately in TakeDamage via UQuakeDamageType_Explosive's
+	// SelfDamageScale = 0.5, so rocket-jump damage is Quad × 0.5, not Quad.
+	if (Rocket)
+	{
+		if (const AQuakeCharacter* QuakePawn = Cast<AQuakeCharacter>(PawnInstigator))
+		{
+			Rocket->DamageScale = QuakePawn->GetOutgoingDamageScale();
+		}
+	}
 
 	// Hearing noise event — same pattern as the Shotgun / Axe. Loudness 2.0
 	// since a rocket launch is substantially louder than a shotgun blast

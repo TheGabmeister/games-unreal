@@ -118,7 +118,7 @@ void AQuakeProjectile_Grenade::Explode()
 	const TArray<AActor*> IgnoreActors;
 	UGameplayStatics::ApplyRadialDamageWithFalloff(
 		this,
-		BaseDamage,
+		BaseDamage * DamageScale,
 		/*MinimumDamage*/     0.f,
 		ExplosionOrigin,
 		/*DamageInnerRadius*/ 0.f,

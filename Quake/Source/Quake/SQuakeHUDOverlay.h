@@ -57,6 +57,17 @@ private:
 	FText GetSecretsText() const;
 	FText GetTimeText() const;
 
+	// Phase 10 HUD additions.
+	FText GetArmorText() const;
+	FSlateColor GetArmorColor() const;
+	EVisibility GetArmorVisibility() const;
+	FText GetSilverKeyText() const;
+	EVisibility GetSilverKeyVisibility() const;
+	FText GetGoldKeyText() const;
+	EVisibility GetGoldKeyVisibility() const;
+	FText GetQuadTimerText() const;
+	EVisibility GetQuadTimerVisibility() const;
+
 	// Phase 9 level-end stats screen.
 	EVisibility GetLevelEndStatsVisibility() const;
 	FText GetLevelEndTitleText() const;

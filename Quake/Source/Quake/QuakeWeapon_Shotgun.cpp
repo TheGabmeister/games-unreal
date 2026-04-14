@@ -1,6 +1,7 @@
 #include "QuakeWeapon_Shotgun.h"
 
 #include "QuakeBalanceRows.h"
+#include "QuakeCharacter.h"
 #include "QuakeCollisionChannels.h"
 #include "QuakeDamageType_Bullet.h"
 
@@ -55,6 +56,14 @@ void AQuakeWeapon_Shotgun::Fire(AActor* InInstigator)
 
 	AController* InstigatorController = PawnInstigator->GetController();
 
+	// SPEC 4.3: Quad applies to the player's weapon; enemy shotgun-equivalents
+	// (future v2 Enforcer) won't — read the scale off the firing pawn.
+	float PelletDamage = DamagePerPellet;
+	if (const AQuakeCharacter* QuakePawn = Cast<AQuakeCharacter>(PawnInstigator))
+	{
+		PelletDamage *= QuakePawn->GetOutgoingDamageScale();
+	}
+
 	const float SpreadRadians = FMath::DegreesToRadians(SpreadHalfAngleDegrees);
 
 	for (int32 Pellet = 0; Pellet < PelletCount; ++Pellet)
@@ -91,7 +100,7 @@ void AQuakeWeapon_Shotgun::Fire(AActor* InInstigator)
 		{
 			UGameplayStatics::ApplyPointDamage(
 				Hit.GetActor(),
-				DamagePerPellet,
+				PelletDamage,
 				PelletDir,
 				Hit,
 				InstigatorController,

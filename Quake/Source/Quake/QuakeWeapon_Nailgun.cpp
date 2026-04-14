@@ -1,6 +1,7 @@
 #include "QuakeWeapon_Nailgun.h"
 
 #include "QuakeBalanceRows.h"
+#include "QuakeCharacter.h"
 #include "QuakeProjectile.h"
 
 #include "Engine/World.h"
@@ -78,11 +79,21 @@ void AQuakeWeapon_Nailgun::Fire(AActor* InInstigator)
 	SpawnParams.Instigator = PawnInstigator;
 	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
-	World->SpawnActor<AQuakeProjectile>(
+	AQuakeProjectile* Nail = World->SpawnActor<AQuakeProjectile>(
 		ProjectileClass,
 		SpawnLocation,
 		SpawnRotation,
 		SpawnParams);
+
+	// SPEC 4.3: bake Quad scale onto the shot at spawn time — a nail fired
+	// during Quad lands at 4× even if the timer ticks out mid-flight.
+	if (Nail)
+	{
+		if (const AQuakeCharacter* QuakePawn = Cast<AQuakeCharacter>(PawnInstigator))
+		{
+			Nail->DamageScale = QuakePawn->GetOutgoingDamageScale();
+		}
+	}
 
 	// Hearing noise — softer than the shotgun's boom since the nailgun is a
 	// sustained-fire weapon and reporting at 1.5 loudness 8 times a second

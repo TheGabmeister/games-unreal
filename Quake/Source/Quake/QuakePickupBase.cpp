@@ -37,7 +37,7 @@ AQuakePickupBase::AQuakePickupBase()
 
 	GlowLight = CreateDefaultSubobject<UPointLightComponent>(TEXT("GlowLight"));
 	GlowLight->SetupAttachment(PickupSphere);
-	GlowLight->SetIntensity(1000.f);
+	GlowLight->SetIntensity(10000.f);
 	GlowLight->SetAttenuationRadius(200.f);
 	GlowLight->SetCastShadows(false);
 }
