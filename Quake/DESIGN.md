@@ -108,13 +108,14 @@ Subtract `UE_KINDA_SMALL_NUMBER` before the ceil — float imprecision on 0.3×5
 
 **Ownership.**
 
-| State                              | Home                      | Why                                         |
-|------------------------------------|---------------------------|---------------------------------------------|
-| Weapons owned, ammo, armor          | `UQuakeGameInstance`      | Must survive `OpenLevel` and pawn respawn   |
-| Level-entry snapshot               | `UQuakeGameInstance`      | Death restores from it                      |
-| Current-level stats, powerups, keys | `AQuakePlayerState`       | Auto-cleared on `OpenLevel`                 |
-| Live HP                            | `AQuakeCharacter`         | Dies with the body; reset per above         |
-| Level totals (Kills/SecretsTotal)   | `AQuakeGameMode`          | Computed once at `BeginPlay`                |
+| State                              | Home                                | Why                                         |
+|------------------------------------|-------------------------------------|---------------------------------------------|
+| Weapons owned, ammo, armor          | `UQuakeInventoryComponent` on Character | Lives on the pawn so MP replication is a drop-in follow-up |
+| Cross-level inventory mailbox       | `UQuakeGameInstance::TransitSnapshot`   | Survives `OpenLevel`; consumed by the next pawn's component in `InitializeComponent` |
+| Level-entry snapshot               | `UQuakeGameInstance::LevelEntrySnapshot`| Death-restart copies it back into `TransitSnapshot` |
+| Current-level stats, powerups, keys | `AQuakePlayerState`                 | Auto-cleared on `OpenLevel`                 |
+| Live HP                            | `AQuakeCharacter`                   | Dies with the body; reset per above         |
+| Level totals (Kills/SecretsTotal)   | `AQuakeGameMode`                    | Computed once at `BeginPlay`                |
 
 **PlayerState lifecycle gotcha.** `OpenLevel` destroys and recreates PlayerState (clears everything automatically). Death-respawn **persists** PlayerState (UE preserves it across pawn recreation), so the death-restart flow in 6.4 must explicitly call `AQuakePlayerState::ClearPerLifeState()` to empty powerups + keys. Kills/Secrets/Time/Deaths stay put — they're score, not life-bound.
 
@@ -358,9 +359,7 @@ Gib when `overkillDamage >= currentHealth × 2`. Primitives scatter as physics o
 
 ### 3.5 Hit and Death Sounds
 
-Per-enemy `UPROPERTY(EditDefaultsOnly) TObjectPtr<USoundBase>` slots: `PainSound`, `DeathSound`. `PainSound` plays from `TakeDamage` on every non-fatal hit (independent of pain-chance flinch). `DeathSound` plays once from `Die()` before the death/gib branch. Null slots skipped silently.
-
-Phase 14 migrates these direct `PlaySoundAtLocation` calls to `UQuakeSoundManager` and moves the slots into `DT_SoundEvents` rows.
+Routed through `UQuakeSoundManager::PlaySoundEvent` (DESIGN 8.1). `EnemyPain` plays from `TakeDamage` on every non-fatal hit (independent of pain-chance flinch); `EnemyDeath` plays once from `Die()` before the death/gib branch. Per-enemy variation lives on `DT_SoundEvents` rows (volume/pitch), not on the pawn — no per-enemy sound-asset slots.
 
 ---
 
@@ -636,7 +635,7 @@ Selected at new-game time, persists for the playthrough, cannot change mid-playt
 
 **Fields:**
 - **Profile:** difficulty, total stats across all levels.
-- **Inventory snapshot** (from GameInstance): weapons owned, ammo, armor.
+- **Inventory snapshot:** captured by `UQuakeGameInstance` from the live `UQuakeInventoryComponent` (weapons owned, ammo, armor).
 - **Live HP** (from Character): serialized separately — not inventory.
 - **Level state:** current level name, player transform.
 - **PlayerState snapshot:** Kills, Secrets, Time, Deaths, `ActivePowerups`, Keys.
@@ -659,11 +658,11 @@ USTRUCT() struct FActorSaveRecord
 
 **Load flow:**
 1. `LoadGameFromSlot` returns the `UQuakeSaveGame`.
-2. GameInstance restores its own fields immediately (before `OpenLevel`).
+2. GameInstance restores difficulty + writes the saved inventory into `TransitSnapshot` (before `OpenLevel`).
 3. `OpenLevel` with the saved level name.
-4. After load, GameMode restores PlayerState fields.
-5. GameMode builds `TMap<FName, const FActorSaveRecord*>` and iterates `IQuakeSaveable` actors, calling `LoadState(record)` when FName matches. Unmatched actors fall back to level defaults.
-6. Character `BeginPlay` reads inventory from GameInstance (step 2) and HP from its record (step 5).
+4. New pawn's `UQuakeInventoryComponent::InitializeComponent` consumes `TransitSnapshot` (pre-`BeginPlay`).
+5. GameMode restores PlayerState fields and iterates `IQuakeSaveable` actors via a `TMap<FName, const FActorSaveRecord*>`, calling `LoadState(record)` when FName matches. Unmatched actors fall back to level defaults.
+6. Character `BeginPlay` reads HP from its record (step 5); inventory is already hydrated from step 4.
 
 **Slots:** `auto_<profile>`, `quick_<profile>`. One of each per profile.
 
@@ -688,9 +687,9 @@ Within an episode, last level returns to hub. No score system — stats are info
 
 1. `PlayerState->AddDeath()`.
 2. `PlayerState->ClearPerLifeState()` (empties powerups + keys, leaves Kills/Secrets/Time/Deaths).
-3. Restore GameInstance inventory from the level-entry snapshot.
+3. `UQuakeGameInstance::RestoreFromLevelEntrySnapshot` copies `LevelEntrySnapshot` into `TransitSnapshot`.
 4. Destroy dead pawn, spawn new `AQuakeCharacter` at `PlayerStart`.
-5. New pawn `BeginPlay` reads inventory from GameInstance, sets HP to 100 (or snapshot).
+5. New pawn's `UQuakeInventoryComponent::InitializeComponent` consumes `TransitSnapshot`; HP is set to 100 (DESIGN 6.4: death always restores full HP — health is intentionally NOT in the snapshot).
 6. Time counter keeps running.
 
 ---
@@ -708,12 +707,12 @@ No audio assets in v1. System provides a clean interface for future integration.
 ### 8.1 Architecture
 
 - **`UQuakeSoundManager : UGameInstanceSubsystem`** — central audio manager. Auto-instantiated. **Subsystems cannot have Blueprint subclasses.**
-- Methods: `PlaySound(ESoundEvent, Location)`, `PlayMusic(EMusicTrack)`, `StopMusic()`.
-- `ESoundEvent` enum catalogs every game sound.
+- Entry point: `PlaySoundEvent(WorldContext, EQuakeSoundEvent, Location)` — static convenience that finds the manager off any UObject and forwards.
+- `EQuakeSoundEvent` enum catalogs every game sound.
 
-**Sound table.** Because subsystems can't be BP-subclassed, the data-table reference lives on `UQuakeGameInstance` (which does have `BP_QuakeGameInstance`) as `UPROPERTY(EditDefaultsOnly) TObjectPtr<UDataTable> SoundEventTable`. `UQuakeSoundManager` pulls it via `GetGameInstance<UQuakeGameInstance>()` on first use and caches.
+**Sound table.** Because subsystems can't be BP-subclassed, the data-table reference lives on `UQuakeGameInstance` (which does have `BP_QuakeGameInstance`) as `UPROPERTY(EditDefaultsOnly) TSoftObjectPtr<UDataTable> SoundEventTable`. `UQuakeSoundManager` pulls it via `Cast<UQuakeGameInstance>(GetGameInstance())` on first use and caches (the templated `GetGameInstance<T>()` overload is unavailable on subsystems in UE 5.7).
 
-`DT_SoundEvents.uasset` rows: `FQuakeSoundEvent { ESoundEvent Key; TObjectPtr<USoundBase> Sound; }`. Unmapped or missing rows = `PlaySound` is a no-op (gameplay ships before assets exist).
+`DT_SoundEvents.uasset` rows: `FQuakeSoundEvent { TObjectPtr<USoundBase> Sound; float VolumeMultiplier; float PitchMultiplier; }` keyed by row name matching the `EQuakeSoundEvent` value name (`PlayerJump`, `WeaponShotgunFire`, …). Lookup is a compile-time switch in `UQuakeSoundManager::ResolveRowName` — a renamed enum value fails to compile until the case is updated. Unmapped or missing rows = `PlaySoundEvent` is a no-op (gameplay ships before assets exist).
 
 ### 8.2 Sound Events (partial)
 
@@ -735,6 +734,7 @@ AQuakePlayerController                — input setup, HUD ownership
 AQuakePlayerState : APlayerState      — Kills/Secrets/Time/Deaths, ActivePowerups, Keys
 AQuakeCharacter                       — player body: movement, HP, weapon mgmt
 UQuakeCharacterMovementComponent      — custom CMC, Quake-style air physics
+UQuakeInventoryComponent              — live ammo / armor / owned weapon classes (attached to AQuakeCharacter)
 AQuakeHUD : AHUD                      — owns SQuakeHUDOverlay Slate widget
   SQuakeHUDOverlay                    — HP / armor / ammo / weapon bar / keys / powerups / crosshair
 
@@ -770,7 +770,7 @@ IQuakeSaveable                        — SaveState/LoadState
 UQuakeSaveGame : USaveGame
 UQuakeProjectSettings : UDeveloperSettings  — balance + audio DataTable refs
 UQuakeSoundManager : UGameInstanceSubsystem
-UQuakeGameInstance                    — inventory, snapshot, save/load, difficulty
+UQuakeGameInstance                    — inventory snapshot mailbox (TransitSnapshot, LevelEntrySnapshot), save/load, difficulty, sound-table ref
 ```
 
 ### 9.2 Blueprint Layer
@@ -793,7 +793,7 @@ Categories:
 
 ### 9.4 Ownership Summary
 
-- **Inventory** (weapons, ammo, armor) → `UQuakeGameInstance`. Survives `OpenLevel` and respawn.
+- **Inventory** (weapons, ammo, armor) → `UQuakeInventoryComponent` on `AQuakeCharacter`. The pawn dies on `OpenLevel`; `UQuakeGameInstance` holds the `TransitSnapshot` mailbox that survives the swap and is consumed by the next pawn's component in `InitializeComponent`.
 - **Live HP** → `AQuakeCharacter`. Body-bound.
 - **Per-life** (powerups, keys) + **per-attempt score** (kills/secrets/time/deaths) → `AQuakePlayerState`. Note: powerups/keys cleared by `ClearPerLifeState` on death; score persists across deaths within the attempt.
 - **Level totals** (KillsTotal, SecretsTotal) → `AQuakeGameMode`. Computed once.
