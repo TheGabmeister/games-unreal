@@ -10,6 +10,9 @@
 AQuakeTrigger_Hurt::AQuakeTrigger_Hurt()
 {
 	DamageTypeClass = UQuakeDamageType_Telefrag::StaticClass();
+
+	// Kill floors / crusher pits bite enemies too — matches original Quake.
+	bAllowMonsters = true;
 }
 
 void AQuakeTrigger_Hurt::BeginPlay()

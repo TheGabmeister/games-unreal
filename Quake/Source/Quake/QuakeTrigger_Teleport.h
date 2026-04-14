@@ -19,6 +19,8 @@ class QUAKE_API AQuakeTrigger_Teleport : public AQuakeTrigger
 	GENERATED_BODY()
 
 public:
+	AQuakeTrigger_Teleport();
+
 	UPROPERTY(EditInstanceOnly, Category = "Trigger|Teleport")
 	TObjectPtr<AActor> Destination;
 

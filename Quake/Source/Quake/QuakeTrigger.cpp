@@ -1,5 +1,7 @@
 #include "QuakeTrigger.h"
 
+#include "QuakeCharacter.h"
+
 #include "Components/BoxComponent.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogQuakeTrigger, Log, All);
@@ -38,10 +40,23 @@ void AQuakeTrigger::OnTriggerBeginOverlap(
 	bool /*bFromSweep*/,
 	const FHitResult& /*SweepResult*/)
 {
-	if (OtherActor && OtherActor != this)
+	if (!OtherActor || OtherActor == this)
 	{
-		Activate(OtherActor);
+		return;
 	}
+	if (!bAllowMonsters && !IsPlayerPawn(OtherActor))
+	{
+		return;
+	}
+	Activate(OtherActor);
+}
+
+bool AQuakeTrigger::IsPlayerPawn(const AActor* OtherActor)
+{
+	// Type-based rather than controller-based so the filter is stable
+	// across possession timing. AQuakeCharacter is only the player pawn;
+	// enemies subclass AQuakeEnemyBase and don't match.
+	return Cast<const AQuakeCharacter>(OtherActor) != nullptr;
 }
 
 void AQuakeTrigger::Activate(AActor* InInstigator)

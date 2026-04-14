@@ -8,6 +8,13 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogQuakeTeleport, Log, All);
 
+AQuakeTrigger_Teleport::AQuakeTrigger_Teleport()
+{
+	// Teleporters move enemies too — matches original Quake's teleporter
+	// behavior (monsters routed through teleporters in E1M7, etc.).
+	bAllowMonsters = true;
+}
+
 void AQuakeTrigger_Teleport::Activate(AActor* InInstigator)
 {
 	if (!Destination)

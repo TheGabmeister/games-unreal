@@ -47,6 +47,16 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Quake|Button", meta = (ClampMin = "0.0"))
 	float Cooldown = 0.f;
 
+	/**
+	 * Quake SF_TRIGGER_ALLOWMONSTERS equivalent for buttons. False: only
+	 * the player pawn (AQuakeCharacter) can push / shoot the button; an
+	 * enemy bumping into a Touch button or blocking a shot that clips it
+	 * is ignored. Flip to true for maze / puzzle maps where a monster
+	 * path legitimately crosses a button.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Quake|Button")
+	bool bAllowMonsters = false;
+
 	/** Actors to fire on activation. Each must implement IQuakeActivatable. */
 	UPROPERTY(EditInstanceOnly, Category = "Quake|Button")
 	TArray<TObjectPtr<AActor>> Targets;

@@ -1,9 +1,11 @@
 #include "QuakeButton.h"
 
 #include "QuakeActivatable.h"
+#include "QuakeCharacter.h"
 #include "QuakeCollisionChannels.h"
 #include "QuakeSaveArchive.h"
 #include "QuakeSoundManager.h"
+#include "QuakeTrigger.h"
 
 #include "Components/BoxComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -58,10 +60,15 @@ void AQuakeButton::OnColliderBeginOverlap(
 	{
 		return;
 	}
-	if (Cast<ACharacter>(OtherActor))
+	if (!Cast<ACharacter>(OtherActor))
 	{
-		Fire(OtherActor);
+		return;
 	}
+	if (!bAllowMonsters && !AQuakeTrigger::IsPlayerPawn(OtherActor))
+	{
+		return;
+	}
+	Fire(OtherActor);
 }
 
 float AQuakeButton::TakeDamage(
@@ -79,6 +86,10 @@ float AQuakeButton::TakeDamage(
 
 	// Attribute the activation to the firing pawn when available.
 	AActor* PawnInstigator = EventInstigator ? EventInstigator->GetPawn() : DamageCauser;
+	if (!bAllowMonsters && !AQuakeTrigger::IsPlayerPawn(PawnInstigator))
+	{
+		return ActualDamage;
+	}
 	Fire(PawnInstigator);
 
 	return ActualDamage;

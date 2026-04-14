@@ -22,6 +22,12 @@ class UBoxComponent;
  * in the editor — no string-name lookups, matching SPEC 5.5's actor-picker
  * model. Entries that don't implement IQuakeActivatable log a warning
  * (authoring error, not a crash).
+ *
+ * Overlap filter defaults to player-only (Quake's SF_TRIGGER_ALLOWMONSTERS
+ * = off), so an enemy chasing the player can't open the exit, burn a
+ * secret, or fire a message trigger. Hazard / teleport subclasses flip
+ * bAllowMonsters = true in their constructors — kill floors and
+ * teleporters affect monsters in original Quake too.
  */
 UCLASS(Abstract)
 class QUAKE_API AQuakeTrigger : public AActor, public IQuakeActivatable
@@ -41,7 +47,19 @@ public:
 	UPROPERTY(EditInstanceOnly, Category = "Trigger")
 	TArray<TObjectPtr<AActor>> Targets;
 
+	/**
+	 * Quake SF_TRIGGER_ALLOWMONSTERS. False = only the player pawn fires
+	 * the overlap path. True = any pawn fires (hazard / teleport default).
+	 * Relay-style calls through Activate() bypass this filter — a relay
+	 * fired by any source still propagates to its targets.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Trigger")
+	bool bAllowMonsters = false;
+
 	virtual void Activate(AActor* InInstigator) override;
+
+	/** True iff OtherActor is the player pawn (AQuakeCharacter). */
+	static bool IsPlayerPawn(const AActor* OtherActor);
 
 protected:
 	virtual void BeginPlay() override;
