@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Unreal Engine 5.7 single-player FPS recreating original Quake gameplay with primitive shapes. v1 is feature-complete in code; remaining work is editor-side map authoring (Phase 15) tracked in [TODO.md](TODO.md).
 
+**C++ first, thin BP layer.** All gameplay logic in C++. Blueprints are thin subclasses with **zero event-graph nodes** — asset-reference slots and per-instance property tuning only. Runtime behavior goes in the C++ base.
+
 - **[DESIGN.md](DESIGN.md)** — durable "what the game is" (movement/damage formulas, class hierarchy, collision, game rules). Read this before non-trivial gameplay changes.
 - **[HUD.md](HUD.md)** — HUD layout, wireframe, data sources.
 - **[TODO.md](TODO.md)** — v2 backlog.
@@ -42,22 +44,7 @@ IntelliSense errors like `cannot open source file "InputModifiers.h"` are usuall
 
 ## Running Tests
 
-Tests live under `Source/Quake/Tests/` and use `IMPLEMENT_SIMPLE_AUTOMATION_TEST` with `EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter`, guarded by `#if WITH_DEV_AUTOMATION_TESTS`. Run via **Session Frontend → Automation tab → filter `Quake.*`**. Test categories:
-
-- `Quake.Foundation.*` — runner smoke test.
-- `Quake.Movement.AirAccel.*` — CMC dot-product clamp regression.
-- `Quake.Damage.ArmorAbsorption.*` — armor formula (Green / Yellow / Underflow / NoArmor).
-- `Quake.Damage.DamageType.*` — shared-base CDO cast (SPEC 1.5).
-- `Quake.Enemy.PainChance.*` — SPEC 3.3 pain formula.
-- `Quake.Ammo.*` — SPEC 2.1 ammo inventory.
-- `Quake.Weapon.RocketSplash.*` — linear splash falloff.
-- `Quake.Weapon.AutoSwitch.*` — SPEC 2.2 auto-switch priority picker.
-- `Quake.Stats.*` — SPEC 5.1/5.9 spawn-point eligibility, IsSatisfied, IsLevelClearedForSet, PlayerState credit.
-- `Quake.Powerup.*` / `Quake.Key.*` / `Quake.Armor.*` — SPEC 4.3/4.4/4.2 PlayerState powerup grant + refresh cap, key storage, armor tier table.
-- `Quake.Save.*` — Phase 11 / DESIGN 6.2 F5 gate matrix, consumed-pickup set, time-base translation, FActorSaveRecord round-trip, UQuakeSaveGame field retention.
-- `Quake.Difficulty.*` — Phase 12 / DESIGN 6.1 multiplier table seeded defaults, missing-key fallback, scaling math (Grunt 30 HP → 37.5 on Hard), enum monotonicity.
-- `Quake.Phase13.*` — DESIGN 6.3/6.4 final-level → win-screen routing predicate, inventory snapshot round-trip, no-op-on-invalid restore.
-- `Quake.Phase14.*` — DESIGN 8 sound-event row-name resolution + `UQuakeGameUserSettings` sensitivity/volume clamp + defaults reset.
+Tests live under `Source/Quake/Tests/` and use `IMPLEMENT_SIMPLE_AUTOMATION_TEST` with `EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter`, guarded by `#if WITH_DEV_AUTOMATION_TESTS`. Run via **Session Frontend → Automation tab → filter `Quake.*`** — the runtime discovery is the test inventory; one test file per phase / subsystem.
 
 **Prefer pure static helpers over world-spinup tests.** `ApplyQuakeAirAccel`, `ApplyArmorAbsorption`, `ComputePainChance`, `ComputeLinearFalloffDamage`, `PickAutoSwitchWeaponSlot`, `IsLevelClearedForSet`, `ComputeScaledEnemyStats`, `ComputeConsumedNames`, `CanQuickSave`, `ShouldRouteToWinScreen`, `UQuakeSoundManager::ResolveRowName` are the templates. Functional tests requiring a world are deferred to manual sandbox-map verification.
 
@@ -67,21 +54,17 @@ Tests live under `Source/Quake/Tests/` and use `IMPLEMENT_SIMPLE_AUTOMATION_TEST
 
 **LWC numeric-assert gotcha.** UE 5.5+ `FVector` components are `double`. `TestEqual(TEXT("..."), Vec.X, 30.f, KINDA_SMALL_NUMBER)` is an ambiguous-overload error. Use `30.0` and `UE_KINDA_SMALL_NUMBER` for any vector-component assertion.
 
-**DataTable rows.** `DT_EnemyStats`/`DT_WeaponStats` row names must match `StatsRowName` in each leaf C++ constructor (current keys: `Grunt`, `Knight`, `Ogre`; `Axe`, `Shotgun`, `Nailgun`, `RocketLauncher`). Missing rows fall back to C++ defaults — tests exercise the fallback only and stay world-free.
-
-## Architecture: C++ First, Thin BP Layer
-
-Per SPEC "Constraints", **all gameplay logic in C++**. Blueprints are thin subclasses with **zero event-graph nodes** — they exist only for asset-reference slots and per-instance property tuning. If a feature needs runtime behavior, add it to the C++ base class.
+**DataTable rows.** Tests exercise the C++-default fallback only, world-free. Row-name conventions live next to the row structs in [QuakeBalanceRows.h](Source/Quake/QuakeBalanceRows.h).
 
 ## Architecture: State Ownership
 
 Where data lives is determined by lifecycle. Wrong placement breaks respawn, level transitions, or the HUD.
 
-- **`UQuakeGameInstance`** — inventory (weapons owned, ammo, armor), `LevelEntrySnapshot` (DESIGN 6.4), `CurrentDifficulty` (DESIGN 6.1), Phase 11 save plumbing (`SaveCurrentState` / `LoadFromSlot` / `ConsumePendingLoad`, slot-name builders). Survives `OpenLevel` and Character respawn. Ammo is a private `TMap<EQuakeAmmoType, int32>` accessed via `GetAmmo`/`GiveAmmo`/`ConsumeAmmo`; SPEC 2.1 caps live in pure-static `GetAmmoCap`. `OwnedWeaponClasses[8]` is filled in BP_QuakeGameInstance; the Character spawns one actor per non-null slot at `BeginPlay`.
-- **`AQuakePlayerState`** — per-attempt stats (`Kills`, `Secrets`, `Deaths`, `GetTimeElapsed()` from world time), `ActivePowerups` (typed `TArray<FQuakeActivePowerup>`), and `Keys` (typed `TArray<EQuakeKeyColor>`). Auto-cleared on `OpenLevel`; **NOT** auto-cleared on pawn respawn (UE preserves PlayerState across death). Death-restart must call `ClearPerLifeState()` which empties both `ActivePowerups` and `Keys`. That call deliberately preserves Kills/Secrets/TimeElapsed/Deaths — those are score, not life-bound. Mutators: `AddKillCredit`/`AddSecretCredit`/`AddDeath`; `GivePowerup(Type, Duration)` is additive-capped at `GetPowerupMaxDuration()` (60s per SPEC 4.3); `GiveKey(Color)` is idempotent (re-pickup is silent per SPEC 4.4). Tick stays disabled unless powerups are active (`EnablePowerupTick()` arms it; Tick disables itself when the array empties). Phase 11: `CaptureToSave` / `ApplyFromSave` round-trip through `UQuakeSaveGame` with time-base translation (`LevelStartTime = WorldTimeNow - ElapsedAtSave`).
-- **`AQuakeCharacter`** — live health, `WeaponInstances[NumWeaponSlots]`, `CurrentWeapon`/`CurrentWeaponSlot`, Phase 11 `bIsInPain` + `IQuakeSaveable`, Phase 13 `bAwaitingRestart` + 1.5s tilt timer (`EnterDeathState`). Dies with the body. Facade methods `GiveAmmo`/`ConsumeAmmo`/`GetAmmo` forward to GameInstance; `GiveKey`/`HasKey` forward to PlayerState; `GiveHealth(Amount, bOvercharge)` is self-owned (caps at `MaxHealth` or `GetOverchargeCap()` = 200). `GetOutgoingDamageScale()` returns 4.0 when PlayerState reports an active Quad (SPEC 4.3) and 1.0 otherwise. `GiveWeaponPickup(Slot, Class)` is the SPEC 2.2 "first pickup grants + auto-switches" path — returns true only when the slot was previously empty; subsequent pickups of the same slot return false and the caller grants ammo only. Use the `static constexpr NumWeaponSlots` (= 8) everywhere — never hardcode `8`. **`Move`/`Look`/`OnFirePressed` early-return when `bAwaitingRestart`** so the death screen can consume Fire for the restart prompt.
-- **`AQuakeGameMode`** — level totals (`KillsTotal`, `SecretsTotal`), spawn rules, `bIsFinalLevel` + `MainMenuMapName` (DESIGN 6.3 win routing), `DifficultyTable` UPROPERTY (DESIGN 6.1), `RequestRestartFromDeath` (DESIGN 6.4). `GetDifficulty()` forwards to GameInstance — GameMode no longer owns the field. `BeginPlay` orchestrates Phase 11 restore (consume pending load → restore PlayerState/per-actor records/consumed pickups, OR auto-save), then captures the level-entry snapshot.
-- **`AQuakeHUD`** — reads from all of the above; Slate widget caches weak pointers and reads them on paint. Phase 13 owns three viewport overlays: main HUD (z=10), death screen (z=20), win screen (z=30).
+- **`UQuakeGameInstance`** — inventory (weapons, ammo, armor), `LevelEntrySnapshot`, `CurrentDifficulty`, save plumbing. Survives `OpenLevel` and Character respawn.
+- **`AQuakePlayerState`** — per-attempt stats (Kills/Secrets/Deaths/Time), powerups, keys. Auto-cleared on `OpenLevel`; **NOT** cleared on pawn respawn (UE preserves PlayerState across death) — death-restart must call `ClearPerLifeState()`, which deliberately preserves the score counters.
+- **`AQuakeCharacter`** — live health, weapon instances, pain/death flags. Dies with the body. Facade methods forward to GameInstance/PlayerState. **`Move`/`Look`/`OnFirePressed` early-return when `bAwaitingRestart`** so the death screen can consume Fire for the restart prompt. Use `static constexpr NumWeaponSlots` everywhere — never hardcode `8`.
+- **`AQuakeGameMode`** — level denominators, spawn rules, win routing, restart orchestration. `GetDifficulty()` forwards to GameInstance — GameMode does not own the field.
+- **`AQuakeHUD`** — paints from all of the above; Slate widget caches weak pointers and reads them on paint. Three viewport overlays: main HUD (z=10), death (z=20), win (z=30).
 
 Do not put inventory on Character. Do not put per-level stats on Character or GameMode. Do not put settings (sensitivity, volume) on PlayerState.
 
@@ -137,30 +120,19 @@ Attribution uses UE's built-in `EventInstigator` (controller) and `DamageCauser`
 
 ## Architecture: Pickups
 
-`AQuakePickupBase` is the `UCLASS(Abstract)` base. Owns `USphereComponent` (Pickup channel, overlap-only, 64u default), non-colliding `UStaticMeshComponent`, `UPointLightComponent`. `BeginPlay` binds overlap → casts to `AQuakeCharacter` (per SPEC 1.6 rule 4) → calls virtual `CanBeConsumedBy` gate → `ApplyPickupEffectTo` (PURE_VIRTUAL) → `Destroy()`.
+`AQuakePickupBase` is the `UCLASS(Abstract)` base. Owns `USphereComponent` (Pickup channel, overlap-only), non-colliding mesh + light. `BeginPlay` binds overlap → cast to `AQuakeCharacter` (SPEC 1.6 rule 4) → virtual `CanBeConsumedBy` gate → `ApplyPickupEffectTo` (PURE_VIRTUAL) → `Destroy()`.
 
-- **`AQuakePickup_Health`** — `HealthAmount` + `bIsOvercharge`. Non-overcharge variants refuse at max HP; Megahealth consumes up to `GetOverchargeCap()` (200).
-- **`AQuakePickup_Ammo`** — `AmmoType` + `AmmoAmount`. Always consumed even when at cap (matches original Quake — excess wasted).
-- **`AQuakePickup_Armor`** — `Tier` (Green/Yellow/Red). `GetAmountForTier`/`GetAbsorptionForTier` are pure static lookups (100/0.3, 150/0.6, 200/0.8). SPEC 1.2 "replace if higher tier OR current drained below new value" lives in `CanBeConsumedBy` — a Green pickup on top of fresh Yellow is refused; the Green pickup actor persists so the player can grab it after the Yellow drains.
-- **`AQuakePickup_Powerup`** — `Type` (`EQuakePowerup::Quad` etc.) + `Duration`. Always consumed; the SPEC 4.3 refresh cap (additive, max 60 s) lives in `AQuakePlayerState::GivePowerup`, not on the pickup. `HasPowerup` / `GetPowerupRemaining` are the PlayerState reads the HUD and `AQuakeCharacter::GetOutgoingDamageScale()` pull from.
-- **`AQuakePickup_Key`** — `KeyColor`. Re-pickup is silent per SPEC 4.4: `CanBeConsumedBy` checks `Character->HasKey` first so the actor stays placed when the player already holds the color.
-- **`AQuakePickup_Weapon`** — `WeaponClass` + `SlotNumberOneBased` + `AmmoType` + `AmmoAmount`. Always grants ammo first; then calls `Character->GiveWeaponPickup` which is idempotent on the weapon spawn (returns true iff this was the first pickup). SPEC 2.2 "first pickup auto-switches" is enforced inside `GiveWeaponPickup` — don't re-implement the branch in the pickup.
+**Subclass placement rules:**
+- **Refresh / cap logic (powerup duration, armor tier replacement) lives on PlayerState/Character, not the pickup.** Pickup decides "can I be consumed?"; the recipient owns "how does this combine with what I have?"
+- **`AQuakePickup_Weapon`: ammo always granted first**, then `Character->GiveWeaponPickup` which is idempotent. SPEC 2.2 "first pickup auto-switches" is inside `GiveWeaponPickup` — don't re-implement in the pickup.
 
-BP subclasses (`BP_Pickup_*`) only fill mesh/material/light asset slots + the UPROPERTY defaults listed above.
+BP subclasses (`BP_Pickup_*`) only fill mesh/material/light asset slots + UPROPERTY defaults.
 
 ## Architecture: Balance DataTables
 
-Stats centralized in `DT_EnemyStats` (`FQuakeEnemyStatsRow`) and `DT_WeaponStats` (`FQuakeWeaponStatsRow`), referenced from `UQuakeProjectSettings` (`UDeveloperSettings`, visible in **Project Settings > Game > Quake**). Row structs in [QuakeBalanceRows.h](Source/Quake/QuakeBalanceRows.h).
+Stats centralized in `DT_EnemyStats` / `DT_WeaponStats`, configured via `UQuakeProjectSettings` (**Project Settings > Game > Quake**). Conventions and adding-a-new-enemy walkthrough live next to the row structs in [QuakeBalanceRows.h](Source/Quake/QuakeBalanceRows.h).
 
-**Loading order matters for enemies.** `AQuakeEnemyBase::PostInitializeComponents` loads DataTable stats *before* `Super`. Super triggers `SpawnDefaultController` → `OnPossess`, which reads perception stats to configure AI sense configs. If the load happened in `BeginPlay`, the controller would read stale C++ defaults. Weapons can load in `BeginPlay` — no auto-possess timing constraint.
-
-**C++ defaults are the fallback** when a row is missing or no table is configured.
-
-**Adding a new enemy**: set `StatsRowName = TEXT("MyEnemy")` in the constructor, set C++ defaults, add the matching row. Same pattern for weapons.
-
-**Projectile damage is NOT in the weapon table** — `AQuakeProjectile_Nail::Damage` and `AQuakeProjectile_Rocket::BaseDamage` live on the projectile actor. The weapon table's Damage column is informational for those rows.
-
-`UQuakeProjectSettings` also owns `SoundEventTable` for the future sound-manager subsystem.
+**Loading order gotcha.** `AQuakeEnemyBase::PostInitializeComponents` loads DataTable stats *before* `Super` because Super triggers `SpawnDefaultController` → `OnPossess`, which reads perception stats. Loading in `BeginPlay` would leave the controller seeing stale C++ defaults. Weapons can load in `BeginPlay` — no auto-possess timing constraint.
 
 ## Architecture: AI Split
 
@@ -192,20 +164,15 @@ Per-enemy variations live on AIController subclasses, not pawn subclasses — ke
 
 ## Architecture: Stats and Level-Clear
 
-Per SPEC 5.9, stats split as a **numerator/denominator pair**, never duplicated:
+Per SPEC 5.9, stats split as a **numerator/denominator pair**, never duplicated: denominators (`KillsTotal`, `SecretsTotal`) on `AQuakeGameMode`, numerators (`Kills`, `Secrets`, `Deaths`, time-elapsed) on `AQuakePlayerState`. Denominators computed once in `BeginPlay` via `TActorIterator` and never updated — a deferred spawn point still owes its enemy.
 
-- **Denominators** (`KillsTotal`, `SecretsTotal`) on `AQuakeGameMode`, computed once in `BeginPlay` via `TActorIterator<AQuakeEnemySpawnPoint>` (filtered by `IsEligible()`) and `TActorIterator<AQuakeTrigger_Secret>`. Never updated afterward — a deferred spawn point still owes its enemy to the total.
-- **Numerators** (`Kills`, `Secrets`, `Deaths`, `GetTimeElapsed()`) on `AQuakePlayerState`. Mutators: `AddKillCredit`/`AddSecretCredit`/`AddDeath`. Time computed on demand from `World->GetTimeSeconds() - LevelStartTime`.
+**Level-clear scan reads spawn points, not enemies.** `AQuakeGameMode::IsLevelCleared` iterates spawn points and bails on any eligible-but-unsatisfied entry. This handles three edge cases without branching: (1) unfired deferred spawns are unsatisfied; (2) infighting/hazard kills satisfy regardless of player credit; (3) Down-state Zombies (forward-compat) report `IsDead() = false`. Pure helper `IsLevelClearedForSet` is the world-free test target.
 
-**Level-clear scan reads spawn points, not enemies.** `AQuakeGameMode::IsLevelCleared` iterates spawn points and bails on any eligible-but-unsatisfied entry. Handles three edge cases without branching: (1) deferred spawn points that haven't fired are unsatisfied; (2) infighting/hazard kills satisfy the spawn point regardless of player credit; (3) Down-state Zombies (forward-compat) report `IsDead() = false`. Pure helper `IsLevelClearedForSet(TArray<const AQuakeEnemySpawnPoint*>&)` is the world-free version for tests.
+**`AQuakeEnemySpawnPoint` is the only authoring path for counted enemies.** Direct `BP_Enemy_*` placements are decoration — `bIsMarkedKillTarget` defaults false; only `TrySpawn` flips it true. Death credit (`Die`) only routes to PlayerState when marked.
 
-**`AQuakeEnemySpawnPoint` is the only authoring path for counted enemies.** Direct `BP_Enemy_*` placements are decoration — `bIsMarkedKillTarget` defaults false on the enemy; only `TrySpawn` flips it true after `SpawnActor`. Enemy death credit (in `Die`) only routes to PlayerState when the flag is set, so directly-placed actors never increment Kills nor gate exit. Spawn points implement `IQuakeActivatable` so `AQuakeTrigger_Spawn` (typed `SpawnPoints` array for picker filtering) and button → relay chains can fire deferred spawns. `TrySpawn` is one-shot via the `SpawnedEnemy` pointer.
+**Kill credit rules** (in `Die`): `PlayerState.Kills` increments only when marked AND one of: `Killer && Killer->IsPlayerController()` (direct), or `Killer == nullptr && bPlayerHasDamagedMe` (hazard kill where the player softened first). Infighting kills grant no credit; the spawn point still satisfies.
 
-**Difficulty filter is fully wired (Phase 12).** Storage is `UQuakeGameInstance::CurrentDifficulty` (survives `OpenLevel` per DESIGN 6.1); `AQuakeGameMode::GetDifficulty` forwards there. Spawn points filter via `CurrentDifficulty >= MinDifficulty`. See **Architecture: Difficulty** below for the multipliers table.
-
-**Kill credit rules** (in `AQuakeEnemyBase::Die`). `PlayerState.Kills` increments only when the enemy is marked AND one of: `Killer && Killer->IsPlayerController()` (direct kill), or `Killer == nullptr && bPlayerHasDamagedMe` (hazard kill where the player softened first; flag set in `TakeDamage` when the instigator is the player). Infighting kills currently grant no credit (5-second chain rule deferred); the spawn point still satisfies. Player Deaths++ fires from `AQuakeCharacter::TakeDamage` inside the `Health <= 0` branch — the existing `IsDead()` early-return guards against double-counting.
-
-**Exit gating + level-end stats screen.** `AQuakeTrigger_Exit` honors `bGatedByClearCondition` (default true). When gated and unclear, shows a HUD message and bails. When clear: fires the base Targets chain, calls `AQuakeHUD::ShowLevelEndStats(StatsDisplaySeconds)`, schedules `OpenLevel(NextMapName)` via timer at the same duration. The Slate widget polls PlayerState/GameMode every paint — no explicit refresh needed. `bTransitionInFlight` blocks a second overlap from re-firing. Phase 13: when `GameMode->bIsFinalLevel` is true, the exit shows `ShowWinScreen()` and routes the timer to `OpenLevel(MainMenuMapName)` instead — gated by pure helper `AQuakeGameMode::ShouldRouteToWinScreen`.
+**`bTransitionInFlight` blocks a second exit-trigger overlap from re-firing.** Phase 13: final-level exits show `ShowWinScreen()` and route to `MainMenuMapName` via the pure predicate `ShouldRouteToWinScreen`.
 
 ## Architecture: Activation Chains
 
@@ -271,31 +238,21 @@ Buttons, triggers, doors, spawn points, and the level exit communicate via `IQua
 
 ## Architecture: Difficulty (Phase 12)
 
-Storage on `UQuakeGameInstance` (survives `OpenLevel`); `AQuakeGameMode::GetDifficulty` forwards there. Multipliers table on GameMode: `TMap<EQuakeDifficulty, FQuakeDifficultyMultipliers> DifficultyTable` UPROPERTY (BP-tunable) seeded with DESIGN 6.1 defaults in the constructor (Easy 0.75/1.0, Normal 1.0/1.0, Hard 1.5/1.25, Nightmare 2.0/1.5 + `bSuppressPain = true`). Pure-static `LookupMultipliers` returns the entry or a 1.0/1.0 default for missing keys.
+Difficulty stored on `UQuakeGameInstance` (survives `OpenLevel`); `AQuakeGameMode::GetDifficulty` forwards. Multipliers `TMap` on GameMode is BP-tunable, seeded with DESIGN 6.1 defaults in the constructor.
 
-**Application.** `AQuakeEnemyBase::ApplyDifficultyScaling` runs in `BeginPlay` BEFORE `Health = MaxHealth` seed: bakes `MaxHealth *= EnemyHP` and stores `AttackDamageMultiplier = EnemyDamage`. Per-enemy `Fire` paths multiply outgoing `ApplyPointDamage` by `AttackDamageMultiplier`; the Ogre grenade bakes `Projectile->DamageScale = AttackDamageMultiplier` at spawn (matches the Quad pattern — frozen at launch).
+**Damage scaling is frozen at launch, matching the Quad pattern.** Hitscan `Fire` paths multiply by `AttackDamageMultiplier`; the Ogre grenade bakes `Projectile->DamageScale` at spawn — a difficulty change mid-flight does not affect in-flight grenades.
 
-**Nightmare pain immunity.** `AQuakeEnemyAIController::OnDamaged` skips the SPEC 3.3 pain roll entirely when `GetDifficultyMultipliers().bSuppressPain` is true.
-
-Pure helper `AQuakeEnemyBase::ComputeScaledEnemyStats` extracts the math for unit testing (regression: Grunt 30 HP × 1.25 = 37.5 on Hard).
+**Nightmare pain immunity.** `AQuakeEnemyAIController::OnDamaged` skips the pain roll when `GetDifficultyMultipliers().bSuppressPain` is true.
 
 ## Architecture: Failure + Win Flow (Phase 13)
 
-**Death state.** `AQuakeCharacter::EnterDeathState` runs from `TakeDamage` when `Health <= 0`: increments `PlayerState->Deaths`, stops the CMC, sets `bAwaitingRestart = true` and `RestartReadyWorldTime = Now + 1.5s`. `Move`/`Look`/`OnFirePressed` early-return while `bAwaitingRestart` is set — the corpse can't slide and the death-screen Fire-to-restart can't accidentally also discharge a weapon.
+**Inventory snapshot is captured AFTER any pending-load restore.** The snapshot reflects "what the player walked in with this attempt", not the prior level's exit inventory. **Health is NOT in the snapshot** per DESIGN 6.4 — death always restores full HP; the snapshot only handles inventory.
 
-**Restart.** `AQuakePlayerController::OnFirePressedForRestart` consumes `FireAction::Started` only when the pawn is dead AND the tilt has elapsed, then calls `GameMode->RequestRestartFromDeath`. That runs the DESIGN 6.4 sequence: `PlayerState->ClearPerLifeState` → `GameInstance->RestoreFromLevelEntrySnapshot` → unpossess + destroy old pawn → `RestartPlayer(PC)`.
-
-**Inventory snapshot** (`FQuakeInventorySnapshot` on GameInstance). Captured by `GameMode::BeginPlay` AFTER any pending-load restore — the snapshot reflects "what the player walked in with this attempt", not the prior level's exit inventory. **Health is NOT in the snapshot** per DESIGN 6.4 ("new pawn sets HP to 100"): death always restores full HP, snapshot only handles inventory.
-
-**Win routing** is the pure predicate `AQuakeGameMode::ShouldRouteToWinScreen(bIsFinal, NextMapName)` — final-level always wins regardless of NextMapName; non-final never does. `Trigger_Exit` calls `HUD->ShowWinScreen()` instead of normal stats + scheduled `OpenLevel(MainMenuMapName)`.
+**Win routing is the pure predicate** `AQuakeGameMode::ShouldRouteToWinScreen(bIsFinal, NextMapName)` — final-level always wins regardless of NextMapName; non-final never does. Test target.
 
 ## Architecture: Main Menu (Phase 13)
 
-`AQuakeMenuGameMode` + `AQuakeMenuHUD` are a separate game-mode pair used by the editor-authored `MainMenu.umap`. `AQuakeMenuHUD::BeginPlay` constructs `SQuakeMainMenu`, sets `bShowMouseCursor = true`, calls `SetInputMode(FInputModeUIOnly())`. The menu has a difficulty picker → sets `GameInstance->Difficulty` → `OpenLevel(HubMapName)` (slot on the HUD BP).
-
-**Cursor / input-mode reset gotcha.** `LocalPlayer` and Slate viewport state survive `OpenLevel` even though the `PlayerController` is destroyed and recreated. Without an explicit reset, the new in-game PC inherits UIOnly + cursor-on from the menu. `AQuakePlayerController::BeginPlay` therefore calls `SetInputMode(FInputModeGameOnly())` and `bShowMouseCursor = false` unconditionally — preserve this or transitioning MainMenu → Hub leaves controls dead.
-
-**Slate widgets** ([SQuakeMenuWidgets.h](Source/Quake/SQuakeMenuWidgets.h)). `SQuakeDeathScreen` and `SQuakeWinScreen` are added to the in-game viewport (z=20/30) by `AQuakeHUD::BeginPlay` and poll on paint — visibility is driven by `Char->IsAwaitingRestart()` and `bShown` respectively. `SQuakeMainMenu` and embedded `SQuakeSettingsMenu` (Phase 14: mouse sensitivity AND master volume sliders, both backed by `UQuakeGameUserSettings`) live on the menu HUD only.
+**Cursor / input-mode reset gotcha.** `LocalPlayer` and Slate viewport state survive `OpenLevel` even though the `PlayerController` is destroyed and recreated. Without an explicit reset, the new in-game PC inherits `UIOnly` + cursor-on from the menu. `AQuakePlayerController::BeginPlay` therefore calls `SetInputMode(FInputModeGameOnly())` and `bShowMouseCursor = false` unconditionally — preserve this or transitioning MainMenu → Hub leaves controls dead.
 
 ## Architecture: Audio + Settings (Phase 14)
 
@@ -305,9 +262,9 @@ Pure helper `AQuakeEnemyBase::ComputeScaledEnemyStats` extracts the math for uni
 
 **Row-name lookup is `UEnum::GetNameStringByValue`,** so DT_SoundEvents row keys must match the UENUM value names verbatim (`PlayerJump`, `DoorOpen`, `WeaponShotgunFire`, …). `UQuakeSoundManager::ResolveRowName` is the pure helper exposed for `Quake.Phase14.Sound.ResolveRowName`. Renaming an enum value silently re-keys every row that uses it — fix the table at the same commit.
 
-**Insertion-point conventions.** Weapons emit `Weapon*Fire` from inside `Fire()` after `UAISense_Hearing::ReportNoiseEvent`. Empty-click is on `AQuakeWeaponBase::PlayEmptyClick` (covers every subclass). Projectiles emit `RocketExplode` / `GrenadeBounce` from `HandleImpact` / `OnGrenadeBounce`. Pickups route through `AQuakePickupBase::OnPickupBeginOverlap` calling virtual `GetPickupSoundEvent()` — `_Weapon` overrides to `PickupWeapon`, `_Powerup` to `PickupPowerup`, base default is `PickupItem`. Player Pain/Death come from `TakeDamage` / `EnterDeathState`; Jump/Land from `AQuakeCharacter::Jump` / `Landed` overrides (engine binds `JumpAction` to `&ACharacter::Jump`, virtual dispatch picks up the override). Enemy Alert/Attack/Idle fire from `AQuakeEnemyAIController::TransitionTo` — one switch on the new state; Pain/Death from `PlayPainReaction` / `Die`. World events (`DoorOpen`, `DoorClose`, `ButtonPress`, `Teleport`, `SecretFound`) live next to the corresponding state mutation.
+**Per-enemy sound variation lives on DT_SoundEvents rows (volume/pitch), not on the pawn.** Legacy `PainSound`/`DeathSound` UPROPERTY slots were removed from `AQuakeEnemyBase`. If a future enemy needs a unique sound asset, add a new `EQuakeSoundEvent::EnemyPain_Shambler` row rather than re-introducing per-pawn slots.
 
-**Migration of legacy `PainSound`/`DeathSound` UPROPERTY slots:** removed from `AQuakeEnemyBase`. Per-enemy sound variation now lives on the DT_SoundEvents rows (volume/pitch overrides), not on the pawn. If a future enemy needs a unique sound asset, add a new `EQuakeSoundEvent::EnemyPain_Shambler` row rather than re-introducing per-pawn slots.
+**Pain sound is in `TakeDamage`'s non-fatal branch only.** `PlayPainReaction` is the visual-flinch hook — emitting sound there double-plays on non-fatal hits and overlaps `EnemyDeath` on the killing blow.
 
 **Settings persistence: `UQuakeGameUserSettings : UGameUserSettings`** holds `MouseSensitivity` and `MasterVolume` as `Config` UPROPERTYs (auto-persisted to `GameUserSettings.ini` on `SaveSettings()`). Wired in `Config/DefaultEngine.ini` via `[/Script/Engine.Engine] GameUserSettingsClassName=/Script/Quake.QuakeGameUserSettings` — without that line, `UQuakeGameUserSettings::Get()` returns null and the settings menu falls back to the live pawn's `LookSensitivity`. Both setters clamp; `SetToDefaults` resets to 0.5 / 1.0. `AQuakeCharacter::BeginPlay` pulls the saved sensitivity into `LookSensitivity` so death-respawn / level-load applies the persisted value.
 

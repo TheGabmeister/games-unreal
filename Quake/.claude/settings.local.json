@@ -33,7 +33,9 @@
       "Bash(git -C \"c:/dev/games-unreal/Quake\" diff --stat HEAD -- DESIGN.md)",
       "Bash(git -C \"c:/dev/games-unreal/Quake\" show HEAD:DESIGN.md)",
       "Bash(git -C \"c:/dev/games-unreal/Quake\" show HEAD:./DESIGN.md)",
-      "Bash(git -C \"c:/dev/games-unreal/Quake\" diff --stat)"
+      "Bash(git -C \"c:/dev/games-unreal/Quake\" diff --stat)",
+      "Bash(git -C \"c:/dev/games-unreal/Quake\" diff --stat CLAUDE.md Source/Quake/QuakeBalanceRows.h)",
+      "Bash(git -C \"c:/dev/games-unreal/Quake\" show HEAD:./CLAUDE.md)"
     ],
     "additionalDirectories": [
       "\\tmp"

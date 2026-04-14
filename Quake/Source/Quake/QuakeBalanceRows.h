@@ -4,6 +4,27 @@
 #include "Engine/DataTable.h"
 #include "QuakeBalanceRows.generated.h"
 
+// -----------------------------------------------------------------------------
+// Conventions for these row tables:
+//
+// Row name = StatsRowName on the leaf C++ constructor. Current keys:
+//   Enemies: Grunt, Knight, Ogre
+//   Weapons: Axe, Shotgun, Nailgun, RocketLauncher
+//
+// A missing row falls back to the C++ constructor defaults — the Quake.*
+// automation tests deliberately exercise the fallback path so they stay
+// world-free.
+//
+// Adding a new enemy / weapon: set StatsRowName = TEXT("MyName") in the
+// leaf constructor, define C++ defaults, add the matching row. The DataTable
+// reference itself is configured in Project Settings > Game > Quake.
+//
+// Projectile damage is intentionally NOT in the weapon table —
+// AQuakeProjectile_Nail::Damage and AQuakeProjectile_Rocket::BaseDamage
+// live on the projectile actor. The weapon table's Damage column is
+// informational for those rows.
+// -----------------------------------------------------------------------------
+
 /**
  * DataTable row for per-enemy-type balance stats. One row per enemy
  * (Grunt, Knight, Ogre, etc.), keyed by FName. Maps 1:1 to the SPEC
