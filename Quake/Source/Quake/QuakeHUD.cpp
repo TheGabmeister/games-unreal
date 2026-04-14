@@ -1,6 +1,7 @@
 #include "QuakeHUD.h"
 
 #include "SQuakeHUDOverlay.h"
+#include "SQuakeMenuWidgets.h"
 
 #include "Engine/Canvas.h"
 #include "Engine/Engine.h"
@@ -39,23 +40,44 @@ void AQuakeHUD::BeginPlay()
 		LocalPlayer,
 		OverlayWidget.ToSharedRef(),
 		/*ZOrder=*/10);
+
+	// Phase 13: death + win overlays sit on top of the main HUD so they
+	// can paint over the speedometer / stats strip when active.
+	DeathScreenWidget = SNew(SQuakeDeathScreen).OwningPlayerController(PC);
+	GEngine->GameViewport->AddViewportWidgetForPlayer(
+		LocalPlayer, DeathScreenWidget.ToSharedRef(), /*ZOrder=*/20);
+
+	WinScreenWidget = SNew(SQuakeWinScreen).OwningPlayerController(PC);
+	GEngine->GameViewport->AddViewportWidgetForPlayer(
+		LocalPlayer, WinScreenWidget.ToSharedRef(), /*ZOrder=*/30);
 }
 
 void AQuakeHUD::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	if (OverlayWidget.IsValid() && GEngine && GEngine->GameViewport)
+	if (GEngine && GEngine->GameViewport)
 	{
 		if (APlayerController* PC = GetOwningPlayerController())
 		{
 			if (ULocalPlayer* LocalPlayer = PC->GetLocalPlayer())
 			{
-				GEngine->GameViewport->RemoveViewportWidgetForPlayer(
-					LocalPlayer,
-					OverlayWidget.ToSharedRef());
+				if (OverlayWidget.IsValid())
+				{
+					GEngine->GameViewport->RemoveViewportWidgetForPlayer(LocalPlayer, OverlayWidget.ToSharedRef());
+				}
+				if (DeathScreenWidget.IsValid())
+				{
+					GEngine->GameViewport->RemoveViewportWidgetForPlayer(LocalPlayer, DeathScreenWidget.ToSharedRef());
+				}
+				if (WinScreenWidget.IsValid())
+				{
+					GEngine->GameViewport->RemoveViewportWidgetForPlayer(LocalPlayer, WinScreenWidget.ToSharedRef());
+				}
 			}
 		}
-		OverlayWidget.Reset();
 	}
+	OverlayWidget.Reset();
+	DeathScreenWidget.Reset();
+	WinScreenWidget.Reset();
 	Super::EndPlay(EndPlayReason);
 }
 
@@ -124,5 +146,13 @@ void AQuakeHUD::ShowLevelEndStats(float Duration)
 	if (OverlayWidget.IsValid())
 	{
 		OverlayWidget->ShowLevelEndStats(FMath::Max(0.1f, Duration));
+	}
+}
+
+void AQuakeHUD::ShowWinScreen()
+{
+	if (WinScreenWidget.IsValid())
+	{
+		WinScreenWidget->SetVisible(true);
 	}
 }

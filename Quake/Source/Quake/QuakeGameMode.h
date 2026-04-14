@@ -84,6 +84,32 @@ public:
 		const TMap<EQuakeDifficulty, FQuakeDifficultyMultipliers>& Table,
 		EQuakeDifficulty Difficulty);
 
+	// --- Phase 13: failure + win flow ---
+
+	/**
+	 * If true, AQuakeTrigger_Exit shows the win screen instead of opening
+	 * NextMapName. Set per-instance on `BP_QuakeGameMode_E1Mfinal` (or
+	 * equivalent) in the final level of an episode. DESIGN 6.3.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Win")
+	bool bIsFinalLevel = false;
+
+	/** UMap to OpenLevel from the win screen / "Return to menu". */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Win")
+	FName MainMenuMapName = NAME_None;
+
+	/**
+	 * DESIGN 6.4 restart sequence. Called by the PlayerController on
+	 * fire-to-restart from the death screen. Restores GameInstance from
+	 * the level-entry snapshot, clears per-life PlayerState, destroys the
+	 * dead pawn, and respawns at PlayerStart.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Failure")
+	void RequestRestartFromDeath(class AQuakePlayerController* PC);
+
+	/** Pure helper: should an exit transition trigger the win screen flow? */
+	static bool ShouldRouteToWinScreen(bool bIsFinal, FName NextMapName);
+
 	// --- Phase 11: save/load orchestration ---
 
 	/**

@@ -7,6 +7,7 @@
 #include "QuakeGameMode.h"
 #include "QuakePlayerState.h"
 #include "QuakeProjectSettings.h"
+#include "QuakeSoundManager.h"
 
 #include "AIController.h"
 #include "Components/CapsuleComponent.h"
@@ -18,7 +19,6 @@
 #include "GameFramework/Controller.h"
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
-#include "Sound/SoundBase.h"
 #include "TimerManager.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogQuakeEnemy, Log, All);
@@ -178,10 +178,13 @@ void AQuakeEnemyBase::MoveToTarget(const FVector& TargetLocation)
 
 void AQuakeEnemyBase::PlayPainReaction()
 {
-	// Phase 3 stub — real pain reaction (flash red, scale bounce, play
-	// PainSound) will be wired up in the polish pass. Logged at Verbose so
-	// it's silent by default but inspectable.
-	UE_LOG(LogQuakeEnemy, Verbose, TEXT("%s: PlayPainReaction stub"), *GetName());
+	UE_LOG(LogQuakeEnemy, Verbose, TEXT("%s: PlayPainReaction"), *GetName());
+
+	// Phase 14: route through the sound manager. The legacy PainSound asset
+	// slot is gone; rows in DT_SoundEvents drive playback. Per-enemy pain
+	// variations come from per-row Pitch/Volume overrides, not per-pawn
+	// SoundBase fields.
+	UQuakeSoundManager::PlaySoundEvent(this, EQuakeSoundEvent::EnemyPain, GetActorLocation());
 }
 
 void AQuakeEnemyBase::PlayDeathReaction()
@@ -233,12 +236,9 @@ void AQuakeEnemyBase::Die(AController* Killer, bool bGibbed)
 		}
 	}
 
-	// SPEC section 3.5: DeathSound fires once for both collapse and gib
-	// deaths. Placed before the reaction branch so it is unconditional.
-	if (DeathSound)
-	{
-		UGameplayStatics::PlaySoundAtLocation(this, DeathSound, GetActorLocation());
-	}
+	// SPEC section 3.5: death sound fires once for both collapse and gib
+	// deaths. Phase 14: routed through the sound manager (DT_SoundEvents row).
+	UQuakeSoundManager::PlaySoundEvent(this, EQuakeSoundEvent::EnemyDeath, GetActorLocation());
 
 	// SPEC 3.4: gibbed enemies do not drop loot.
 	if (!bGibbed)
@@ -397,12 +397,15 @@ float AQuakeEnemyBase::TakeDamage(
 		bPlayerHasDamagedMe = true;
 	}
 
-	// SPEC section 3.5: PainSound on every non-fatal hit, independent of the
-	// pain-chance flinch roll. DeathSound is played from Die() to avoid a
-	// pain+death overlap on the fatal hit.
-	if (Health > 0.f && PainSound)
+	// SPEC 3.5 / Phase 14: pain sound on every non-fatal hit, independent of
+	// the pain-chance flinch roll. EnemyDeath fires from Die() so the fatal
+	// hit doesn't double-play pain + death. The pain reaction itself
+	// (PlayPainReaction) ALSO emits EnemyPain when the flinch roll succeeds —
+	// duplicate audio is acceptable for v1; later phases can dedupe on the
+	// per-enemy cooldown side.
+	if (Health > 0.f)
 	{
-		UGameplayStatics::PlaySoundAtLocation(this, PainSound, GetActorLocation());
+		UQuakeSoundManager::PlaySoundEvent(this, EQuakeSoundEvent::EnemyPain, GetActorLocation());
 	}
 
 	// SPEC section 3.3: "damage as a perception trigger" — notify the

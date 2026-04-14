@@ -3,6 +3,7 @@
 #include "QuakeBalanceRows.h"
 #include "QuakeCharacter.h"
 #include "QuakeProjectile.h"
+#include "QuakeSoundManager.h"
 
 #include "Engine/World.h"
 #include "GameFramework/Pawn.h"
@@ -108,4 +109,6 @@ void AQuakeWeapon_RocketLauncher::Fire(AActor* InInstigator)
 		InInstigator,
 		/*MaxRange*/ 0.f,
 		FName(TEXT("QuakeWeaponFire")));
+
+	UQuakeSoundManager::PlaySoundEvent(this, EQuakeSoundEvent::WeaponRocketFire, EyeLoc);
 }

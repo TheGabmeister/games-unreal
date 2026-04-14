@@ -2,6 +2,7 @@
 
 #include "QuakeCharacter.h"
 #include "QuakeCollisionChannels.h"
+#include "QuakeSoundManager.h"
 
 #include "Components/PointLightComponent.h"
 #include "Components/SphereComponent.h"
@@ -81,7 +82,8 @@ void AQuakePickupBase::OnPickupBeginOverlap(
 
 	UE_LOG(LogQuakePickup, Verbose, TEXT("%s consumed by %s"), *GetName(), *Character->GetName());
 
-	// Destroy immediately — no pickup sound yet (Phase 14). Rotation /
-	// bob visuals fall away with the actor.
+	UQuakeSoundManager::PlaySoundEvent(this, GetPickupSoundEvent(), GetActorLocation());
+
+	// Destroy immediately. Rotation / bob visuals fall away with the actor.
 	Destroy();
 }

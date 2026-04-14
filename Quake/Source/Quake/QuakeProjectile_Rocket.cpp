@@ -1,6 +1,7 @@
 #include "QuakeProjectile_Rocket.h"
 
 #include "QuakeDamageType_Explosive.h"
+#include "QuakeSoundManager.h"
 
 #include "Components/SphereComponent.h"
 #include "Engine/World.h"
@@ -101,8 +102,7 @@ void AQuakeProjectile_Rocket::HandleImpact(const FHitResult& Hit, AActor* /*Othe
 		/*DamageCauser*/ this,
 		InstigatorController);
 
-	// One-shot: the rocket is gone. Later phases add an explosion VFX /
-	// sound via a spawned cosmetic actor before Destroy; for Phase 5 the
-	// rocket is a bare primitive so just end the actor here.
+	UQuakeSoundManager::PlaySoundEvent(this, EQuakeSoundEvent::RocketExplode, ExplosionOrigin);
+
 	Destroy();
 }

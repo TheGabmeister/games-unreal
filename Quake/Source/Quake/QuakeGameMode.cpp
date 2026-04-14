@@ -82,6 +82,45 @@ FQuakeDifficultyMultipliers AQuakeGameMode::LookupMultipliers(
 	return FQuakeDifficultyMultipliers{};
 }
 
+bool AQuakeGameMode::ShouldRouteToWinScreen(bool bIsFinal, FName NextMapName)
+{
+	// Final-level exit always routes to win screen, regardless of NextMapName.
+	// Non-final + missing NextMap is an authoring bug, not a win — fall through
+	// to normal handling so the existing "no NextMap" warning fires.
+	return bIsFinal;
+}
+
+void AQuakeGameMode::RequestRestartFromDeath(AQuakePlayerController* PC)
+{
+	UWorld* World = GetWorld();
+	if (!World || !PC)
+	{
+		return;
+	}
+
+	// DESIGN 6.4 step 2: clear per-life state (powerups + keys). Kills,
+	// Secrets, Time, Deaths persist — they're score, not life-bound.
+	if (AQuakePlayerState* PS = PC->GetPlayerState<AQuakePlayerState>())
+	{
+		PS->ClearPerLifeState();
+	}
+
+	// DESIGN 6.4 step 3: restore inventory snapshot.
+	if (UQuakeGameInstance* GI = World->GetGameInstance<UQuakeGameInstance>())
+	{
+		GI->RestoreFromLevelEntrySnapshot();
+	}
+
+	// DESIGN 6.4 step 4: destroy dead pawn, spawn fresh at PlayerStart. The
+	// engine's RestartPlayer path takes care of the spawn + possess.
+	if (APawn* OldPawn = PC->GetPawn())
+	{
+		PC->UnPossess();
+		OldPawn->Destroy();
+	}
+	RestartPlayer(PC);
+}
+
 void AQuakeGameMode::BeginPlay()
 {
 	Super::BeginPlay();
@@ -130,6 +169,11 @@ void AQuakeGameMode::BeginPlay()
 		{
 			GI->SaveCurrentState(UQuakeGameInstance::BuildAutoSlotName());
 		}
+
+		// DESIGN 6.4 step 3: capture the level-entry snapshot AFTER any save
+		// restore so death-restart returns to "what the player walked in
+		// with this attempt", not the prior level's exit inventory.
+		GI->SnapshotForLevelEntry();
 	}
 }
 

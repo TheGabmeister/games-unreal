@@ -475,15 +475,15 @@ v1 is the first playable milestone: 1 hub + 3 levels, 4 weapons, 3 enemies. Deli
 - GameMode flag "is final level of episode" → win screen instead of next-level transition.
 
 **Tests:**
-- [ ] Functional: new-game flow sets `GameInstance->Difficulty` correctly.
-- [ ] Functional: kill player → `PlayerState.Deaths += 1`, powerups cleared, inventory matches snapshot.
-- [ ] Functional: final-level exit → win screen widget in viewport.
-- [ ] Functional: tick while paused → `TimeElapsed` does not advance.
+- [x] Functional: new-game flow sets `GameInstance->Difficulty` correctly.
+- [x] Functional: kill player → `PlayerState.Deaths += 1`, powerups cleared, inventory matches snapshot.
+- [x] Functional: final-level exit → win screen widget in viewport.
+- [x] Functional: tick while paused → `TimeElapsed` does not advance.
 
 **Manual:**
-- [ ] Main Menu → New Game → Easy → Hub. Portal → E1M1 (placeholder).
-- [ ] Die in lava → death screen → fire → respawn at `PlayerStart`, +1 Deaths.
-- [ ] Manually trigger win → stats screen + return to menu.
+- [x] Main Menu → New Game → Easy → Hub. Portal → E1M1 (placeholder).
+- [x] Die in lava → death screen → fire → respawn at `PlayerStart`, +1 Deaths.
+- [x] Manually trigger win → stats screen + return to menu.
 
 **Exit.** Launch-to-win works with placeholder content.
 
@@ -505,10 +505,12 @@ v1 is the first playable milestone: 1 hub + 3 levels, 4 weapons, 3 enemies. Deli
 - **Migration:** the pre-Phase-14 `AQuakeEnemyBase::PainSound`/`DeathSound` direct `PlaySoundAtLocation` calls migrate to `ESoundEvent::EnemyPain`/`EnemyDeath` rows.
 
 **Tests:**
-- [ ] Functional: fire each weapon → expected `ESoundEvent` logged.
-- [ ] Functional: door open → `door_open` logged.
-- [ ] Functional: pickup → `pickup_item` logged.
-- [ ] Functional: set sensitivity 2.0, save, reload, restored.
+- [x] Static: `Quake.Phase14.Sound.ResolveRowName` — UENUM-derived row name lookup.
+- [x] Static: `Quake.Phase14.Settings.RoundTrip` — `UQuakeGameUserSettings` clamp + defaults.
+- [ ] Functional (deferred to manual): fire each weapon → expected `ESoundEvent` logged.
+- [ ] Functional (deferred to manual): door open → `DoorOpen` logged.
+- [ ] Functional (deferred to manual): pickup → `PickupItem` logged.
+- [ ] Functional (deferred to manual): set sensitivity 2.0, save, reload, restored.
 
 **Manual:**
 - [ ] Log level Verbose for `LogQuakeSound`. Run a level → every action logs one `PlaySound`.

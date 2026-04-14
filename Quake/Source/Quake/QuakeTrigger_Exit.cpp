@@ -63,6 +63,32 @@ void AQuakeTrigger_Exit::Activate(AActor* InInstigator)
 		}
 	}
 
+	// DESIGN 6.3: final-level exits route to the win screen instead of
+	// OpenLevel. The HUD widget polls bWinScreenActive on AQuakeHUD.
+	const AQuakeGameMode* GM = World->GetAuthGameMode<AQuakeGameMode>();
+	const bool bWin = GM && AQuakeGameMode::ShouldRouteToWinScreen(GM->bIsFinalLevel, NextMapName);
+	if (bWin)
+	{
+		if (APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0))
+		{
+			if (AQuakeHUD* HUD = Cast<AQuakeHUD>(PC->GetHUD()))
+			{
+				HUD->ShowWinScreen();
+			}
+		}
+		// Schedule return-to-menu on the same display window. Empty
+		// MainMenuMapName falls through to a log + no transition (manual
+		// return-to-menu via the win-screen widget will exist once the
+		// menu map asset is authored).
+		if (GM && !GM->MainMenuMapName.IsNone())
+		{
+			World->GetTimerManager().SetTimer(
+				TransitionTimer, this, &AQuakeTrigger_Exit::OnStatsScreenTimeout,
+				StatsDisplaySeconds, /*bLoop*/ false);
+		}
+		return;
+	}
+
 	if (NextMapName.IsNone())
 	{
 		UE_LOG(LogQuakeExit, Warning,
@@ -77,6 +103,13 @@ void AQuakeTrigger_Exit::Activate(AActor* InInstigator)
 
 void AQuakeTrigger_Exit::OnStatsScreenTimeout()
 {
+	const AQuakeGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AQuakeGameMode>() : nullptr;
+	if (GM && GM->bIsFinalLevel && !GM->MainMenuMapName.IsNone())
+	{
+		UE_LOG(LogQuakeExit, Log, TEXT("%s: win → %s"), *GetName(), *GM->MainMenuMapName.ToString());
+		UGameplayStatics::OpenLevel(this, GM->MainMenuMapName);
+		return;
+	}
 	UE_LOG(LogQuakeExit, Log, TEXT("%s: exiting to %s"), *GetName(), *NextMapName.ToString());
 	UGameplayStatics::OpenLevel(this, NextMapName);
 }

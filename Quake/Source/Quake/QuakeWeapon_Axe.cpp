@@ -4,6 +4,7 @@
 #include "QuakeCharacter.h"
 #include "QuakeCollisionChannels.h"
 #include "QuakeDamageType_Melee.h"
+#include "QuakeSoundManager.h"
 
 #include "DrawDebugHelpers.h"
 #include "Engine/World.h"
@@ -75,6 +76,8 @@ void AQuakeWeapon_Axe::Fire(AActor* InInstigator)
 		InInstigator,
 		/*MaxRange*/ 0.f,
 		FName(TEXT("QuakeWeaponFire")));
+
+	UQuakeSoundManager::PlaySoundEvent(this, EQuakeSoundEvent::WeaponAxeSwing, TraceStart);
 
 #if !UE_BUILD_SHIPPING
 	// Dev visualization: red miss, green hit. 1-second lifetime so single

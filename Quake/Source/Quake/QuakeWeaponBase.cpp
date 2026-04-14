@@ -4,6 +4,7 @@
 #include "QuakeCharacter.h"
 #include "QuakeGameInstance.h"
 #include "QuakeProjectSettings.h"
+#include "QuakeSoundManager.h"
 
 #include "Components/StaticMeshComponent.h"
 #include "Engine/DataTable.h"
@@ -152,5 +153,7 @@ void AQuakeWeaponBase::PlayEmptyClick(AActor* InInstigator)
 			InInstigator,
 			/*MaxRange*/ 0.f,
 			FName(TEXT("QuakeWeaponClick")));
+
+		UQuakeSoundManager::PlaySoundEvent(this, EQuakeSoundEvent::WeaponEmptyClick, Origin);
 	}
 }

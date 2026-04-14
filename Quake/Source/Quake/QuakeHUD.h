@@ -6,6 +6,8 @@
 #include "QuakeHUD.generated.h"
 
 class SQuakeHUDOverlay;
+class SQuakeDeathScreen;
+class SQuakeWinScreen;
 
 /**
  * AQuakeHUD owns the player-facing HUD. It draws two pieces:
@@ -46,6 +48,9 @@ public:
 	 */
 	void ShowLevelEndStats(float Duration);
 
+	/** Phase 13: toggle the win-screen overlay on (DESIGN 6.3). */
+	void ShowWinScreen();
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
@@ -53,6 +58,8 @@ protected:
 
 private:
 	TSharedPtr<SQuakeHUDOverlay> OverlayWidget;
+	TSharedPtr<SQuakeDeathScreen> DeathScreenWidget;
+	TSharedPtr<SQuakeWinScreen> WinScreenWidget;
 
 	// Transient HUD message state. MessageExpireWorldTime <= 0 means none.
 	FText Message;

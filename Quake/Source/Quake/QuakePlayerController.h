@@ -62,7 +62,16 @@ protected:
 	virtual void BeginPlay() override;
 	virtual void SetupInputComponent() override;
 
+	/**
+	 * DESIGN 6.4 fire-to-restart hook. Called by the death-screen Slate
+	 * widget — or the bound FireAction when bAwaitingRestart is set on the
+	 * pawn — to kick off the restart sequence on the GameMode.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Failure")
+	void RequestRestartFromDeath();
+
 private:
 	void OnQuickSavePressed(const struct FInputActionValue& Value);
 	void OnQuickLoadPressed(const struct FInputActionValue& Value);
+	void OnFirePressedForRestart(const struct FInputActionValue& Value);
 };

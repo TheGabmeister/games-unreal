@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "QuakeSoundEvent.h"
 #include "QuakePickupBase.generated.h"
 
 class USphereComponent;
@@ -63,6 +64,13 @@ public:
 	 * abstract CDO stays constructible.
 	 */
 	virtual void ApplyPickupEffectTo(AQuakeCharacter* Character) PURE_VIRTUAL(AQuakePickupBase::ApplyPickupEffectTo, );
+
+	/**
+	 * Phase 14: which sound event the pickup plays on consumption. Default
+	 * is generic PickupItem; AQuakePickup_Weapon / AQuakePickup_Powerup
+	 * override to PickupWeapon / PickupPowerup.
+	 */
+	virtual EQuakeSoundEvent GetPickupSoundEvent() const { return EQuakeSoundEvent::PickupItem; }
 
 protected:
 	virtual void BeginPlay() override;

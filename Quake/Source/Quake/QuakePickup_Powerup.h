@@ -29,4 +29,5 @@ public:
 	float Duration = 30.f;
 
 	virtual void ApplyPickupEffectTo(AQuakeCharacter* Character) override;
+	virtual EQuakeSoundEvent GetPickupSoundEvent() const override { return EQuakeSoundEvent::PickupPowerup; }
 };

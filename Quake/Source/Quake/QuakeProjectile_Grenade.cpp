@@ -1,6 +1,7 @@
 #include "QuakeProjectile_Grenade.h"
 
 #include "QuakeDamageType_Explosive.h"
+#include "QuakeSoundManager.h"
 
 #include "Components/SphereComponent.h"
 #include "Engine/World.h"
@@ -129,14 +130,16 @@ void AQuakeProjectile_Grenade::Explode()
 		/*DamageCauser*/ this,
 		InstigatorController);
 
+	UQuakeSoundManager::PlaySoundEvent(this, EQuakeSoundEvent::RocketExplode, ExplosionOrigin);
+
 	Destroy();
 }
 
-void AQuakeProjectile_Grenade::OnGrenadeBounce(const FHitResult& /*ImpactResult*/, const FVector& /*ImpactVelocity*/)
+void AQuakeProjectile_Grenade::OnGrenadeBounce(const FHitResult& ImpactResult, const FVector& /*ImpactVelocity*/)
 {
-	// Phase 7 stub — real bounce sound will be wired via the audio system
-	// (Phase 14). Log at Verbose so PIE debugging can confirm bounces fire.
 	UE_LOG(LogTemp, Verbose, TEXT("%s: bounce"), *GetName());
+
+	UQuakeSoundManager::PlaySoundEvent(this, EQuakeSoundEvent::GrenadeBounce, ImpactResult.ImpactPoint);
 
 	// After the grace period, re-enable firer collision so walking into
 	// the grenade post-bounce detonates it.

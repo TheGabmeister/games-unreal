@@ -4,9 +4,11 @@
 #include "Engine/GameInstance.h"
 #include "QuakeAmmoType.h"
 #include "QuakeDifficulty.h"
+#include "QuakeInventorySnapshot.h"
 #include "QuakeGameInstance.generated.h"
 
 class AQuakeWeaponBase;
+class UDataTable;
 class UQuakeSaveGame;
 
 /**
@@ -145,6 +147,23 @@ public:
 	static FString BuildAutoSlotName();
 	static FString BuildQuickSlotName();
 
+	// --- Phase 13: level-entry inventory snapshot (DESIGN 6.4 step 3) ---
+
+	/**
+	 * Capture current inventory into LevelEntrySnapshot. Called by
+	 * AQuakeGameMode::BeginPlay after any save-load restore so the snapshot
+	 * reflects "what the player walked in with this level."
+	 */
+	void SnapshotForLevelEntry();
+
+	/**
+	 * Restore inventory from LevelEntrySnapshot. Called by the death-restart
+	 * flow before the new pawn is spawned. No-op on an invalid snapshot.
+	 */
+	void RestoreFromLevelEntrySnapshot();
+
+	const FQuakeInventorySnapshot& GetLevelEntrySnapshot() const { return LevelEntrySnapshot; }
+
 	// --- Phase 12: difficulty ---
 
 	/**
@@ -159,6 +178,20 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Difficulty")
 	void SetDifficulty(EQuakeDifficulty NewDifficulty) { CurrentDifficulty = NewDifficulty; }
 
+	// --- Phase 14: audio (DESIGN 8.1) ---
+
+	/**
+	 * DataTable of FQuakeSoundEvent rows. Lives here (not on the subsystem)
+	 * because UGameInstanceSubsystem cannot be Blueprint-subclassed and we
+	 * need a BP slot for asset assignment. UQuakeSoundManager pulls this
+	 * via GetGameInstance() on first PlaySound and caches the resolved table.
+	 *
+	 * Soft pointer so the cooked package doesn't pull the table (and every
+	 * referenced sound asset) into the GameInstance's CDO.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Audio")
+	TSoftObjectPtr<UDataTable> SoundEventTable;
+
 	// --- Init hook ---
 
 	virtual void Init() override;
@@ -171,6 +204,10 @@ private:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Difficulty",
 		meta = (AllowPrivateAccess = "true"))
 	EQuakeDifficulty CurrentDifficulty = EQuakeDifficulty::Normal;
+
+	/** DESIGN 6.4 step 3: captured at level entry, restored on death. */
+	UPROPERTY()
+	FQuakeInventorySnapshot LevelEntrySnapshot;
 
 	/**
 	 * Populated by LoadFromSlot before OpenLevel; consumed by the new

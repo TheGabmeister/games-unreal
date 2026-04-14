@@ -214,3 +214,29 @@ UQuakeSaveGame* UQuakeGameInstance::ConsumePendingLoad()
 	PendingLoad = nullptr;
 	return Out;
 }
+
+void UQuakeGameInstance::SnapshotForLevelEntry()
+{
+	LevelEntrySnapshot.Armor              = Armor;
+	LevelEntrySnapshot.ArmorAbsorption    = ArmorAbsorption;
+	LevelEntrySnapshot.OwnedWeaponClasses = OwnedWeaponClasses;
+	LevelEntrySnapshot.AmmoCounts         = AmmoCounts;
+	LevelEntrySnapshot.bValid             = true;
+}
+
+void UQuakeGameInstance::RestoreFromLevelEntrySnapshot()
+{
+	if (!LevelEntrySnapshot.bValid)
+	{
+		return;
+	}
+	Armor              = LevelEntrySnapshot.Armor;
+	ArmorAbsorption    = LevelEntrySnapshot.ArmorAbsorption;
+	OwnedWeaponClasses = LevelEntrySnapshot.OwnedWeaponClasses;
+	AmmoCounts         = LevelEntrySnapshot.AmmoCounts;
+	for (EQuakeAmmoType Type : { EQuakeAmmoType::Shells, EQuakeAmmoType::Nails,
+								  EQuakeAmmoType::Rockets, EQuakeAmmoType::Cells })
+	{
+		AmmoCounts.FindOrAdd(Type);
+	}
+}

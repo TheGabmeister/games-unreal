@@ -3,10 +3,12 @@
 #include "QuakeCharacterMovementComponent.h"
 #include "QuakeDamageType.h"
 #include "QuakeGameInstance.h"
+#include "QuakeGameUserSettings.h"
 #include "QuakePlayerController.h"
 #include "QuakePlayerState.h"
 #include "QuakePowerup.h"
 #include "QuakeSaveArchive.h"
+#include "QuakeSoundManager.h"
 #include "QuakeWeaponBase.h"
 
 #include "TimerManager.h"
@@ -56,6 +58,15 @@ void AQuakeCharacter::BeginPlay()
 	Super::BeginPlay();
 
 	Health = MaxHealth;
+
+	// Phase 14: pull persisted mouse sensitivity from UQuakeGameUserSettings
+	// so the saved value applies to every spawned pawn (new game, level
+	// load, death respawn).
+	if (const UQuakeGameUserSettings* Settings = UQuakeGameUserSettings::Get())
+	{
+		LookSensitivity = Settings->GetMouseSensitivity();
+	}
+
 	SpawnOwnedWeapons();
 }
 
@@ -203,6 +214,8 @@ void AQuakeCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComp
 
 void AQuakeCharacter::Move(const FInputActionValue& Value)
 {
+	if (bAwaitingRestart) return;
+
 	const FVector2D Input = Value.Get<FVector2D>();
 
 	const FRotator YawRotation(0.f, Controller->GetControlRotation().Yaw, 0.f);
@@ -215,6 +228,8 @@ void AQuakeCharacter::Move(const FInputActionValue& Value)
 
 void AQuakeCharacter::Look(const FInputActionValue& Value)
 {
+	if (bAwaitingRestart) return;
+
 	const FVector2D Input = Value.Get<FVector2D>();
 
 	AddControllerYawInput(Input.X * LookSensitivity);
@@ -223,6 +238,10 @@ void AQuakeCharacter::Look(const FInputActionValue& Value)
 
 void AQuakeCharacter::OnFirePressed(const FInputActionValue& /*Value*/)
 {
+	// While dead, Fire is consumed by the death-screen restart prompt
+	// (handled by AQuakePlayerController). The weapon path is gated.
+	if (bAwaitingRestart) return;
+
 	// Bound to ETriggerEvent::Triggered so a "Hold" trigger on the IA can
 	// auto-repeat. Cooldown enforcement lives in AQuakeWeaponBase::TryFire,
 	// which gates the per-tick spam to the weapon's RoF.
@@ -548,6 +567,8 @@ float AQuakeCharacter::TakeDamage(
 	{
 		TriggerDamageFlash(FMath::Clamp(ScaledDamage / 50.f, 0.f, 1.f));
 
+		UQuakeSoundManager::PlaySoundEvent(this, EQuakeSoundEvent::PlayerPain, GetActorLocation());
+
 		bIsInPain = true;
 		if (UWorld* World = GetWorld())
 		{
@@ -559,24 +580,63 @@ float AQuakeCharacter::TakeDamage(
 		}
 	}
 
-	if (Health <= 0.f)
+	if (Health <= 0.f && !bAwaitingRestart)
 	{
 		Health = 0.f;
-
-		// SPEC 6.4 / 5.9: increment the Deaths counter once per death. The
-		// full restart flow (snapshot restore, respawn at PlayerStart) lands
-		// with the failure-loop work; this is the stats half of that
-		// wiring, which Phase 9 requires independently for the HUD.
-		if (AController* C = GetController())
-		{
-			if (AQuakePlayerState* PS = C->GetPlayerState<AQuakePlayerState>())
-			{
-				PS->AddDeath();
-			}
-		}
+		EnterDeathState();
 	}
 
 	return ScaledDamage;
+}
+
+void AQuakeCharacter::EnterDeathState()
+{
+	bAwaitingRestart = true;
+
+	UQuakeSoundManager::PlaySoundEvent(this, EQuakeSoundEvent::PlayerDeath, GetActorLocation());
+
+	// DESIGN 6.4 step 1: increment the Deaths counter once per death.
+	if (AController* C = GetController())
+	{
+		if (AQuakePlayerState* PS = C->GetPlayerState<AQuakePlayerState>())
+		{
+			PS->AddDeath();
+		}
+	}
+
+	// Stop the body. Movement input is ignored once bAwaitingRestart is set
+	// (Move/Look/Fire all early-return) but the CMC velocity has to be
+	// drained explicitly or the corpse keeps sliding.
+	if (UCharacterMovementComponent* CMC = GetCharacterMovement())
+	{
+		CMC->StopMovementImmediately();
+		CMC->DisableMovement();
+	}
+
+	if (UWorld* World = GetWorld())
+	{
+		RestartReadyWorldTime = World->GetTimeSeconds() + GetDeathTiltDuration();
+	}
+}
+
+void AQuakeCharacter::Jump()
+{
+	const bool bWasFalling = GetCharacterMovement() && GetCharacterMovement()->IsFalling();
+	Super::Jump();
+
+	// Only emit the sound if Super actually accepted the jump (not already
+	// airborne, not in death state). bPressedJump is the engine's accepted
+	// flag; on a refused jump it stays false.
+	if (bPressedJump && !bWasFalling)
+	{
+		UQuakeSoundManager::PlaySoundEvent(this, EQuakeSoundEvent::PlayerJump, GetActorLocation());
+	}
+}
+
+void AQuakeCharacter::Landed(const FHitResult& Hit)
+{
+	Super::Landed(Hit);
+	UQuakeSoundManager::PlaySoundEvent(this, EQuakeSoundEvent::PlayerLand, GetActorLocation());
 }
 
 void AQuakeCharacter::TriggerDamageFlash(float /*Intensity*/)

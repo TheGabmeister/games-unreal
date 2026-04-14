@@ -2,6 +2,7 @@
 #include "QuakeCharacter.h"
 #include "QuakeEnemyBase.h"
 #include "QuakeGameMode.h"
+#include "QuakeSoundManager.h"
 
 #include "CollisionQueryParams.h"
 #include "Engine/EngineTypes.h"
@@ -165,6 +166,30 @@ void AQuakeEnemyAIController::TransitionTo(EQuakeEnemyState NewState)
 	}
 	UE_LOG(LogQuakeEnemyAI, Verbose, TEXT("%s: %d -> %d"),
 		*GetName(), static_cast<int32>(CurrentState), static_cast<int32>(NewState));
+
+	// Phase 14 audio hook: emit one sound at the moment of state entry. The
+	// call sites map directly to DESIGN 8.2 enemy events (alert / attack /
+	// idle). Pain/Death are emitted from the pawn (PlayPainReaction /
+	// PlayDeathReaction) so leaf overrides can still customize.
+	if (const APawn* EnemyPawnForSound = GetPawn())
+	{
+		const FVector Loc = EnemyPawnForSound->GetActorLocation();
+		switch (NewState)
+		{
+		case EQuakeEnemyState::Alert:
+			UQuakeSoundManager::PlaySoundEvent(this, EQuakeSoundEvent::EnemyAlert, Loc);
+			break;
+		case EQuakeEnemyState::Attack:
+			UQuakeSoundManager::PlaySoundEvent(this, EQuakeSoundEvent::EnemyAttack, Loc);
+			break;
+		case EQuakeEnemyState::Idle:
+			UQuakeSoundManager::PlaySoundEvent(this, EQuakeSoundEvent::EnemyIdle, Loc);
+			break;
+		default:
+			break;
+		}
+	}
+
 	CurrentState = NewState;
 	TimeInState = 0.f;
 }

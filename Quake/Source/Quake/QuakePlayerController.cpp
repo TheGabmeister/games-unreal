@@ -2,8 +2,11 @@
 
 #include "QuakeCharacter.h"
 #include "QuakeGameInstance.h"
+#include "QuakeGameMode.h"
 #include "QuakeHUD.h"
 #include "QuakeSaveArchive.h"
+
+#include "Engine/World.h"
 
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
@@ -16,6 +19,15 @@ DEFINE_LOG_CATEGORY_STATIC(LogQuakeSaveInput, Log, All);
 void AQuakePlayerController::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// Reset input mode + cursor every time a Quake level loads. The
+	// AQuakeMenuHUD path sets FInputModeUIOnly + cursor-on, and that state
+	// lives on the LocalPlayer / viewport (which survives OpenLevel), not on
+	// the PlayerController (which doesn't). Without this reset, transitioning
+	// from MainMenu → Hub leaves the player in UIOnly with the cursor up and
+	// no movement/look input.
+	bShowMouseCursor = false;
+	SetInputMode(FInputModeGameOnly());
 
 	if (UEnhancedInputLocalPlayerSubsystem* Subsystem =
 		ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer()))
@@ -46,6 +58,39 @@ void AQuakePlayerController::SetupInputComponent()
 			EnhancedInput->BindAction(QuickLoadAction, ETriggerEvent::Started, this,
 				&AQuakePlayerController::OnQuickLoadPressed);
 		}
+		// DESIGN 6.4: Fire from the death screen restarts. The pawn's own
+		// Fire handler is already gated on bAwaitingRestart, so adding a
+		// controller-level hook on Started doesn't double-fire weapons.
+		if (FireAction)
+		{
+			EnhancedInput->BindAction(FireAction, ETriggerEvent::Started, this,
+				&AQuakePlayerController::OnFirePressedForRestart);
+		}
+	}
+}
+
+void AQuakePlayerController::OnFirePressedForRestart(const FInputActionValue& /*Value*/)
+{
+	const AQuakeCharacter* Char = Cast<AQuakeCharacter>(GetPawn());
+	if (Char && Char->IsAwaitingRestart())
+	{
+		// Wait out the death-tilt animation before accepting input.
+		const UWorld* World = GetWorld();
+		const float Now = World ? World->GetTimeSeconds() : 0.f;
+		if (Now >= Char->GetRestartReadyWorldTime())
+		{
+			RequestRestartFromDeath();
+		}
+	}
+}
+
+void AQuakePlayerController::RequestRestartFromDeath()
+{
+	UWorld* World = GetWorld();
+	if (!World) return;
+	if (AQuakeGameMode* GM = World->GetAuthGameMode<AQuakeGameMode>())
+	{
+		GM->RequestRestartFromDeath(this);
 	}
 }
 

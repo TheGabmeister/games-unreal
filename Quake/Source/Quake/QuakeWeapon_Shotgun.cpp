@@ -4,6 +4,7 @@
 #include "QuakeCharacter.h"
 #include "QuakeCollisionChannels.h"
 #include "QuakeDamageType_Bullet.h"
+#include "QuakeSoundManager.h"
 
 #include "DrawDebugHelpers.h"
 #include "Engine/World.h"
@@ -119,4 +120,6 @@ void AQuakeWeapon_Shotgun::Fire(AActor* InInstigator)
 		InInstigator,
 		/*MaxRange*/ 0.f,
 		FName(TEXT("QuakeWeaponFire")));
+
+	UQuakeSoundManager::PlaySoundEvent(this, EQuakeSoundEvent::WeaponShotgunFire, EyeLoc);
 }

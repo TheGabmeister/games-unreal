@@ -1,5 +1,7 @@
 #include "QuakeTrigger_Teleport.h"
 
+#include "QuakeSoundManager.h"
+
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/Controller.h"
@@ -41,6 +43,8 @@ void AQuakeTrigger_Teleport::Activate(AActor* InInstigator)
 	{
 		Ctrl->SetControlRotation(NewRot);
 	}
+
+	UQuakeSoundManager::PlaySoundEvent(this, EQuakeSoundEvent::Teleport, NewLoc);
 
 	Super::Activate(InInstigator);
 }

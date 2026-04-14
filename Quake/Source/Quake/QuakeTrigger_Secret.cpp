@@ -3,6 +3,7 @@
 #include "QuakeHUD.h"
 #include "QuakePlayerState.h"
 #include "QuakeSaveArchive.h"
+#include "QuakeSoundManager.h"
 
 #include "Engine/Engine.h"
 #include "Engine/World.h"
@@ -21,6 +22,8 @@ void AQuakeTrigger_Secret::Activate(AActor* InInstigator)
 
 	UE_LOG(LogQuakeSecret, Log, TEXT("%s: secret found (instigator %s)"),
 		*GetName(), *GetNameSafe(InInstigator));
+
+	UQuakeSoundManager::PlaySoundEvent(this, EQuakeSoundEvent::SecretFound, GetActorLocation());
 
 	if (APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0))
 	{

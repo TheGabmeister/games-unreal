@@ -9,7 +9,6 @@
 #include "QuakeEnemyBase.generated.h"
 
 class UStaticMeshComponent;
-class USoundBase;
 
 /**
  * One entry in an enemy's drop table. SPEC section 3.2.
@@ -85,14 +84,6 @@ public:
 	/** Weapon box (Grunt rifle, Ogre chainsaw, etc.). Attached to BodyMesh. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Enemy|Mesh")
 	TObjectPtr<UStaticMeshComponent> WeaponMesh;
-
-	// --- Sound slots, filled in the BP subclass ---
-
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enemy|Sound")
-	TObjectPtr<USoundBase> PainSound;
-
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enemy|Sound")
-	TObjectPtr<USoundBase> DeathSound;
 
 	// --- Perception tuning, read by the AIController on possess ---
 

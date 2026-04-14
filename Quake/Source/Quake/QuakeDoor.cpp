@@ -4,6 +4,7 @@
 #include "QuakeDamageType_Telefrag.h"
 #include "QuakeHUD.h"
 #include "QuakeSaveArchive.h"
+#include "QuakeSoundManager.h"
 
 #include "Components/BoxComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -82,6 +83,8 @@ void AQuakeDoor::Activate(AActor* InInstigator)
 		{
 			World->GetTimerManager().ClearTimer(CloseTimerHandle);
 		}
+
+		UQuakeSoundManager::PlaySoundEvent(this, EQuakeSoundEvent::DoorOpen, GetActorLocation());
 	}
 }
 
@@ -162,6 +165,7 @@ void AQuakeDoor::TryStartClosing()
 	}
 
 	State = EQuakeDoorState::Closing;
+	UQuakeSoundManager::PlaySoundEvent(this, EQuakeSoundEvent::DoorClose, GetActorLocation());
 }
 
 bool AQuakeDoor::IsBlockingZoneOccupied() const

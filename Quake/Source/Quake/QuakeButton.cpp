@@ -3,6 +3,7 @@
 #include "QuakeActivatable.h"
 #include "QuakeCollisionChannels.h"
 #include "QuakeSaveArchive.h"
+#include "QuakeSoundManager.h"
 
 #include "Components/BoxComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -90,6 +91,8 @@ void AQuakeButton::Fire(AActor* InInstigator)
 		return;
 	}
 	bArmed = false;
+
+	UQuakeSoundManager::PlaySoundEvent(this, EQuakeSoundEvent::ButtonPress, GetActorLocation());
 
 	for (AActor* Target : Targets)
 	{

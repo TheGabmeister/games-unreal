@@ -195,6 +195,14 @@ public:
 		class AController* EventInstigator,
 		AActor* DamageCauser) override;
 
+	// --- Phase 14: audio hooks ---
+
+	/** ACharacter override — emits the PlayerJump sound after Super::Jump. */
+	virtual void Jump() override;
+
+	/** ACharacter override — emits the PlayerLand sound after Super::Landed. */
+	virtual void Landed(const FHitResult& Hit) override;
+
 	// --- Phase 11: save/load ---
 
 	/**
@@ -204,6 +212,19 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "State")
 	bool IsInPain() const { return bIsInPain; }
+
+	/**
+	 * DESIGN 6.4 death state. Set when Health reaches 0; held until the
+	 * restart sequence destroys this pawn. While true, input bindings are
+	 * suppressed (Move / Look / Fire route through Character handlers that
+	 * early-return when dead). The HUD's death screen polls IsDead() to
+	 * show the "Press Fire to Restart" overlay.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "State")
+	bool IsAwaitingRestart() const { return bAwaitingRestart; }
+
+	/** World time at which the death-tilt animation finishes (1.5s after death). */
+	float GetRestartReadyWorldTime() const { return RestartReadyWorldTime; }
 
 	/** IQuakeSaveable: persists live Health via SaveGame-marked UPROPERTY. */
 	virtual void SaveState(FActorSaveRecord& OutRecord) override;
@@ -234,6 +255,18 @@ protected:
 
 	/** How long the pain flag stays up after a non-suppressed hit. */
 	static constexpr float GetPainStateDuration() { return 0.5f; }
+
+	/** Set true the frame health hits 0; cleared when the dying pawn is destroyed. */
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "State")
+	bool bAwaitingRestart = false;
+
+	/** World time the restart prompt becomes interactive (DESIGN 6.4: 1.5s tilt). */
+	float RestartReadyWorldTime = 0.f;
+
+	static constexpr float GetDeathTiltDuration() { return 1.5f; }
+
+	/** Internal: invoked from TakeDamage's lethal branch. Idempotent. */
+	void EnterDeathState();
 
 	/**
 	 * Trigger the screen-flash damage feedback. Phase 2 stub: writes the
