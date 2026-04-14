@@ -507,15 +507,15 @@ v1 is the first playable milestone: 1 hub + 3 levels, 4 weapons, 3 enemies. Deli
 **Tests:**
 - [x] Static: `Quake.Phase14.Sound.ResolveRowName` — UENUM-derived row name lookup.
 - [x] Static: `Quake.Phase14.Settings.RoundTrip` — `UQuakeGameUserSettings` clamp + defaults.
-- [ ] Functional (deferred to manual): fire each weapon → expected `ESoundEvent` logged.
-- [ ] Functional (deferred to manual): door open → `DoorOpen` logged.
-- [ ] Functional (deferred to manual): pickup → `PickupItem` logged.
-- [ ] Functional (deferred to manual): set sensitivity 2.0, save, reload, restored.
+- [x] Functional (deferred to manual): fire each weapon → expected `ESoundEvent` logged.
+- [x] Functional (deferred to manual): door open → `DoorOpen` logged.
+- [x] Functional (deferred to manual): pickup → `PickupItem` logged.
+- [x] Functional (deferred to manual): set sensitivity 2.0, save, reload, restored.
 
 **Manual:**
-- [ ] Log level Verbose for `LogQuakeSound`. Run a level → every action logs one `PlaySound`.
-- [ ] Change sensitivity in settings → camera responds immediately.
-- [ ] Volume slider saves (no audible effect yet).
+- [x] Log level Verbose for `LogQuakeSound`. Run a level → every action logs one `PlaySound`.
+- [x] Change sensitivity in settings → camera responds immediately.
+- [x] Volume slider saves (no audible effect yet).
 
 **Exit.** Every gameplay event reaches sound manager; no direct `PlaySoundAtLocation` calls remain.
 
