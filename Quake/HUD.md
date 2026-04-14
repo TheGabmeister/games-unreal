@@ -53,8 +53,8 @@ The overlay reads from three owners every paint — no explicit refresh needed.
 | Field          | Source                                                          |
 |----------------|-----------------------------------------------------------------|
 | HP             | `AQuakeCharacter::GetHealth()`                                   |
-| Armor value    | `UQuakeGameInstance::Armor`                                      |
-| Armor tier     | `UQuakeGameInstance::ArmorAbsorption` → color via threshold      |
+| Armor value    | `UQuakeInventoryComponent::GetArmor()` (on the player pawn)      |
+| Armor tier     | `UQuakeInventoryComponent::GetArmorAbsorption()` → color via threshold |
 | Weapon name    | `AQuakeCharacter::CurrentWeapon->DisplayName`                    |
 | Ammo           | `Character->GetAmmo(Weapon->AmmoType)`                           |
 | Keys           | `AQuakePlayerState::HasKey(EQuakeKeyColor)`                      |
