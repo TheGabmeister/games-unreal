@@ -28,11 +28,12 @@ This file gives repo-specific guidance to coding agents working in this project.
 
 ## Existing Gameplay Architecture
 
-- `AQuakeCharacter` owns first-person movement and player-side gameplay state.
+- `AQuakeCharacter` owns first-person movement, live health, and active weapon instances. Ammo and owned-weapon persistence route through `UQuakeGameInstance`; key checks and powerup-derived combat queries route through `AQuakePlayerState`.
 - `AQuakePlayerController` owns Enhanced Input setup.
 - `AQuakeGameMode` sets core game classes and rules.
-- `AQuakePlayerState` owns current-level stats plus per-level state such as keys and active powerups.
+- `AQuakePlayerState` owns current-level stats plus per-level state such as keys and active powerups. `GivePowerup` refreshes additively with a 60 s cap, and `ClearPerLifeState()` clears only per-life state while preserving attempt stats.
 - `UQuakeGameInstance` owns persistent inventory, profile-level data, and cross-level state.
+- `AQuakeCharacter::GiveWeaponPickup` is the first-pickup path for weapons: first pickup grants the weapon and auto-switches, repeat pickups grant only ammo.
 - New shared input actions should be added in `AQuakePlayerController` rather than created as editor-only input assets.
 - New input wiring is a 4-part change: add the `UPROPERTY(EditDefaultsOnly)` slot on `AQuakePlayerController`, create the `IA_*` asset, map it in `IMC_Default`, and assign it in `BP_QuakePlayerController`. Do not synthesize IA/IMC objects at runtime as a shortcut.
 
@@ -43,7 +44,9 @@ This file gives repo-specific guidance to coding agents working in this project.
 - For Phase 2 damage-validation work, keep the "target dummy returns fire" check as a test-only/sandbox behavior that calls `ApplyPointDamage` on the player. Do not pull Phase 3 enemy AI or combat behavior forward just to verify pain flash or HUD health loss.
 - Do not assume `AQuakePlayerState` is recreated on death. UE keeps `PlayerController` and `PlayerState` across pawn respawn, so Quake's death-restart flow must explicitly call `AQuakePlayerState::ClearPerLifeState()` to clear keys and active powerups while preserving cumulative level-attempt stats.
 - Keep live health on `AQuakeCharacter` or a shared health component tied to the pawn. Inventory lives on `UQuakeGameInstance`, but save/load and level-entry restore must serialize and restore health explicitly.
+- Key state is shared across door, pickup, HUD, and player-state code via `EQuakeKeyColor` in `QuakeKeyColor.h`. Reuse the shared enum instead of re-declaring key colors on individual gameplay classes.
 - Pickups depend on collision setup in C++, not just BP placement: `AQuakePickupBase` overlaps the custom `Pickup` channel, and the player capsule must explicitly overlap `QuakeCollision::ECC_Pickup` or shell/health/powerup pickups will never fire `OnPickupBeginOverlap`.
+- Pickup rules are split by subclass, not ad hoc branches in placed Blueprints: `AQuakePickup_Key` rejects duplicate keys so the actor stays in-world, `AQuakePickup_Powerup` is always consumed and leaves refresh-cap logic to `AQuakePlayerState`, `AQuakePickup_Armor` owns the tier/value lookup and replacement rule, and `AQuakePickup_Weapon` grants ammo first then delegates first-time weapon ownership to `AQuakeCharacter::GiveWeaponPickup()`.
 - Counted enemies are authored through `AQuakeEnemySpawnPoint`, not by dragging `BP_Enemy_*` actors directly into a map. Direct enemy placements are decoration/scripted display unless the user explicitly changes that rule.
 - Stats and level-clear logic must follow spawn points, difficulty gating, and spawn-point satisfaction state. Do not build systems that only count already-spawned `AQuakeEnemyBase` actors.
 - Save/load identity for level-placed actors uses stable actor identity via `GetFName()`/`FActorSaveRecord::ActorName`, not ad hoc Actor Tags or string registries.
@@ -96,6 +99,7 @@ $env:DOTNET_ROLL_FORWARD = "LatestMajor"
 - Keep project settings changes in `Config/Default*.ini` under version control.
 - Avoid editing generated directories such as `Binaries/`, `DerivedDataCache/`, `Intermediate/`, or `Saved/` unless the task explicitly requires it.
 - Keep the custom collision channels (`Pickup`, `Projectile`, `Corpse`, and the `Weapon` trace channel) in sync with `SPEC.md` section 1.6 when touching collision.
+- Reference custom channels through `QuakeCollision::ECC_*` in `QuakeCollisionChannels.h`; do not scatter raw `ECC_GameTraceChannelN` literals through gameplay code.
 - Enemy navigation settings must stay aligned with player traversal assumptions. In particular, NavMesh step height should match the movement spec rather than drifting lower than the player's step-up capability.
 
 ## Implementation Preferences
@@ -104,6 +108,8 @@ $env:DOTNET_ROLL_FORWARD = "LatestMajor"
 - Keep HUD work in C++/Slate unless the user explicitly changes that direction.
 - Keep the HUD primarily pull-based for always-visible state and reserve event-driven logic for transient messages or feedback effects.
 - When adding new gameplay systems, match the naming/style of the existing `AQuake*` and `UQuake*` classes.
+- Use `AQuakeCharacter::NumWeaponSlots` instead of hardcoding `8` for slot-count logic.
+- For abstract `UCLASS` gameplay bases, use Unreal's `PURE_VIRTUAL(...)` macro rather than C++ `= 0` so the class default object remains constructible.
 - For non-trivial gameplay changes, update `SPEC.md` if the implementation changes the design contract.
 - If touching movement, AI, or save/load architecture, read the matching section in `CLAUDE.md` before editing; those are the highest-churn areas.
 
