@@ -5,8 +5,9 @@ This file gives repo-specific guidance to coding agents working in this project.
 ## Project Summary
 
 - Unreal Engine 5.7 single-player FPS inspired by Quake, implemented in C++.
-- The full gameplay design lives in `SPEC.md`. Read it before making non-trivial gameplay or architecture changes.
-- The current target is the v1 vertical slice in `SPEC.md` section 11, delivered in phased milestones. Stay within the active phase instead of pulling later systems forward.
+- The design docs are split by purpose: `DESIGN.md` is the durable gameplay/design source of truth, `ROADMAP.md` is the v1 phase plan and delivery checklist, `HUD.md` covers HUD layout/data flow, and `SPEC.md` is a thin redirect index for historical references.
+- Read `DESIGN.md` before making non-trivial gameplay or architecture changes, and read `ROADMAP.md` before making scope or phase decisions.
+- The current target is the v1 vertical slice in `ROADMAP.md`, delivered in phased milestones. Stay within the active phase instead of pulling later systems forward.
 - Module name: `Quake`.
 - Current code lives under `Source/Quake/`.
 
@@ -23,7 +24,10 @@ This file gives repo-specific guidance to coding agents working in this project.
 - `Source/Quake/` - gameplay module source.
 - `Config/` - version-controlled Unreal project settings.
 - `Content/` - editor-authored assets and maps.
-- `SPEC.md` - gameplay and systems spec.
+- `DESIGN.md` - durable gameplay/design reference and system rules.
+- `ROADMAP.md` - v1 phases, scope boundaries, and verification checklists.
+- `HUD.md` - HUD wireframe, data sources, and HUD-specific behavior.
+- `SPEC.md` - redirect index for legacy `SPEC x.y` references.
 - `CLAUDE.md` - additional architecture guidance and implementation notes.
 
 ## Existing Gameplay Architecture
@@ -39,8 +43,10 @@ This file gives repo-specific guidance to coding agents working in this project.
 
 ## Spec Alignment Notes
 
-- Treat `SPEC.md` as the design source of truth. When `SPEC.md`, `AGENTS.md`, and `CLAUDE.md` disagree, follow `SPEC.md` and then update the secondary docs to match.
-- Respect the phase plan in `SPEC.md` section 11. Do not quietly pull Phase N work into Phase N-1 just because you are nearby in the code.
+- Treat `DESIGN.md` as the gameplay/design source of truth. When `DESIGN.md`, `ROADMAP.md`, `AGENTS.md`, and `CLAUDE.md` disagree on gameplay or state ownership, follow `DESIGN.md` and then update the secondary docs to match.
+- Treat `ROADMAP.md` as the implementation-phase source of truth. Respect its phase plan and do not quietly pull Phase N work into Phase N-1 just because you are nearby in the code.
+- Treat `HUD.md` as the HUD layout/source-of-data reference. When HUD presentation, placement, or always-visible data rules are in question, follow `HUD.md`.
+- `SPEC.md` is now a compatibility index for historical section references and cross-links, not the primary place to read current rules.
 - For Phase 2 damage-validation work, keep the "target dummy returns fire" check as a test-only/sandbox behavior that calls `ApplyPointDamage` on the player. Do not pull Phase 3 enemy AI or combat behavior forward just to verify pain flash or HUD health loss.
 - Do not assume `AQuakePlayerState` is recreated on death. UE keeps `PlayerController` and `PlayerState` across pawn respawn, so Quake's death-restart flow must explicitly call `AQuakePlayerState::ClearPerLifeState()` to clear keys and active powerups while preserving cumulative level-attempt stats.
 - Keep live health on `AQuakeCharacter` or a shared health component tied to the pawn. Inventory lives on `UQuakeGameInstance`, but save/load and level-entry restore must serialize and restore health explicitly.
@@ -98,7 +104,7 @@ $env:DOTNET_ROLL_FORWARD = "LatestMajor"
 - Treat VS Code IntelliSense errors as secondary to a real Unreal build. Stale compile commands can produce false squiggles.
 - Keep project settings changes in `Config/Default*.ini` under version control.
 - Avoid editing generated directories such as `Binaries/`, `DerivedDataCache/`, `Intermediate/`, or `Saved/` unless the task explicitly requires it.
-- Keep the custom collision channels (`Pickup`, `Projectile`, `Corpse`, and the `Weapon` trace channel) in sync with `SPEC.md` section 1.6 when touching collision.
+- Keep the custom collision channels (`Pickup`, `Projectile`, `Corpse`, and the `Weapon` trace channel) in sync with `DESIGN.md` section 1.6 when touching collision.
 - Reference custom channels through `QuakeCollision::ECC_*` in `QuakeCollisionChannels.h`; do not scatter raw `ECC_GameTraceChannelN` literals through gameplay code.
 - Enemy navigation settings must stay aligned with player traversal assumptions. In particular, NavMesh step height should match the movement spec rather than drifting lower than the player's step-up capability.
 
@@ -106,15 +112,15 @@ $env:DOTNET_ROLL_FORWARD = "LatestMajor"
 
 - Favor data-driven tuning for weapons, enemies, pickups, and other balance values even when behavior stays in C++.
 - Keep HUD work in C++/Slate unless the user explicitly changes that direction.
-- Keep the HUD primarily pull-based for always-visible state and reserve event-driven logic for transient messages or feedback effects.
+- Keep the HUD primarily pull-based for always-visible state and reserve event-driven logic for transient messages or feedback effects. Use `HUD.md` when changing element placement, visibility rules, or which owner provides a HUD datum.
 - When adding new gameplay systems, match the naming/style of the existing `AQuake*` and `UQuake*` classes.
 - Use `AQuakeCharacter::NumWeaponSlots` instead of hardcoding `8` for slot-count logic.
 - For abstract `UCLASS` gameplay bases, use Unreal's `PURE_VIRTUAL(...)` macro rather than C++ `= 0` so the class default object remains constructible.
-- For non-trivial gameplay changes, update `SPEC.md` if the implementation changes the design contract.
+- For non-trivial gameplay changes, update the right design doc when the implementation changes the contract: `DESIGN.md` for gameplay/system rules, `ROADMAP.md` for phase scope or exit criteria, and `HUD.md` for HUD layout/data-flow changes.
 - If touching movement, AI, or save/load architecture, read the matching section in `CLAUDE.md` before editing; those are the highest-churn areas.
 
 ## Verification
 
 - After meaningful C++ changes, run a real `Build.bat` compile when feasible.
-- When a task maps to a specific v1 phase, run that phase's relevant automated checks and manual verification steps from `SPEC.md` section 11 before calling the work done.
+- When a task maps to a specific v1 phase, run that phase's relevant automated checks and manual verification steps from `ROADMAP.md` before calling the work done.
 - If you could not build or test, say so clearly in your final handoff.
