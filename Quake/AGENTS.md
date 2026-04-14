@@ -5,9 +5,10 @@ This file gives repo-specific guidance to coding agents working in this project.
 ## Project Summary
 
 - Unreal Engine 5.7 single-player FPS inspired by Quake, implemented in C++.
-- The design docs are split by purpose: `DESIGN.md` is the durable gameplay/design source of truth, `ROADMAP.md` is the v1 phase plan and delivery checklist, `HUD.md` covers HUD layout/data flow, and `SPEC.md` is a thin redirect index for historical references.
-- Read `DESIGN.md` before making non-trivial gameplay or architecture changes, and read `ROADMAP.md` before making scope or phase decisions.
-- The current target is the v1 vertical slice in `ROADMAP.md`, delivered in phased milestones. Stay within the active phase instead of pulling later systems forward.
+- `DESIGN.md` is the durable gameplay/design source of truth. `HUD.md` covers HUD layout/data flow, `CLAUDE.md` captures architecture/tooling notes, and `TODO.md` tracks v2+ backlog and remaining content/editor work.
+- Read `DESIGN.md` before making non-trivial gameplay changes. Read `CLAUDE.md` before touching movement, AI, save/load, menu/settings, or other high-churn architecture.
+- v1 gameplay code is feature-complete. Most remaining work is content/editor-side authoring plus selective polish. Do not quietly pull `TODO.md` backlog items into the current task unless the user asks for them.
+- Historical `SPEC`, `ROADMAP`, and `Phase N` references still appear in comments/tests. Treat them as legacy labels that usually map back to `DESIGN.md` sections and nearby code, not as root docs you should expect to find.
 - Module name: `Quake`.
 - Current code lives under `Source/Quake/`.
 
@@ -25,31 +26,33 @@ This file gives repo-specific guidance to coding agents working in this project.
 - `Config/` - version-controlled Unreal project settings.
 - `Content/` - editor-authored assets and maps.
 - `DESIGN.md` - durable gameplay/design reference and system rules.
-- `ROADMAP.md` - v1 phases, scope boundaries, and verification checklists.
 - `HUD.md` - HUD wireframe, data sources, and HUD-specific behavior.
-- `SPEC.md` - redirect index for legacy `SPEC x.y` references.
 - `CLAUDE.md` - additional architecture guidance and implementation notes.
+- `TODO.md` - v2+ backlog plus remaining editor/content work.
 
 ## Existing Gameplay Architecture
 
 - `AQuakeCharacter` owns first-person movement, live health, and active weapon instances. Ammo and owned-weapon persistence route through `UQuakeGameInstance`; key checks and powerup-derived combat queries route through `AQuakePlayerState`.
 - `AQuakePlayerController` owns Enhanced Input setup.
 - `AQuakeGameMode` sets core game classes and rules.
+- `AQuakeHUD` owns the pure-Slate HUD and transient message / level-end overlays. Keep HUD behavior in C++/Slate, not UMG.
 - `AQuakePlayerState` owns current-level stats plus per-level state such as keys and active powerups. `GivePowerup` refreshes additively with a 60 s cap, and `ClearPerLifeState()` clears only per-life state while preserving attempt stats.
 - `UQuakeGameInstance` owns persistent inventory, profile-level data, and cross-level state.
+- `UQuakeSoundManager` is the gameplay audio entry point and lives as a `UGameInstanceSubsystem`.
+- `UQuakeGameUserSettings` persists mouse sensitivity and master-volume settings via `GameUserSettings.ini`.
 - `AQuakeCharacter::GiveWeaponPickup` is the first-pickup path for weapons: first pickup grants the weapon and auto-switches, repeat pickups grant only ammo.
 - New shared input actions should be added in `AQuakePlayerController` rather than created as editor-only input assets.
 - New input wiring is a 4-part change: add the `UPROPERTY(EditDefaultsOnly)` slot on `AQuakePlayerController`, create the `IA_*` asset, map it in `IMC_Default`, and assign it in `BP_QuakePlayerController`. Do not synthesize IA/IMC objects at runtime as a shortcut.
 
-## Spec Alignment Notes
+## Doc Alignment Notes
 
-- Treat `DESIGN.md` as the gameplay/design source of truth. When `DESIGN.md`, `ROADMAP.md`, `AGENTS.md`, and `CLAUDE.md` disagree on gameplay or state ownership, follow `DESIGN.md` and then update the secondary docs to match.
-- Treat `ROADMAP.md` as the implementation-phase source of truth. Respect its phase plan and do not quietly pull Phase N work into Phase N-1 just because you are nearby in the code.
+- Treat `DESIGN.md` as the gameplay/design source of truth. When `DESIGN.md`, `AGENTS.md`, `HUD.md`, and `CLAUDE.md` disagree on gameplay or state ownership, follow `DESIGN.md` and then update the secondary docs to match.
 - Treat `HUD.md` as the HUD layout/source-of-data reference. When HUD presentation, placement, or always-visible data rules are in question, follow `HUD.md`.
-- `SPEC.md` is now a compatibility index for historical section references and cross-links, not the primary place to read current rules.
-- For Phase 2 damage-validation work, keep the "target dummy returns fire" check as a test-only/sandbox behavior that calls `ApplyPointDamage` on the player. Do not pull Phase 3 enemy AI or combat behavior forward just to verify pain flash or HUD health loss.
+- Treat `TODO.md` as backlog, not as automatic scope. Items there are opt-in future work.
+- Historical `SPEC` / `ROADMAP` references in code comments and tests should usually be resolved back to `DESIGN.md` section numbers or the local implementation/test they sit next to.
 - Do not assume `AQuakePlayerState` is recreated on death. UE keeps `PlayerController` and `PlayerState` across pawn respawn, so Quake's death-restart flow must explicitly call `AQuakePlayerState::ClearPerLifeState()` to clear keys and active powerups while preserving cumulative level-attempt stats.
 - Keep live health on `AQuakeCharacter` or a shared health component tied to the pawn. Inventory lives on `UQuakeGameInstance`, but save/load and level-entry restore must serialize and restore health explicitly.
+- `AQuakeCharacter` input handlers intentionally early-return when `bAwaitingRestart` so the death screen can consume Fire for restart flow. Preserve that gate when touching player input or death handling.
 - Key state is shared across door, pickup, HUD, and player-state code via `EQuakeKeyColor` in `QuakeKeyColor.h`. Reuse the shared enum instead of re-declaring key colors on individual gameplay classes.
 - Pickups depend on collision setup in C++, not just BP placement: `AQuakePickupBase` overlaps the custom `Pickup` channel, and the player capsule must explicitly overlap `QuakeCollision::ECC_Pickup` or shell/health/powerup pickups will never fire `OnPickupBeginOverlap`.
 - Pickup rules are split by subclass, not ad hoc branches in placed Blueprints: `AQuakePickup_Key` rejects duplicate keys so the actor stays in-world, `AQuakePickup_Powerup` is always consumed and leaves refresh-cap logic to `AQuakePlayerState`, `AQuakePickup_Armor` owns the tier/value lookup and replacement rule, and `AQuakePickup_Weapon` grants ammo first then delegates first-time weapon ownership to `AQuakeCharacter::GiveWeaponPickup()`.
@@ -58,6 +61,8 @@ This file gives repo-specific guidance to coding agents working in this project.
 - Save/load identity for level-placed actors uses stable actor identity via `GetFName()`/`FActorSaveRecord::ActorName`, not ad hoc Actor Tags or string registries.
 - `IQuakeActivatable` is a pure C++ interface method: implement `Activate(AActor* Instigator)`. Do not use `Activate_Implementation` unless the interface is explicitly changed to `BlueprintNativeEvent`.
 - `UQuakeSoundManager` is a `UGameInstanceSubsystem`. Keep sound-table ownership aligned with the GameInstance/subsystem lifecycle rather than hanging audio configuration off unrelated gameplay actors.
+- `UQuakeGameUserSettings` only works when `Config/DefaultEngine.ini` keeps `GameUserSettingsClassName=/Script/Quake.QuakeGameUserSettings`. Do not remove or bypass that wiring when touching menu/settings code.
+- `UQuakeProjectSettings` is the project-level home for balance/audio DataTable references. Prefer extending project settings over scattering new global tuning assets across unrelated classes.
 
 ## Damage Guidance
 
@@ -94,9 +99,10 @@ $env:DOTNET_ROLL_FORWARD = "LatestMajor"
 ## Tests
 
 - Automation tests live under `Source/Quake/Tests/` and use Unreal's automation framework.
-- Prefer unit tests for pure gameplay logic and functional tests for map-driven interactions.
+- Prefer unit tests for pure gameplay logic and pure static helpers over world-spinup tests when possible.
 - Run automation tests from the editor via Session Frontend -> Automation and filter on `Quake.*`.
 - Keep `Source/Quake/Quake.Build.cs` configured so tests under `Source/Quake/Tests/` can include module headers. Do not remove include-path support without replacing it with an equivalent solution.
+- When a subsystem already has focused automation coverage, run the closest matching `Quake.*` test(s) after changing it. For map/content/editor-only work, call out manual verification if automation is not practical yet.
 
 ## Unreal-Specific Guidance
 
@@ -116,11 +122,11 @@ $env:DOTNET_ROLL_FORWARD = "LatestMajor"
 - When adding new gameplay systems, match the naming/style of the existing `AQuake*` and `UQuake*` classes.
 - Use `AQuakeCharacter::NumWeaponSlots` instead of hardcoding `8` for slot-count logic.
 - For abstract `UCLASS` gameplay bases, use Unreal's `PURE_VIRTUAL(...)` macro rather than C++ `= 0` so the class default object remains constructible.
-- For non-trivial gameplay changes, update the right design doc when the implementation changes the contract: `DESIGN.md` for gameplay/system rules, `ROADMAP.md` for phase scope or exit criteria, and `HUD.md` for HUD layout/data-flow changes.
+- For non-trivial gameplay changes, update the right design doc when the implementation changes the contract: `DESIGN.md` for gameplay/system rules, `HUD.md` for HUD layout/data-flow changes, `CLAUDE.md` for architecture/tooling guidance, and `TODO.md` when you intentionally add or retire backlog work.
 - If touching movement, AI, or save/load architecture, read the matching section in `CLAUDE.md` before editing; those are the highest-churn areas.
 
 ## Verification
 
 - After meaningful C++ changes, run a real `Build.bat` compile when feasible.
-- When a task maps to a specific v1 phase, run that phase's relevant automated checks and manual verification steps from `ROADMAP.md` before calling the work done.
+- When a task touches an existing tested subsystem, run the closest relevant automation test(s) under `Source/Quake/Tests/` and note any manual map verification that still remains.
 - If you could not build or test, say so clearly in your final handoff.

@@ -238,15 +238,6 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Health", meta = (ClampMin = "1.0"))
 	float MaxHealth = 100.f;
 
-	/**
-	 * Live HP. Decremented exclusively by TakeDamage per SPEC section 1.5
-	 * "no code outside TakeDamage mutates health directly". Protected so
-	 * external readers go through GetHealth(). `meta = (SaveGame)` so the
-	 * Phase 11 save archive round-trips it.
-	 */
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Health", meta = (SaveGame))
-	float Health = 100.f;
-
 	/** Pain flag: set by TakeDamage, cleared by PainClearTimer. */
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "State")
 	bool bIsInPain = false;
@@ -279,6 +270,25 @@ protected:
 	void TriggerDamageFlash(float Intensity);
 
 private:
+	/**
+	 * Live HP. SPEC 1.5: "no code outside TakeDamage mutates health directly."
+	 * Private + single chokepoint SetHealth() enforces that at compile time.
+	 * The four legitimate writers all funnel through SetHealth: BeginPlay
+	 * (initial), GiveHealth (pickups), TakeDamage (damage + lethal clamp),
+	 * and the save archive via reflection (bypasses access, by design).
+	 * `meta = (SaveGame)` round-trips it through the Phase 11 save.
+	 */
+	UPROPERTY(VisibleInstanceOnly, Category = "Health", meta = (SaveGame, AllowPrivateAccess = "true"))
+	float Health = 100.f;
+
+	/**
+	 * The only permitted write path to Health. Clamps to [0, OverchargeCap].
+	 * Callers that want a tighter cap (e.g. GiveHealth without overcharge)
+	 * must clamp before calling. Lethal transition (Health dropping to 0)
+	 * is the caller's responsibility; this helper does NOT trigger death.
+	 */
+	void SetHealth(float NewValue);
+
 	void Move(const struct FInputActionValue& Value);
 	void Look(const struct FInputActionValue& Value);
 	void OnFirePressed(const struct FInputActionValue& Value);

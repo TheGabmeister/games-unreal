@@ -159,7 +159,7 @@ public:
 
 #if WITH_DEV_AUTOMATION_TESTS
 	/** Test-only HP setter for the SPEC 5.9 IsSatisfied / level-clear suites. */
-	void SetHealthForTest(float NewHealth) { Health = NewHealth; }
+	void SetHealthForTest(float NewHealth) { SetHealth(NewHealth); }
 #endif
 
 	/**
@@ -274,15 +274,23 @@ protected:
 	virtual void PostInitializeComponents() override;
 	virtual void BeginPlay() override;
 
-	/** Live HP. Mutated ONLY by TakeDamage / Die, per the SPEC rule. */
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Enemy|Health")
-	float Health = 30.f;
-
 	/** Timer callback 2 s after death: flip capsule to the Corpse channel. */
 	UFUNCTION()
 	void OnCorpseChannelFlip();
 
 private:
+	/**
+	 * Live HP. SPEC 1.5: "no code outside TakeDamage mutates health directly."
+	 * Private + SetHealth() chokepoint enforces it. TakeDamage and Die are
+	 * the only runtime writers; BeginPlay seeds from MaxHealth through the
+	 * same path.
+	 */
+	UPROPERTY(VisibleInstanceOnly, Category = "Enemy|Health", meta = (AllowPrivateAccess = "true"))
+	float Health = 30.f;
+
+	/** The only permitted write path to Health. Clamps to [0, +inf). */
+	void SetHealth(float NewValue);
+
 	/** Attempt to read stats from the EnemyStatsTable. No-op if the table
 	 *  is unconfigured or the row is missing — C++ defaults remain. */
 	void LoadStatsFromDataTable();

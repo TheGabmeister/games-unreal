@@ -90,16 +90,27 @@ void UQuakeCharacterMovementComponent::CalcVelocity(
 		return;
 	}
 
-	// Airborne: do NOT call Super. Stock UCharacterMovementComponent::CalcVelocity
-	// ends with `Velocity = Velocity.GetClampedToMaxSize(NewMaxInputSpeed)` where
-	// NewMaxInputSpeed is MaxWalkSpeed during falling — that magnitude clamp is
-	// exactly what breaks Quake strafe jumping. Instead we apply the
-	// dot-product-clamped air accel directly.
-	//
-	// Note: PhysFalling has already zeroed Velocity.Z before calling us and will
-	// restore it afterward (see UE CharacterMovementComponent.cpp PhysFalling,
-	// around the CalcVelocity call). So we only need to touch horizontal
-	// components here. ApplyQuakeAirAccel preserves Velocity.Z.
+	// Airborne: dispatch to the air seam instead of Super. Stock
+	// UCharacterMovementComponent::CalcVelocity ends with
+	// `Velocity = Velocity.GetClampedToMaxSize(NewMaxInputSpeed)` where
+	// NewMaxInputSpeed is MaxWalkSpeed during falling — that magnitude clamp
+	// is exactly what breaks Quake strafe jumping. This method is `final`
+	// specifically so the "don't call Super here" contract can't be
+	// accidentally violated by a subclass; extenders hook CalcAirVelocity.
+	CalcAirVelocity(DeltaTime);
+}
+
+void UQuakeCharacterMovementComponent::CalcAirVelocity(float DeltaTime)
+{
+	// Preconditions the airborne path depends on. PhysFalling zeroes Z before
+	// calling CalcVelocity and restores it via NewFallVelocity afterward; if
+	// a future engine version ever changes that contract, this check fires
+	// here at runtime instead of silently re-enabling a vertical clamp.
+	checkf(MovementMode == MOVE_Falling,
+		TEXT("CalcAirVelocity entered outside MOVE_Falling (mode=%d)"), static_cast<int32>(MovementMode.GetValue()));
+	checkf(FMath::IsNearlyZero(Velocity.Z, 1e-3),
+		TEXT("CalcAirVelocity expected Velocity.Z == 0 from PhysFalling, got %.6f"), Velocity.Z);
+
 	const FVector WishDir = Acceleration.GetSafeNormal();
 	if (WishDir.IsNearlyZero())
 	{

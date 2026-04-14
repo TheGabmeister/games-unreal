@@ -45,12 +45,43 @@ UDataTable* UQuakeSoundManager::ResolveTable()
 
 FName UQuakeSoundManager::ResolveRowName(EQuakeSoundEvent Event)
 {
-	const UEnum* EnumPtr = StaticEnum<EQuakeSoundEvent>();
-	if (!EnumPtr)
+	// Compile-time switch instead of UEnum::GetNameStringByValue reflection.
+	// Renaming an enumerator now forces a case rename here (unhandled enum
+	// warning is a compile error under our config), which in turn forces a
+	// DT_SoundEvents row rename. Previously the three had to be kept in
+	// sync by documentation only.
+	switch (Event)
 	{
-		return NAME_None;
+	case EQuakeSoundEvent::None:                 return FName(TEXT("None"));
+	case EQuakeSoundEvent::PlayerFootstep:       return FName(TEXT("PlayerFootstep"));
+	case EQuakeSoundEvent::PlayerJump:           return FName(TEXT("PlayerJump"));
+	case EQuakeSoundEvent::PlayerLand:           return FName(TEXT("PlayerLand"));
+	case EQuakeSoundEvent::PlayerPain:           return FName(TEXT("PlayerPain"));
+	case EQuakeSoundEvent::PlayerDeath:          return FName(TEXT("PlayerDeath"));
+	case EQuakeSoundEvent::PickupItem:           return FName(TEXT("PickupItem"));
+	case EQuakeSoundEvent::PickupWeapon:         return FName(TEXT("PickupWeapon"));
+	case EQuakeSoundEvent::PickupPowerup:        return FName(TEXT("PickupPowerup"));
+	case EQuakeSoundEvent::WeaponAxeSwing:       return FName(TEXT("WeaponAxeSwing"));
+	case EQuakeSoundEvent::WeaponShotgunFire:    return FName(TEXT("WeaponShotgunFire"));
+	case EQuakeSoundEvent::WeaponNailgunFire:    return FName(TEXT("WeaponNailgunFire"));
+	case EQuakeSoundEvent::WeaponRocketFire:     return FName(TEXT("WeaponRocketFire"));
+	case EQuakeSoundEvent::WeaponEmptyClick:     return FName(TEXT("WeaponEmptyClick"));
+	case EQuakeSoundEvent::WeaponThunderboltHum: return FName(TEXT("WeaponThunderboltHum"));
+	case EQuakeSoundEvent::GrenadeBounce:        return FName(TEXT("GrenadeBounce"));
+	case EQuakeSoundEvent::RocketExplode:        return FName(TEXT("RocketExplode"));
+	case EQuakeSoundEvent::EnemyAlert:           return FName(TEXT("EnemyAlert"));
+	case EQuakeSoundEvent::EnemyPain:            return FName(TEXT("EnemyPain"));
+	case EQuakeSoundEvent::EnemyDeath:           return FName(TEXT("EnemyDeath"));
+	case EQuakeSoundEvent::EnemyAttack:          return FName(TEXT("EnemyAttack"));
+	case EQuakeSoundEvent::EnemyIdle:            return FName(TEXT("EnemyIdle"));
+	case EQuakeSoundEvent::DoorOpen:             return FName(TEXT("DoorOpen"));
+	case EQuakeSoundEvent::DoorClose:            return FName(TEXT("DoorClose"));
+	case EQuakeSoundEvent::ButtonPress:          return FName(TEXT("ButtonPress"));
+	case EQuakeSoundEvent::Teleport:             return FName(TEXT("Teleport"));
+	case EQuakeSoundEvent::SecretFound:          return FName(TEXT("SecretFound"));
 	}
-	return FName(*EnumPtr->GetNameStringByValue(static_cast<int64>(Event)));
+	checkNoEntry();
+	return NAME_None;
 }
 
 const FQuakeSoundEvent* UQuakeSoundManager::FindRow(EQuakeSoundEvent Event)

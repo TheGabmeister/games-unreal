@@ -92,7 +92,7 @@ void AQuakeEnemyBase::BeginPlay()
 		}
 	}
 
-	Health = MaxHealth;
+	SetHealth(MaxHealth);
 
 	// Apply per-enemy walk speed to the stock CMC. Doing this in BeginPlay
 	// (rather than the constructor) lets subclasses change WalkSpeed without
@@ -165,6 +165,11 @@ void AQuakeEnemyBase::ApplyDifficultyScaling(const FQuakeDifficultyMultipliers& 
 	MaxHealth = ScaledMaxHealth;
 }
 
+void AQuakeEnemyBase::SetHealth(float NewValue)
+{
+	Health = FMath::Max(0.f, NewValue);
+}
+
 void AQuakeEnemyBase::MoveToTarget(const FVector& TargetLocation)
 {
 	// Issued through the AAIController so the path-following component and
@@ -201,7 +206,7 @@ void AQuakeEnemyBase::PlayDeathReaction()
 
 void AQuakeEnemyBase::Die(AController* Killer, bool bGibbed)
 {
-	Health = 0.f;
+	SetHealth(0.f);
 
 	// SPEC 5.9 player-credit rules. Level-clear is independent of credit
 	// (it reads spawn-point satisfaction), so we only touch PlayerState
@@ -387,7 +392,7 @@ float AQuakeEnemyBase::TakeDamage(
 		}
 	}
 
-	Health = FMath::Max(0.f, Health - ScaledDamage);
+	SetHealth(Health - ScaledDamage);
 
 	// SPEC 5.9 hazard-credit rule: remember if the player ever damaged this
 	// enemy. A later lava / slime kill credits the player iff this flag is

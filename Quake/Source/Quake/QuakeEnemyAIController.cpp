@@ -45,9 +45,17 @@ AQuakeEnemyAIController::AQuakeEnemyAIController()
 	HearingConfig = CreateDefaultSubobject<UAISenseConfig_Hearing>(TEXT("HearingConfig"));
 	HearingConfig->HearingRange = 1500.f;
 	// SPEC 3.3: walls do NOT block hearing — Quake-style hearing-through-walls.
-	// bUseLoSHearing was deprecated in UE 5.7; the default behavior (walls do
-	// NOT block hearing) is already what we want, so there's nothing to set.
-	// The deprecation warning would block the "zero warnings" exit criterion.
+	// bUseLoSHearing was deprecated in UE 5.2 and its default is `false`, which
+	// already matches the Quake behavior we want — so there's nothing to set.
+	// Guard: if a future engine upgrade ever flips the default to `true` (or
+	// the deprecated field is removed), this assert fires here instead of
+	// silently changing our AI to respect line-of-sight on hearing. When the
+	// field is eventually deleted, this block stops compiling and a
+	// maintainer has to confirm the new default still matches Quake.
+	PRAGMA_DISABLE_DEPRECATION_WARNINGS
+	checkf(!HearingConfig->bUseLoSHearing,
+		TEXT("UAISenseConfig_Hearing::bUseLoSHearing default flipped — SPEC 3.3 requires walls NOT block hearing."));
+	PRAGMA_ENABLE_DEPRECATION_WARNINGS
 	HearingConfig->DetectionByAffiliation.bDetectEnemies    = true;
 	HearingConfig->DetectionByAffiliation.bDetectNeutrals   = true;
 	HearingConfig->DetectionByAffiliation.bDetectFriendlies = true;

@@ -57,7 +57,7 @@ void AQuakeCharacter::BeginPlay()
 {
 	Super::BeginPlay();
 
-	Health = MaxHealth;
+	SetHealth(MaxHealth);
 
 	// Phase 14: pull persisted mouse sensitivity from UQuakeGameUserSettings
 	// so the saved value applies to every spawned pawn (new game, level
@@ -284,7 +284,12 @@ void AQuakeCharacter::GiveHealth(float Amount, bool bOvercharge)
 		return;
 	}
 	const float Cap = bOvercharge ? GetOverchargeCap() : MaxHealth;
-	Health = FMath::Min(Health + Amount, Cap);
+	SetHealth(FMath::Min(Health + Amount, Cap));
+}
+
+void AQuakeCharacter::SetHealth(float NewValue)
+{
+	Health = FMath::Clamp(NewValue, 0.f, GetOverchargeCap());
 }
 
 float AQuakeCharacter::GetOutgoingDamageScale() const
@@ -388,6 +393,10 @@ int32 AQuakeCharacter::PickAutoSwitchWeaponSlot(
 	// deliberately NOT in the list — they are "kept manual to avoid
 	// accidental switching" per SPEC 2.2. Slot indices here are SPEC 2.0
 	// weapon numbers minus one.
+	// If NumWeaponSlots shrinks below 7, the hard-coded `6` below walks off
+	// the end of the mask arrays — fail at compile time instead.
+	static_assert(AQuakeCharacter::NumWeaponSlots >= 7,
+		"PickAutoSwitchWeaponSlot priority table references slot index 6 (RL).");
 	static const int32 kPriorityOrder[] = { 6, 4, 2, 3, 1, 0 };
 
 	for (const int32 Slot : kPriorityOrder)
@@ -531,7 +540,7 @@ float AQuakeCharacter::TakeDamage(
 
 	ApplyArmorAbsorption(Health, NewArmor, Absorption, ScaledDamage, NewHealth, NewArmor);
 
-	Health = NewHealth;
+	SetHealth(NewHealth);
 	if (GameInstance)
 	{
 		GameInstance->Armor = NewArmor;
@@ -582,7 +591,7 @@ float AQuakeCharacter::TakeDamage(
 
 	if (Health <= 0.f && !bAwaitingRestart)
 	{
-		Health = 0.f;
+		SetHealth(0.f);
 		EnterDeathState();
 	}
 

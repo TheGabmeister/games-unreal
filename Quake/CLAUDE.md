@@ -62,7 +62,7 @@ Where data lives is determined by lifecycle. Wrong placement breaks respawn, lev
 
 - **`UQuakeGameInstance`** — inventory (weapons, ammo, armor), `LevelEntrySnapshot`, `CurrentDifficulty`, save plumbing. Survives `OpenLevel` and Character respawn.
 - **`AQuakePlayerState`** — per-attempt stats (Kills/Secrets/Deaths/Time), powerups, keys. Auto-cleared on `OpenLevel`; **NOT** cleared on pawn respawn (UE preserves PlayerState across death) — death-restart must call `ClearPerLifeState()`, which deliberately preserves the score counters.
-- **`AQuakeCharacter`** — live health, weapon instances, pain/death flags. Dies with the body. Facade methods forward to GameInstance/PlayerState. **`Move`/`Look`/`OnFirePressed` early-return when `bAwaitingRestart`** so the death screen can consume Fire for the restart prompt. Use `static constexpr NumWeaponSlots` everywhere — never hardcode `8`.
+- **`AQuakeCharacter`** — live health, weapon instances, pain/death flags. Dies with the body. Facade methods forward to GameInstance/PlayerState. **`Move`/`Look`/`OnFirePressed` early-return when `bAwaitingRestart`** so the death screen can consume Fire for the restart prompt. Use `static constexpr NumWeaponSlots` everywhere — never hardcode `8`; `static_assert` guards in [QuakePickup_Weapon.h](Source/Quake/QuakePickup_Weapon.h) and `PickAutoSwitchWeaponSlot` catch drift against that constant at compile time.
 - **`AQuakeGameMode`** — level denominators, spawn rules, win routing, restart orchestration. `GetDifficulty()` forwards to GameInstance — GameMode does not own the field.
 - **`AQuakeHUD`** — paints from all of the above; Slate widget caches weak pointers and reads them on paint. Three viewport overlays: main HUD (z=10), death (z=20), win (z=30).
 
@@ -74,7 +74,7 @@ All damage flows through UE's `TakeDamage`:
 
 1. Attackers call `UGameplayStatics::ApplyPointDamage`/`ApplyRadialDamage`/`ApplyDamage`.
 2. Targets override `AActor::TakeDamage` to decrement health, apply armor, knockback.
-3. **No code outside `TakeDamage` mutates health.** `Health -= X` anywhere else is a bug. `AQuakeCharacter::Health` is `protected` to enforce this at compile time.
+3. **No code outside `TakeDamage` mutates health.** `Health -= X` anywhere else is a bug. `AQuakeCharacter::Health` and `AQuakeEnemyBase::Health` are both `private` with a single `SetHealth` chokepoint — the compiler enforces the invariant, and every legitimate writer (BeginPlay seed, GiveHealth, TakeDamage, Die) routes through the chokepoint. Save-archive reflection bypasses access by design.
 
 Damage metadata (self-damage scale, armor bypass, pain suppression, knockback) lives on `UDamageType` subclasses (SPEC 1.5), not on the attacker or target. All Quake damage types inherit from abstract `UQuakeDamageType` which owns every Quake-specific UPROPERTY; leaves only override defaults in their constructor. Read fields in `TakeDamage` via the shared-base CDO cast — never branch on leaf class identity. Adding a damage source = ~10-line subclass overriding constructor defaults + calling the appropriate `Apply...Damage` helper. **Splash radius lives on the weapon, not the damage type.**
 
@@ -146,7 +146,7 @@ Body/brain split per UE convention:
 
 **Infighting (SPEC 3.3).** When `TakeDamage` runs with an `EventInstigator` whose pawn is another enemy, `OnDamaged` seeds a grudge (`GrudgeTarget`, `GrudgeExpireTime = Now + 10s`). `Tick` clears the grudge and reverts to the player when the timer expires or the grudge target dies. `OnTargetPerceptionUpdated` accepts stimuli from the player OR active grudge target. No infighting-specific damage code — emergent from `EventInstigator`-driven target switching alone.
 
-**`bUseLoSHearing` is deprecated in UE 5.7.** Default behavior is already walls-don't-block (matches Quake). Don't write to it — triggers a deprecation warning that violates the zero-warnings exit criterion.
+**`bUseLoSHearing` is deprecated in UE 5.2.** Default is `false`, which already means walls don't block hearing (matches Quake). Don't write to it — triggers a deprecation warning that violates the zero-warnings exit criterion. A `checkf(!HearingConfig->bUseLoSHearing, ...)` guard in the controller constructor fires at runtime if a future engine upgrade ever flips the default; when the field is eventually removed, that block stops compiling and the maintainer has to confirm the new default still matches Quake.
 
 **Weapon noise events.** SPEC 3.3: every weapon (Axe included — matches original Quake) calls `UAISense_Hearing::ReportNoiseEvent` at the swing/shot origin. Tag is `QuakeWeaponFire`; range 0 means the sense config's `HearingRange` is the cutoff. See `AQuakeWeapon_Axe::Fire`.
 
@@ -260,7 +260,7 @@ Difficulty stored on `UQuakeGameInstance` (survives `OpenLevel`); `AQuakeGameMod
 
 **`SoundEventTable` lives on `UQuakeGameInstance`, not on the subsystem,** because UE forbids Blueprint subclasses of `UGameInstanceSubsystem` and we need a BP slot for the asset reference. The manager calls `Cast<UQuakeGameInstance>(GetGameInstance())` on first use and caches the resolved table. Use `Cast<...>(GetGameInstance())` — the templated `GetGameInstance<T>()` overload is not available on subsystems in UE 5.7.
 
-**Row-name lookup is `UEnum::GetNameStringByValue`,** so DT_SoundEvents row keys must match the UENUM value names verbatim (`PlayerJump`, `DoorOpen`, `WeaponShotgunFire`, …). `UQuakeSoundManager::ResolveRowName` is the pure helper exposed for `Quake.Phase14.Sound.ResolveRowName`. Renaming an enum value silently re-keys every row that uses it — fix the table at the same commit.
+**Row-name lookup is a compile-time switch** over every `EQuakeSoundEvent` value — NOT `UEnum::GetNameStringByValue` reflection (the reflection approach silently re-keyed every row when an enum value was renamed). DT_SoundEvents row keys must still match the UENUM value names verbatim (`PlayerJump`, `DoorOpen`, `WeaponShotgunFire`, …), but the switch now fails to compile on an unhandled enum, so a rename forces a matching case update. `UQuakeSoundManager::ResolveRowName` is the pure helper exposed for `Quake.Phase14.Sound.ResolveRowName`.
 
 **Per-enemy sound variation lives on DT_SoundEvents rows (volume/pitch), not on the pawn.** Legacy `PainSound`/`DeathSound` UPROPERTY slots were removed from `AQuakeEnemyBase`. If a future enemy needs a unique sound asset, add a new `EQuakeSoundEvent::EnemyPain_Shambler` row rather than re-introducing per-pawn slots.
 
@@ -272,7 +272,7 @@ Difficulty stored on `UQuakeGameInstance` (survives `OpenLevel`); `AQuakeGameMod
 
 ## Risk Note: Strafe-Jumping CMC
 
-`UQuakeCharacterMovementComponent` is **the single biggest risk in the project**. It overrides `CalcVelocity` and routes `MOVE_Falling` through `ApplyQuakeAirAccel`, which implements original Quake's `PM_AirAccelerate`: clamp the **dot product** of velocity and wishdir to `MaxAirSpeedGain`, NOT the velocity magnitude. Stock `UCharacterMovementComponent::CalcVelocity` ends with `Velocity.GetClampedToMaxSize(MaxInputSpeed)` — that magnitude clamp is exactly what breaks Quake strafe jumping, so the falling branch must NOT call `Super::CalcVelocity`. `PhysFalling` zeroes `Velocity.Z` before calling `CalcVelocity` and restores it after (gravity applied via `NewFallVelocity`), so `ApplyQuakeAirAccel` only touches horizontal components.
+`UQuakeCharacterMovementComponent` is **the single biggest risk in the project**. It overrides `CalcVelocity` (marked `final`) and routes `MOVE_Falling` through the `CalcAirVelocity` seam, which calls `ApplyQuakeAirAccel` — original Quake's `PM_AirAccelerate`: clamp the **dot product** of velocity and wishdir to `MaxAirSpeedGain`, NOT the velocity magnitude. Stock `UCharacterMovementComponent::CalcVelocity` ends with `Velocity.GetClampedToMaxSize(MaxInputSpeed)` — that magnitude clamp is exactly what breaks Quake strafe jumping, so the falling branch must NOT call `Super::CalcVelocity`. `final` on `CalcVelocity` + the dedicated `CalcAirVelocity` seam is how the "don't call Super here" contract is enforced structurally; subclasses that need to tweak airborne behavior override `CalcAirVelocity` instead. `PhysFalling` zeroes `Velocity.Z` before calling `CalcVelocity` and restores it after (gravity applied via `NewFallVelocity`); `CalcAirVelocity` asserts both preconditions (`MovementMode == MOVE_Falling`, `Velocity.Z ≈ 0`) on entry so an engine-upgrade regression fires here instead of silently re-enabling a vertical clamp.
 
 `ApplyQuakeAirAccel` is pure-static so the formula is unit-tested without a world. Canonical regression: velocity `(300,0,0)` + wishdir `(0,1,0)` + `MaxAirSpeedGain=30` must yield Y gain of exactly 30 with X untouched. `Quake.Movement.AirAccel.HighSpeedStrafe` specifically guards against accidentally re-introducing the stock `MaxWalkSpeed` clamp.
 

@@ -2,9 +2,16 @@
 
 #include "CoreMinimal.h"
 #include "QuakeAmmoType.h"
+#include "QuakeCharacter.h"
 #include "QuakePickupBase.h"
 #include "QuakeWeaponBase.h"
 #include "QuakePickup_Weapon.generated.h"
+
+// The UPROPERTY below encodes the slot count in a stringly-typed meta
+// attribute (`ClampMax = "8"`). If NumWeaponSlots ever changes, UHT won't
+// notice — this assert fires instead.
+static_assert(AQuakeCharacter::NumWeaponSlots == 8,
+	"SlotNumberOneBased meta ClampMax must match NumWeaponSlots. Update both.");
 
 /**
  * Phase 10 weapon pickup per SPEC 2.2 "first pickup grants weapon + ammo

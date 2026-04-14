@@ -86,9 +86,32 @@ public:
 
 	// --- UCharacterMovementComponent overrides ---
 
-	virtual void CalcVelocity(float DeltaTime, float Friction, bool bFluid, float BrakingDeceleration) override;
+	/**
+	 * `final` because the grounded/airborne split below is load-bearing:
+	 * subclasses that override CalcVelocity would need to know the exact
+	 * "call Super in grounded, skip Super in airborne" contract, and the
+	 * stock CMC's post-call MaxWalkSpeed clamp silently breaks strafe
+	 * jumping if reintroduced. Subclasses that need to tweak airborne
+	 * behavior should override CalcAirVelocity instead — that seam has
+	 * the preconditions the airborne path depends on documented inline.
+	 */
+	virtual void CalcVelocity(float DeltaTime, float Friction, bool bFluid, float BrakingDeceleration) override final;
 	virtual bool DoJump(bool bReplayingMoves, float DeltaTime) override;
 	virtual void ProcessLanded(const FHitResult& Hit, float RemainingTime, int32 Iterations) override;
+
+protected:
+	/**
+	 * Airborne velocity update. Called from CalcVelocity when
+	 * MovementMode == MOVE_Falling. Preconditions asserted on entry:
+	 *   - MovementMode == MOVE_Falling
+	 *   - Velocity.Z has been zeroed by PhysFalling (and will be restored
+	 *     by NewFallVelocity after this returns)
+	 * If UE ever changes PhysFalling's zero-Z-before-CalcVelocity contract,
+	 * the Velocity.Z check here fires at runtime instead of silently
+	 * re-enabling a vertical clamp. Subclasses that override this must
+	 * preserve both preconditions.
+	 */
+	virtual void CalcAirVelocity(float DeltaTime);
 
 private:
 	/** World time (GetTimeSeconds) at the most recent landing. -1 means "no recent landing". */
