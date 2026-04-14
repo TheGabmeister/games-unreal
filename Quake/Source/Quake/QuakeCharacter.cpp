@@ -6,7 +6,10 @@
 #include "QuakePlayerController.h"
 #include "QuakePlayerState.h"
 #include "QuakePowerup.h"
+#include "QuakeSaveArchive.h"
 #include "QuakeWeaponBase.h"
+
+#include "TimerManager.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogQuakeCharacter, Log, All);
 
@@ -538,10 +541,22 @@ float AQuakeCharacter::TakeDamage(
 	}
 
 	// Pain feedback (visual flash). Suppressed when the damage type silences
-	// the pain reaction (Lava ticks, Telefrag).
+	// the pain reaction (Lava ticks, Telefrag). Also arms the pain flag that
+	// the Phase 11 F5 save gate reads — Lava ticks intentionally don't block
+	// saves, matching "bSuppressesPain = true".
 	if (!DT || !DT->bSuppressesPain)
 	{
 		TriggerDamageFlash(FMath::Clamp(ScaledDamage / 50.f, 0.f, 1.f));
+
+		bIsInPain = true;
+		if (UWorld* World = GetWorld())
+		{
+			World->GetTimerManager().SetTimer(
+				PainClearTimer,
+				FTimerDelegate::CreateWeakLambda(this, [this]() { bIsInPain = false; }),
+				GetPainStateDuration(),
+				false);
+		}
 	}
 
 	if (Health <= 0.f)
@@ -568,4 +583,17 @@ void AQuakeCharacter::TriggerDamageFlash(float /*Intensity*/)
 {
 	// Phase 2 stub — see header for the wiring plan when the post-process
 	// material asset arrives.
+}
+
+void AQuakeCharacter::SaveState(FActorSaveRecord& OutRecord)
+{
+	OutRecord.ActorName = GetFName();
+	QuakeSaveArchive::WriteSaveProperties(this, OutRecord.Payload);
+}
+
+void AQuakeCharacter::LoadState(const FActorSaveRecord& InRecord)
+{
+	// Overwrites BeginPlay's `Health = MaxHealth` default because GameMode
+	// orchestrates LoadState AFTER Character::BeginPlay (DESIGN 6.2 step 6).
+	QuakeSaveArchive::ReadSaveProperties(this, InRecord.Payload);
 }

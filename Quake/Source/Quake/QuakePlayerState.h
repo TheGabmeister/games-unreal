@@ -6,6 +6,8 @@
 #include "QuakePowerup.h"
 #include "QuakePlayerState.generated.h"
 
+class UQuakeSaveGame;
+
 USTRUCT(BlueprintType)
 struct FQuakeActivePowerup
 {
@@ -97,6 +99,19 @@ public:
 
 	/** SPEC 4.3: same-powerup refresh cap. */
 	static constexpr float GetPowerupMaxDuration() { return 60.f; }
+
+	// --- Phase 11: save/load ---
+
+	/** Write Kills/Secrets/Deaths/ElapsedAtSave/ActivePowerups/Keys into the save. */
+	void CaptureToSave(UQuakeSaveGame& Out) const;
+
+	/**
+	 * Restore PlayerState fields. Translates the saved ElapsedAtSave into
+	 * LevelStartTime = WorldTimeNow - ElapsedAtSave so GetTimeElapsed()
+	 * resumes at the saved value. Re-arms powerup tick if any entries are
+	 * live.
+	 */
+	void ApplyFromSave(const UQuakeSaveGame& In, double WorldTimeNow);
 
 protected:
 	virtual void BeginPlay() override;

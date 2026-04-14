@@ -3,6 +3,7 @@
 #include "QuakeCharacter.h"
 #include "QuakeDamageType_Telefrag.h"
 #include "QuakeHUD.h"
+#include "QuakeSaveArchive.h"
 
 #include "Components/BoxComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -72,9 +73,9 @@ void AQuakeDoor::Activate(AActor* InInstigator)
 		return;
 	}
 
-	if (State == EState::Closed || State == EState::Closing)
+	if (State == EQuakeDoorState::Closed || State == EQuakeDoorState::Closing)
 	{
-		State = EState::Opening;
+		State = EQuakeDoorState::Opening;
 
 		// Cancel any pending auto-close — we're going the other way now.
 		if (UWorld* World = GetWorld())
@@ -95,7 +96,7 @@ void AQuakeDoor::Tick(float DeltaSeconds)
 
 	switch (State)
 	{
-	case EState::Opening:
+	case EQuakeDoorState::Opening:
 	{
 		const FVector Current = DoorMesh->GetRelativeLocation();
 		const FVector ToOpen = OpenRelativeLoc - Current;
@@ -105,7 +106,7 @@ void AQuakeDoor::Tick(float DeltaSeconds)
 		if (Step >= DistRemaining)
 		{
 			DoorMesh->SetRelativeLocation(OpenRelativeLoc);
-			State = EState::Open;
+			State = EQuakeDoorState::Open;
 
 			// Arm the auto-close timer. 0 = stay open permanently.
 			if (AutoCloseDelay > 0.f)
@@ -120,7 +121,7 @@ void AQuakeDoor::Tick(float DeltaSeconds)
 		}
 		break;
 	}
-	case EState::Closing:
+	case EQuakeDoorState::Closing:
 	{
 		const FVector Current = DoorMesh->GetRelativeLocation();
 		const FVector ToClosed = ClosedRelativeLoc - Current;
@@ -136,7 +137,7 @@ void AQuakeDoor::Tick(float DeltaSeconds)
 
 		if (Step >= DistRemaining)
 		{
-			State = EState::Closed;
+			State = EQuakeDoorState::Closed;
 		}
 		break;
 	}
@@ -147,7 +148,7 @@ void AQuakeDoor::Tick(float DeltaSeconds)
 
 void AQuakeDoor::TryStartClosing()
 {
-	if (State != EState::Open)
+	if (State != EQuakeDoorState::Open)
 	{
 		return;
 	}
@@ -160,7 +161,7 @@ void AQuakeDoor::TryStartClosing()
 		return;
 	}
 
-	State = EState::Closing;
+	State = EQuakeDoorState::Closing;
 }
 
 bool AQuakeDoor::IsBlockingZoneOccupied() const
@@ -198,7 +199,7 @@ void AQuakeDoor::OnDoorHit(
 {
 	// Only crush during Closing — opening-direction contacts happen when a
 	// pawn leans against an opening door and should not kill anyone.
-	if (State != EState::Closing || !OtherActor)
+	if (State != EQuakeDoorState::Closing || !OtherActor)
 	{
 		return;
 	}
@@ -217,4 +218,47 @@ void AQuakeDoor::OnDoorHit(
 		UQuakeDamageType_Telefrag::StaticClass());
 
 	UE_LOG(LogQuakeDoor, Log, TEXT("%s: crushed %s"), *GetName(), *OtherActor->GetName());
+}
+
+void AQuakeDoor::SaveState(FActorSaveRecord& OutRecord)
+{
+	OutRecord.ActorName = GetFName();
+	// State is a SaveGame-marked UPROPERTY; the proxy archive round-trips it.
+	// Mesh location is not a UPROPERTY — LoadState restores it from State,
+	// snapping Opening/Closing to their respective endpoints (Open / Closed).
+	QuakeSaveArchive::WriteSaveProperties(this, OutRecord.Payload);
+}
+
+void AQuakeDoor::LoadState(const FActorSaveRecord& InRecord)
+{
+	QuakeSaveArchive::ReadSaveProperties(this, InRecord.Payload);
+
+	// Snap mid-animation states to their nearest static endpoint — avoids
+	// loading into an in-progress interpolation that would need a moving-
+	// target location we didn't store.
+	if (State == EQuakeDoorState::Opening)
+	{
+		State = EQuakeDoorState::Open;
+	}
+	else if (State == EQuakeDoorState::Closing)
+	{
+		State = EQuakeDoorState::Closed;
+	}
+
+	if (DoorMesh)
+	{
+		const FVector Target = (State == EQuakeDoorState::Open)
+			? OpenRelativeLoc
+			: ClosedRelativeLoc;
+		DoorMesh->SetRelativeLocation(Target);
+	}
+
+	// If we loaded into the Open state, re-arm the auto-close timer so the
+	// door doesn't sit open forever just because the save happened to catch
+	// it during the dwell.
+	if (State == EQuakeDoorState::Open && AutoCloseDelay > 0.f)
+	{
+		GetWorldTimerManager().SetTimer(CloseTimerHandle, this, &AQuakeDoor::TryStartClosing,
+			AutoCloseDelay, false);
+	}
 }

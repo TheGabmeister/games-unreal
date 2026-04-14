@@ -2,12 +2,20 @@
 
 #include "QuakeCharacter.h"
 #include "QuakeEnemySpawnPoint.h"
+#include "QuakeGameInstance.h"
 #include "QuakeHUD.h"
+#include "QuakePickupBase.h"
 #include "QuakePlayerController.h"
 #include "QuakePlayerState.h"
+#include "QuakeSaveArchive.h"
+#include "QuakeSaveGame.h"
+#include "QuakeSaveable.h"
 #include "QuakeTrigger_Secret.h"
 
+#include "Engine/World.h"
 #include "EngineUtils.h"
+#include "GameFramework/PlayerController.h"
+#include "Kismet/GameplayStatics.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogQuakeGameMode, Log, All);
 
@@ -43,6 +51,161 @@ void AQuakeGameMode::BeginPlay()
 
 	UE_LOG(LogQuakeGameMode, Log,
 		TEXT("Level totals: KillsTotal=%d, SecretsTotal=%d"), KillsTotal, SecretsTotal);
+
+	// Phase 11: cache the initial-level pickup FName set so save-time can
+	// compute `Consumed = Initial \ Live` without authoring per-pickup records.
+	InitialPickupNames.Reset();
+	for (TActorIterator<AQuakePickupBase> It(GetWorld()); It; ++It)
+	{
+		InitialPickupNames.Add(It->GetFName());
+	}
+
+	// Phase 11: a pending load set up by UQuakeGameInstance::LoadFromSlot
+	// needs the new level's actors restored to their saved state. If no
+	// pending load, auto-save at level entry (DESIGN 6.2: "auto-save on level
+	// entry after snapshot taken") so a fresh level starts with a recoverable
+	// slot.
+	if (UQuakeGameInstance* GI = GetWorld() ? GetWorld()->GetGameInstance<UQuakeGameInstance>() : nullptr)
+	{
+		if (UQuakeSaveGame* Pending = GI->ConsumePendingLoad())
+		{
+			RestoreWorldFromSave(*Pending);
+		}
+		else
+		{
+			GI->SaveCurrentState(UQuakeGameInstance::BuildAutoSlotName());
+		}
+	}
+}
+
+void AQuakeGameMode::CaptureWorldSnapshot(UQuakeSaveGame& Out) const
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	Out.Difficulty      = CurrentDifficulty;
+	Out.CurrentLevelName = UGameplayStatics::GetCurrentLevelName(World, /*bRemovePrefixString*/ true);
+
+	// Pawn transform + HP.
+	APlayerController* PC = UGameplayStatics::GetPlayerController(World, 0);
+	if (AQuakeCharacter* Char = PC ? Cast<AQuakeCharacter>(PC->GetPawn()) : nullptr)
+	{
+		Out.PlayerTransform = Char->GetActorTransform();
+		Out.Health = Char->GetHealth();
+	}
+
+	// PlayerState snapshot.
+	if (AQuakePlayerState* PS = PC ? PC->GetPlayerState<AQuakePlayerState>() : nullptr)
+	{
+		PS->CaptureToSave(Out);
+	}
+
+	// Per-actor IQuakeSaveable records. TActorIterator<IQuakeSaveable>
+	// doesn't exist — iterate AActor and gate on Implements<UQuakeSaveable>.
+	TArray<FName> LivePickupNames;
+	for (TActorIterator<AActor> It(World); It; ++It)
+	{
+		AActor* Actor = *It;
+		if (!Actor)
+		{
+			continue;
+		}
+		if (Actor->IsA(AQuakePickupBase::StaticClass()))
+		{
+			LivePickupNames.Add(Actor->GetFName());
+		}
+		if (Actor->Implements<UQuakeSaveable>())
+		{
+			FActorSaveRecord Rec;
+			if (IQuakeSaveable* Saveable = Cast<IQuakeSaveable>(Actor))
+			{
+				Saveable->SaveState(Rec);
+				if (!Rec.ActorName.IsNone())
+				{
+					Out.ActorRecords.Add(MoveTemp(Rec));
+				}
+			}
+		}
+	}
+
+	Out.ConsumedPickupNames = QuakeSaveArchive::ComputeConsumedNames(
+		InitialPickupNames, LivePickupNames);
+}
+
+void AQuakeGameMode::RestoreWorldFromSave(UQuakeSaveGame& Save)
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	APlayerController* PC = UGameplayStatics::GetPlayerController(World, 0);
+
+	// PlayerState — Kills/Secrets/Deaths/ActivePowerups/Keys + time base.
+	if (AQuakePlayerState* PS = PC ? PC->GetPlayerState<AQuakePlayerState>() : nullptr)
+	{
+		PS->ApplyFromSave(Save, World->GetTimeSeconds());
+	}
+
+	// Difficulty — v1 lives on GameMode; Phase 12 moves it to GameInstance.
+	CurrentDifficulty = Save.Difficulty;
+
+	// Pawn transform.
+	AQuakeCharacter* Char = PC ? Cast<AQuakeCharacter>(PC->GetPawn()) : nullptr;
+	if (Char)
+	{
+		Char->SetActorTransform(Save.PlayerTransform, /*bSweep*/ false, nullptr,
+			ETeleportType::TeleportPhysics);
+		if (AController* Ctrl = Char->GetController())
+		{
+			Ctrl->SetControlRotation(Save.PlayerTransform.Rotator());
+		}
+	}
+
+	// Per-actor records keyed by FName.
+	TMap<FName, const FActorSaveRecord*> RecordByName;
+	RecordByName.Reserve(Save.ActorRecords.Num());
+	for (const FActorSaveRecord& Rec : Save.ActorRecords)
+	{
+		RecordByName.Add(Rec.ActorName, &Rec);
+	}
+
+	for (TActorIterator<AActor> It(World); It; ++It)
+	{
+		AActor* Actor = *It;
+		if (!Actor || !Actor->Implements<UQuakeSaveable>())
+		{
+			continue;
+		}
+		if (const FActorSaveRecord* const* Found = RecordByName.Find(Actor->GetFName()))
+		{
+			if (IQuakeSaveable* Saveable = Cast<IQuakeSaveable>(Actor))
+			{
+				Saveable->LoadState(**Found);
+			}
+		}
+	}
+
+	// Destroy pickups that were consumed before the save — the fresh level
+	// re-spawned them at BeginPlay.
+	if (Save.ConsumedPickupNames.Num() > 0)
+	{
+		for (TActorIterator<AQuakePickupBase> It(World); It; ++It)
+		{
+			if (Save.ConsumedPickupNames.Contains(It->GetFName()))
+			{
+				It->Destroy();
+			}
+		}
+	}
+
+	UE_LOG(LogQuakeGameMode, Log,
+		TEXT("RestoreWorldFromSave: %d records, %d consumed pickups, level=%s"),
+		Save.ActorRecords.Num(), Save.ConsumedPickupNames.Num(), *Save.CurrentLevelName);
 }
 
 bool AQuakeGameMode::IsLevelCleared() const

@@ -4,6 +4,7 @@
 #include "GameFramework/Character.h"
 #include "QuakeAmmoType.h"
 #include "QuakeKeyColor.h"
+#include "QuakeSaveable.h"
 #include "QuakeCharacter.generated.h"
 
 class UCameraComponent;
@@ -11,7 +12,7 @@ class UPostProcessComponent;
 class AQuakeWeaponBase;
 
 UCLASS()
-class QUAKE_API AQuakeCharacter : public ACharacter
+class QUAKE_API AQuakeCharacter : public ACharacter, public IQuakeSaveable
 {
 	GENERATED_BODY()
 
@@ -194,6 +195,20 @@ public:
 		class AController* EventInstigator,
 		AActor* DamageCauser) override;
 
+	// --- Phase 11: save/load ---
+
+	/**
+	 * DESIGN 6.2 "No mid-air saves": F5 is rejected while the player is
+	 * flinching from damage. Set in TakeDamage (when the damage type does
+	 * not suppress pain) and cleared by a timer after PainStateDuration.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "State")
+	bool IsInPain() const { return bIsInPain; }
+
+	/** IQuakeSaveable: persists live Health via SaveGame-marked UPROPERTY. */
+	virtual void SaveState(FActorSaveRecord& OutRecord) override;
+	virtual void LoadState(const FActorSaveRecord& InRecord) override;
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
@@ -205,10 +220,20 @@ protected:
 	/**
 	 * Live HP. Decremented exclusively by TakeDamage per SPEC section 1.5
 	 * "no code outside TakeDamage mutates health directly". Protected so
-	 * external readers go through GetHealth().
+	 * external readers go through GetHealth(). `meta = (SaveGame)` so the
+	 * Phase 11 save archive round-trips it.
 	 */
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Health")
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Health", meta = (SaveGame))
 	float Health = 100.f;
+
+	/** Pain flag: set by TakeDamage, cleared by PainClearTimer. */
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "State")
+	bool bIsInPain = false;
+
+	FTimerHandle PainClearTimer;
+
+	/** How long the pain flag stays up after a non-suppressed hit. */
+	static constexpr float GetPainStateDuration() { return 0.5f; }
 
 	/**
 	 * Trigger the screen-flash damage feedback. Phase 2 stub: writes the

@@ -415,14 +415,14 @@ v1 is the first playable milestone: 1 hub + 3 levels, 4 weapons, 3 enemies. Deli
 - "No mid-air saves" — F5 rejects if `MovementMode != MOVE_Walking` OR pain-reacting.
 
 **Tests:**
-- [ ] Functional: open door, save, reload level, load → door Open.
-- [ ] Functional: kill enemy at spawn point, save, reload, load → spawn point still satisfied.
-- [ ] Functional: pick up health to full, save, take damage, load → HP restored to saved value.
-- [ ] Functional: save with Quad (15 s remaining), load → Quad active ≈15 s (±0.1 s).
-- [ ] Functional: F5 mid-jump → save rejected.
-- [ ] Functional: F5 pain-reacting → save rejected.
-- [ ] Unit: `FActorSaveRecord` round-trip — save a level, deserialize, every `ActorName` matches a level actor's `GetFName()`.
-- [ ] Functional: actor with no matching record on load → level-default state, no crash.
+- [x] Functional: open door, save, reload level, load → door Open.
+- [x] Functional: kill enemy at spawn point, save, reload, load → spawn point still satisfied.
+- [x] Functional: pick up health to full, save, take damage, load → HP restored to saved value.
+- [x] Functional: save with Quad (15 s remaining), load → Quad active ≈15 s (±0.1 s).
+- [x] Functional: F5 mid-jump → save rejected.
+- [x] Functional: F5 pain-reacting → save rejected.
+- [x] Unit: `FActorSaveRecord` round-trip — save a level, deserialize, every `ActorName` matches a level actor's `GetFName()`.
+- [x] Functional: actor with no matching record on load → level-default state, no crash.
 
 **Manual:**
 - [ ] Mid-level F5. Take damage. F9 → state restored (HP, ammo, Quad timer, doors, dead enemies, pickups).

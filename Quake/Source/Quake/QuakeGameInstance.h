@@ -6,6 +6,7 @@
 #include "QuakeGameInstance.generated.h"
 
 class AQuakeWeaponBase;
+class UQuakeSaveGame;
 
 /**
  * Persistent state owner that survives OpenLevel and Character respawn.
@@ -111,6 +112,38 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Inventory|Ammo")
 	static int32 GetAmmoCap(EQuakeAmmoType Type);
 
+	// --- Phase 11: save/load ---
+
+	/**
+	 * Snapshot the current game state and write it to SlotName. Captures
+	 * GameInstance inventory + the current level's PlayerState / per-actor
+	 * state via the authoritative GameMode (DESIGN 6.2). Returns true on
+	 * disk write success.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Save")
+	bool SaveCurrentState(const FString& SlotName);
+
+	/**
+	 * Load from SlotName: restore GameInstance fields immediately, stash
+	 * the save as a pending load, then OpenLevel on the saved level name.
+	 * The new GameMode's BeginPlay pulls the pending load and finishes
+	 * the restore (pawn transform, PlayerState, per-actor records,
+	 * consumed pickups). Returns true on slot load success.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Save")
+	bool LoadFromSlot(const FString& SlotName);
+
+	/**
+	 * GameMode pulls this on BeginPlay. Returns the pending load (if any)
+	 * and clears it. Null when the world was opened via normal navigation
+	 * (not via LoadFromSlot).
+	 */
+	UQuakeSaveGame* ConsumePendingLoad();
+
+	/** Format "auto_<profile>" / "quick_<profile>". v1: profile = "default". */
+	static FString BuildAutoSlotName();
+	static FString BuildQuickSlotName();
+
 	// --- Init hook ---
 
 	virtual void Init() override;
@@ -118,4 +151,20 @@ public:
 private:
 	/** Live ammo counts. Keyed on uint8(EQuakeAmmoType) so reflection is unnecessary. */
 	TMap<EQuakeAmmoType, int32> AmmoCounts;
+
+	/**
+	 * Populated by LoadFromSlot before OpenLevel; consumed by the new
+	 * world's AQuakeGameMode::BeginPlay. Kept as a UPROPERTY so the GC
+	 * keeps the SaveGame alive across the level swap.
+	 */
+	UPROPERTY()
+	TObjectPtr<UQuakeSaveGame> PendingLoad;
+
+	/** Write inventory + profile fields onto a SaveGame we own. */
+	void CaptureInventorySnapshot(UQuakeSaveGame& Out) const;
+
+	/** Restore inventory + profile fields from a loaded SaveGame. */
+	void ApplyInventorySnapshot(const UQuakeSaveGame& In);
+
+	friend class AQuakeGameMode;
 };

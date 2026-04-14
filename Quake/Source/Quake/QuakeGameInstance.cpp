@@ -1,7 +1,14 @@
 #include "QuakeGameInstance.h"
 
 #include "QuakeCharacter.h"
+#include "QuakeGameMode.h"
+#include "QuakeSaveGame.h"
 #include "QuakeWeaponBase.h"
+
+#include "Engine/World.h"
+#include "Kismet/GameplayStatics.h"
+
+DEFINE_LOG_CATEGORY_STATIC(LogQuakeSave, Log, All);
 
 UQuakeGameInstance::UQuakeGameInstance()
 {
@@ -98,4 +105,112 @@ bool UQuakeGameInstance::OwnsWeaponInSlot(int32 SlotIndexZeroBased) const
 		return false;
 	}
 	return OwnedWeaponClasses[SlotIndexZeroBased] != nullptr;
+}
+
+// --- Phase 11: save/load ---
+
+FString UQuakeGameInstance::BuildAutoSlotName()
+{
+	// Profile field is placeholder until Phase 13 wires a profile UI. DESIGN 6.2
+	// prescribes `auto_<profile>` / `quick_<profile>` as the slot schema.
+	return TEXT("auto_default");
+}
+
+FString UQuakeGameInstance::BuildQuickSlotName()
+{
+	return TEXT("quick_default");
+}
+
+void UQuakeGameInstance::CaptureInventorySnapshot(UQuakeSaveGame& Out) const
+{
+	Out.Armor              = Armor;
+	Out.ArmorAbsorption    = ArmorAbsorption;
+	Out.OwnedWeaponClasses = OwnedWeaponClasses;
+	Out.AmmoCounts         = AmmoCounts;
+}
+
+void UQuakeGameInstance::ApplyInventorySnapshot(const UQuakeSaveGame& In)
+{
+	Armor              = In.Armor;
+	ArmorAbsorption    = In.ArmorAbsorption;
+	OwnedWeaponClasses = In.OwnedWeaponClasses;
+
+	// Pre-seed keys so GetAmmo without a prior Give still works. Copy the
+	// saved counts, then union in any missing keys so downstream code can
+	// rely on all four ammo types being present.
+	AmmoCounts = In.AmmoCounts;
+	for (EQuakeAmmoType Type : { EQuakeAmmoType::Shells, EQuakeAmmoType::Nails,
+								  EQuakeAmmoType::Rockets, EQuakeAmmoType::Cells })
+	{
+		AmmoCounts.FindOrAdd(Type);
+	}
+}
+
+bool UQuakeGameInstance::SaveCurrentState(const FString& SlotName)
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		UE_LOG(LogQuakeSave, Warning, TEXT("SaveCurrentState: no World."));
+		return false;
+	}
+
+	UQuakeSaveGame* Save = Cast<UQuakeSaveGame>(
+		UGameplayStatics::CreateSaveGameObject(UQuakeSaveGame::StaticClass()));
+	if (!Save)
+	{
+		return false;
+	}
+
+	// 1) Inventory + profile straight from the GameInstance.
+	CaptureInventorySnapshot(*Save);
+
+	// 2) Per-level state: the authoritative GameMode owns the iteration
+	//    over IQuakeSaveable actors + PlayerState capture. Keeps the
+	//    per-world code in one place and out of the GameInstance.
+	if (AQuakeGameMode* GM = World->GetAuthGameMode<AQuakeGameMode>())
+	{
+		GM->CaptureWorldSnapshot(*Save);
+	}
+
+	const bool bOk = UGameplayStatics::SaveGameToSlot(Save, SlotName, /*UserIndex*/ 0);
+	UE_LOG(LogQuakeSave, Log, TEXT("SaveCurrentState(%s): %s"),
+		*SlotName, bOk ? TEXT("OK") : TEXT("FAILED"));
+	return bOk;
+}
+
+bool UQuakeGameInstance::LoadFromSlot(const FString& SlotName)
+{
+	if (!UGameplayStatics::DoesSaveGameExist(SlotName, /*UserIndex*/ 0))
+	{
+		UE_LOG(LogQuakeSave, Log, TEXT("LoadFromSlot(%s): slot does not exist."), *SlotName);
+		return false;
+	}
+
+	USaveGame* Loaded = UGameplayStatics::LoadGameFromSlot(SlotName, /*UserIndex*/ 0);
+	UQuakeSaveGame* Save = Cast<UQuakeSaveGame>(Loaded);
+	if (!Save)
+	{
+		UE_LOG(LogQuakeSave, Warning, TEXT("LoadFromSlot(%s): cast to UQuakeSaveGame failed."), *SlotName);
+		return false;
+	}
+
+	// DESIGN 6.2 step 2: restore GameInstance fields BEFORE OpenLevel so
+	// the fresh Character's BeginPlay reads the restored inventory.
+	ApplyInventorySnapshot(*Save);
+
+	// Stash for the new world's GameMode to pick up in BeginPlay.
+	PendingLoad = Save;
+
+	// DESIGN 6.2 step 3: open the saved level.
+	const FName LevelName(*Save->CurrentLevelName);
+	UGameplayStatics::OpenLevel(this, LevelName);
+	return true;
+}
+
+UQuakeSaveGame* UQuakeGameInstance::ConsumePendingLoad()
+{
+	UQuakeSaveGame* Out = PendingLoad;
+	PendingLoad = nullptr;
+	return Out;
 }

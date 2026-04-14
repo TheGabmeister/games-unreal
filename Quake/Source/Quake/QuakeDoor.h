@@ -4,10 +4,20 @@
 #include "GameFramework/Actor.h"
 #include "QuakeActivatable.h"
 #include "QuakeKeyColor.h"
+#include "QuakeSaveable.h"
 #include "QuakeDoor.generated.h"
 
 class UBoxComponent;
 class UStaticMeshComponent;
+
+UENUM()
+enum class EQuakeDoorState : uint8
+{
+	Closed,
+	Opening,
+	Open,
+	Closing
+};
 
 /**
  * Phase 8 door per SPEC section 5.4. Moves a UStaticMeshComponent between
@@ -36,7 +46,7 @@ class UStaticMeshComponent;
  * gate). Buttons and triggers hold a TObjectPtr<AActor> picker to this door.
  */
 UCLASS()
-class QUAKE_API AQuakeDoor : public AActor, public IQuakeActivatable
+class QUAKE_API AQuakeDoor : public AActor, public IQuakeActivatable, public IQuakeSaveable
 {
 	GENERATED_BODY()
 
@@ -85,6 +95,11 @@ public:
 
 	virtual void Activate(AActor* InInstigator) override;
 
+	// --- IQuakeSaveable ---
+
+	virtual void SaveState(FActorSaveRecord& OutRecord) override;
+	virtual void LoadState(const FActorSaveRecord& InRecord) override;
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaSeconds) override;
@@ -93,9 +108,8 @@ protected:
 	void OnDoorHit(UPrimitiveComponent* HitComponent, AActor* OtherActor,
 		UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit);
 
-	enum class EState : uint8 { Closed, Opening, Open, Closing };
-
-	EState State = EState::Closed;
+	UPROPERTY(meta = (SaveGame))
+	EQuakeDoorState State = EQuakeDoorState::Closed;
 
 	/** Mesh relative location when Closed (captured in BeginPlay). */
 	FVector ClosedRelativeLoc = FVector::ZeroVector;

@@ -1,6 +1,7 @@
 #include "QuakeEnemySpawnPoint.h"
 
 #include "QuakeGameMode.h"
+#include "QuakeSaveArchive.h"
 
 #include "Components/SceneComponent.h"
 #include "Engine/World.h"
@@ -65,6 +66,13 @@ bool AQuakeEnemySpawnPoint::IsEligible() const
 
 bool AQuakeEnemySpawnPoint::IsSatisfied() const
 {
+	// Save-restored points: bHasFired = true even when SpawnedEnemy is null
+	// (the fresh re-spawned enemy was destroyed by LoadState). Treat as
+	// satisfied — DESIGN 6.2 says a fired spawn point stays consumed.
+	if (bHasFired && SpawnedEnemy == nullptr)
+	{
+		return true;
+	}
 	return SpawnedEnemy != nullptr && SpawnedEnemy->IsDead();
 }
 
@@ -88,9 +96,12 @@ void AQuakeEnemySpawnPoint::Activate(AActor* /*InInstigator*/)
 
 AQuakeEnemyBase* AQuakeEnemySpawnPoint::TrySpawn()
 {
-	if (SpawnedEnemy)
+	if (SpawnedEnemy || bHasFired)
 	{
 		// One-shot: a spawn point spawns at most once per level attempt.
+		// Save-restored points keep bHasFired = true even after SpawnedEnemy
+		// is cleared by LoadState, so a deferred-spawn Activate on a loaded
+		// save is a no-op.
 		return nullptr;
 	}
 	if (!IsEligible())
@@ -123,6 +134,27 @@ AQuakeEnemyBase* AQuakeEnemySpawnPoint::TrySpawn()
 		// default (false) and contribute nothing to KillsTotal.
 		Enemy->bIsMarkedKillTarget = true;
 		SpawnedEnemy = Enemy;
+		bHasFired = true;
 	}
 	return Enemy;
+}
+
+void AQuakeEnemySpawnPoint::SaveState(FActorSaveRecord& OutRecord)
+{
+	OutRecord.ActorName = GetFName();
+	QuakeSaveArchive::WriteSaveProperties(this, OutRecord.Payload);
+}
+
+void AQuakeEnemySpawnPoint::LoadState(const FActorSaveRecord& InRecord)
+{
+	QuakeSaveArchive::ReadSaveProperties(this, InRecord.Payload);
+
+	// A reloaded level re-ran BeginPlay and (for non-deferred points) already
+	// spawned a fresh enemy. If the save says we've fired, destroy that fresh
+	// pawn so the level reflects the saved "this wave is already dead" state.
+	if (bHasFired && SpawnedEnemy)
+	{
+		SpawnedEnemy->Destroy();
+		SpawnedEnemy = nullptr;
+	}
 }

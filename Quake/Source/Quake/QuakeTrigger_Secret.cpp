@@ -2,6 +2,7 @@
 
 #include "QuakeHUD.h"
 #include "QuakePlayerState.h"
+#include "QuakeSaveArchive.h"
 
 #include "Engine/Engine.h"
 #include "Engine/World.h"
@@ -35,4 +36,16 @@ void AQuakeTrigger_Secret::Activate(AActor* InInstigator)
 	}
 
 	Super::Activate(InInstigator);
+}
+
+void AQuakeTrigger_Secret::SaveState(FActorSaveRecord& OutRecord)
+{
+	OutRecord.ActorName = GetFName();
+	QuakeSaveArchive::WriteSaveProperties(this, OutRecord.Payload);
+}
+
+void AQuakeTrigger_Secret::LoadState(const FActorSaveRecord& InRecord)
+{
+	QuakeSaveArchive::ReadSaveProperties(this, InRecord.Payload);
+	// bCredited controls re-credit gating in Activate — no further wiring needed.
 }

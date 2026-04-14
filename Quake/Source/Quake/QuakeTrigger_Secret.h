@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "QuakeSaveable.h"
 #include "QuakeTrigger.h"
 #include "QuakeTrigger_Secret.generated.h"
 
@@ -15,13 +16,18 @@
  * increment is a TODO commented inline.
  */
 UCLASS()
-class QUAKE_API AQuakeTrigger_Secret : public AQuakeTrigger
+class QUAKE_API AQuakeTrigger_Secret : public AQuakeTrigger, public IQuakeSaveable
 {
 	GENERATED_BODY()
 
 public:
 	virtual void Activate(AActor* InInstigator) override;
 
+	// IQuakeSaveable
+	virtual void SaveState(FActorSaveRecord& OutRecord) override;
+	virtual void LoadState(const FActorSaveRecord& InRecord) override;
+
 private:
+	UPROPERTY(meta = (SaveGame))
 	bool bCredited = false;
 };

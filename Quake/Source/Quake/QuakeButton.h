@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "QuakeSaveable.h"
 #include "QuakeButton.generated.h"
 
 class UBoxComponent;
@@ -32,7 +33,7 @@ enum class EQuakeButtonActivation : uint8
  * after `Cooldown` seconds.
  */
 UCLASS()
-class QUAKE_API AQuakeButton : public AActor
+class QUAKE_API AQuakeButton : public AActor, public IQuakeSaveable
 {
 	GENERATED_BODY()
 
@@ -64,6 +65,10 @@ public:
 		class AController* EventInstigator,
 		AActor* DamageCauser) override;
 
+	// IQuakeSaveable
+	virtual void SaveState(FActorSaveRecord& OutRecord) override;
+	virtual void LoadState(const FActorSaveRecord& InRecord) override;
+
 protected:
 	virtual void BeginPlay() override;
 
@@ -78,6 +83,8 @@ protected:
 	void ReArm();
 
 private:
+	UPROPERTY(meta = (SaveGame))
 	bool bArmed = true;
+
 	FTimerHandle CooldownHandle;
 };

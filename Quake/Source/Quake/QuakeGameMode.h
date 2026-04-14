@@ -6,6 +6,7 @@
 #include "QuakeGameMode.generated.h"
 
 class AQuakeEnemySpawnPoint;
+class UQuakeSaveGame;
 
 /**
  * Per SPEC section 5.9 and [CLAUDE.md](CLAUDE.md) "Architecture: State
@@ -60,8 +61,31 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Difficulty")
 	EQuakeDifficulty GetDifficulty() const { return CurrentDifficulty; }
 
+	// --- Phase 11: save/load orchestration ---
+
+	/**
+	 * Walk every IQuakeSaveable actor, populate Out.ActorRecords, capture
+	 * the player's transform + PlayerState, and compute the consumed-pickup
+	 * set from InitialPickupNames \ live pickup FNames. Called by
+	 * UQuakeGameInstance::SaveCurrentState.
+	 */
+	void CaptureWorldSnapshot(UQuakeSaveGame& Out) const;
+
 protected:
 	virtual void BeginPlay() override;
+
+	/**
+	 * Post-BeginPlay orchestration for a pending load (DESIGN 6.2 steps 4-6):
+	 * restore PlayerState, teleport the pawn, dispatch LoadState to
+	 * IQuakeSaveable actors keyed by FName, destroy consumed pickups.
+	 */
+	void RestoreWorldFromSave(UQuakeSaveGame& Save);
+
+	/**
+	 * FName snapshot of every AQuakePickupBase live at BeginPlay. The save's
+	 * ConsumedPickupNames is derived at save time as `Initial \ Live`.
+	 */
+	TArray<FName> InitialPickupNames;
 
 	/** Phase 12 replaces this with a GameInstance read. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Difficulty")

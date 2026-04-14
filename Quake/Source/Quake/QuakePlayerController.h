@@ -46,6 +46,23 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input|Weapons")
 	TObjectPtr<UInputAction> Weapon7Action;
 
+	/**
+	 * Phase 11 quick-save / quick-load. Editor-authored IA assets assigned
+	 * via BP_QuakePlayerController defaults, mapped to F5 / F9 in
+	 * IMC_Default per the project's "no runtime IA creation" rule
+	 * (CLAUDE.md Architecture: Input Configuration).
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input|Save")
+	TObjectPtr<UInputAction> QuickSaveAction;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input|Save")
+	TObjectPtr<UInputAction> QuickLoadAction;
+
 protected:
 	virtual void BeginPlay() override;
+	virtual void SetupInputComponent() override;
+
+private:
+	void OnQuickSavePressed(const struct FInputActionValue& Value);
+	void OnQuickLoadPressed(const struct FInputActionValue& Value);
 };

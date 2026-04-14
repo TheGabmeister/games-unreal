@@ -4,6 +4,7 @@
 #include "GameFramework/Actor.h"
 #include "QuakeActivatable.h"
 #include "QuakeDifficulty.h"
+#include "QuakeSaveable.h"
 // Full include needed for TSubclassOf<AQuakeEnemyBase> — same gotcha as
 // TSubclassOf<AQuakeWeaponBase> in QuakeGameInstance.h. The include must
 // appear before the .generated.h or UHT rejects it.
@@ -34,7 +35,7 @@ class UBillboardComponent;
  * per level attempt.
  */
 UCLASS()
-class QUAKE_API AQuakeEnemySpawnPoint : public AActor, public IQuakeActivatable
+class QUAKE_API AQuakeEnemySpawnPoint : public AActor, public IQuakeActivatable, public IQuakeSaveable
 {
 	GENERATED_BODY()
 
@@ -73,6 +74,17 @@ public:
 	TObjectPtr<AQuakeEnemyBase> SpawnedEnemy;
 
 	/**
+	 * True once TrySpawn has successfully created an enemy at this point.
+	 * Persisted to the save per DESIGN 6.2 — runtime-spawned enemies do NOT
+	 * persist, so a fired spawn point is treated as permanently satisfied
+	 * on load (its enemy is considered "already killed and cleared"). The
+	 * fresh re-spawned enemy that the reloaded level creates is destroyed
+	 * by LoadState to match.
+	 */
+	UPROPERTY(meta = (SaveGame))
+	bool bHasFired = false;
+
+	/**
 	 * True if this spawn point participates in stat / clear counting at the
 	 * given difficulty. Pure helper so tests can exercise the predicate
 	 * without spinning up a GameMode. The Difficulty-less overload pulls
@@ -96,6 +108,10 @@ public:
 
 	// IQuakeActivatable
 	virtual void Activate(AActor* InInstigator) override;
+
+	// IQuakeSaveable
+	virtual void SaveState(FActorSaveRecord& OutRecord) override;
+	virtual void LoadState(const FActorSaveRecord& InRecord) override;
 
 	virtual void BeginPlay() override;
 

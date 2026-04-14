@@ -1,5 +1,8 @@
 #include "QuakePlayerState.h"
 
+#include "QuakeSaveArchive.h"
+#include "QuakeSaveGame.h"
+
 #include "Engine/World.h"
 
 AQuakePlayerState::AQuakePlayerState()
@@ -103,6 +106,39 @@ void AQuakePlayerState::ClearPerLifeState()
 	ActivePowerups.Empty();
 	Keys.Empty();
 	SetActorTickEnabled(false);
+}
+
+void AQuakePlayerState::CaptureToSave(UQuakeSaveGame& Out) const
+{
+	Out.Kills          = Kills;
+	Out.Secrets        = Secrets;
+	Out.Deaths         = Deaths;
+	Out.ElapsedAtSave  = GetTimeElapsed();
+	Out.ActivePowerups = ActivePowerups;
+	Out.Keys           = Keys;
+}
+
+void AQuakePlayerState::ApplyFromSave(const UQuakeSaveGame& In, double WorldTimeNow)
+{
+	Kills          = In.Kills;
+	Secrets        = In.Secrets;
+	Deaths         = In.Deaths;
+	ActivePowerups = In.ActivePowerups;
+	Keys           = In.Keys;
+
+	// DESIGN 6.2: translate the saved elapsed count back into a LevelStartTime
+	// so GetTimeElapsed() resumes at the saved value against the new world's
+	// clock.
+	LevelStartTime = QuakeSaveArchive::ComputeRestoredLevelStartTime(WorldTimeNow, In.ElapsedAtSave);
+
+	if (ActivePowerups.Num() > 0)
+	{
+		EnablePowerupTick();
+	}
+	else
+	{
+		SetActorTickEnabled(false);
+	}
 }
 
 void AQuakePlayerState::Tick(float DeltaSeconds)

@@ -2,6 +2,7 @@
 
 #include "QuakeActivatable.h"
 #include "QuakeCollisionChannels.h"
+#include "QuakeSaveArchive.h"
 
 #include "Components/BoxComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -128,4 +129,24 @@ void AQuakeButton::Fire(AActor* InInstigator)
 void AQuakeButton::ReArm()
 {
 	bArmed = true;
+}
+
+void AQuakeButton::SaveState(FActorSaveRecord& OutRecord)
+{
+	OutRecord.ActorName = GetFName();
+	QuakeSaveArchive::WriteSaveProperties(this, OutRecord.Payload);
+}
+
+void AQuakeButton::LoadState(const FActorSaveRecord& InRecord)
+{
+	QuakeSaveArchive::ReadSaveProperties(this, InRecord.Payload);
+
+	// A saved one-shot button (Cooldown == 0, bArmed == false) disabled its
+	// collider at Fire time; mirror that on load so the button stays dead.
+	// Saved mid-cooldown buttons immediately re-arm — the remaining cooldown
+	// isn't saved; an edge case rare enough not to justify another field.
+	if (!bArmed && Cooldown <= 0.f && Collider)
+	{
+		Collider->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	}
 }
