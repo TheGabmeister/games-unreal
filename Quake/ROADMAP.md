@@ -78,15 +78,15 @@ v1 is the first playable milestone: 1 hub + 3 levels, 4 weapons, 3 enemies. Deli
 - Enable UE Automation Testing plugin.
 
 **Tests:**
-- [ ] Unit: trivial `Quake.Foundation.Smoke` always-passes test proves the runner picks up the module.
-- [ ] Build smoke: `Build.bat` succeeds with zero warnings on new files.
+- [x] Unit: trivial `Quake.Foundation.Smoke` always-passes test proves the runner picks up the module.
+- [x] Build smoke: `Build.bat` succeeds with zero warnings on new files.
 
 **Manual:**
-- [ ] Editor opens without errors.
-- [ ] `PhysSandbox` opens.
-- [ ] PIE spawns a default Character; mouse look works.
-- [ ] Session Frontend → `Quake.*` filter → trivial test green.
-- [ ] Project Settings shows the 4 custom channels.
+- [x] Editor opens without errors.
+- [x] `PhysSandbox` opens.
+- [x] PIE spawns a default Character; mouse look works.
+- [x] Session Frontend → `Quake.*` filter → trivial test green.
+- [x] Project Settings shows the 4 custom channels.
 
 **Exit.** Trivial test green; PIE on `PhysSandbox` doesn't crash.
 
@@ -105,17 +105,17 @@ v1 is the first playable milestone: 1 hub + 3 levels, 4 weapons, 3 enemies. Deli
 - Debug HUD speedometer (`Speed`, `Z vel`, `MovementMode`) — top-left, `DrawHUD` path.
 
 **Tests:**
-- [ ] Unit: `ApplyQuakeAirAccel` canonical case — velocity (300,0,0), wishdir (0,1,0), MaxAirSpeedGain 30 → Y gain = 30, X untouched.
-- [ ] Unit: dot-product clamp does NOT re-introduce magnitude clamp (velocity (300,0,0) + strafe must still allow sideways gain).
-- [ ] Functional: bunny-hop window — apply jump, land, jump within 100 ms → horizontal speed ≥ pre-landing.
-- [ ] Functional: 30° ramp ascends; 50° ramp rejected.
+- [x] Unit: `ApplyQuakeAirAccel` canonical case — velocity (300,0,0), wishdir (0,1,0), MaxAirSpeedGain 30 → Y gain = 30, X untouched.
+- [x] Unit: dot-product clamp does NOT re-introduce magnitude clamp (velocity (300,0,0) + strafe must still allow sideways gain).
+- [x] Functional: bunny-hop window — apply jump, land, jump within 100 ms → horizontal speed ≥ pre-landing.
+- [x] Functional: 30° ramp ascends; 50° ramp rejected.
 
 **Manual:** (binary feel test — no "70% strafe-jump")
-- [ ] Speedometer shows ~600 on flat ground.
-- [ ] Hold strafe + W, turn mouse with strafe direction while jumping → **speed climbs past 600.** If not, formula is wrong — do not advance.
-- [ ] Bunny-hop in place preserves speed.
-- [ ] Walk up 30° ✓, 40° ✓, 45° ✗.
-- [ ] No fall damage, no crouch.
+- [x] Speedometer shows ~600 on flat ground.
+- [x] Hold strafe + W, turn mouse with strafe direction while jumping → **speed climbs past 600.** If not, formula is wrong — do not advance.
+- [x] Bunny-hop in place preserves speed.
+- [x] Walk up 30° ✓, 40° ✓, 45° ✗.
+- [x] No fall damage, no crouch.
 
 **Exit.** Manual speed-gain passes; functional tests green; zero build warnings.
 
@@ -135,14 +135,14 @@ v1 is the first playable milestone: 1 hub + 3 levels, 4 weapons, 3 enemies. Deli
 - `BP_Weapon_Axe` (mesh slot).
 
 **Tests:**
-- [ ] Unit: `ApplyArmorAbsorption` — 100 HP + 100 Green armor + 50 dmg → HP 65, armor 85. Include the 0.3f×50 float-epsilon case.
-- [ ] Unit: shared-base CDO cast returns non-null for `_Melee` subclass.
-- [ ] Functional: dummy at 100 HP, Axe hit → HP 80; five hits → dead.
+- [x] Unit: `ApplyArmorAbsorption` — 100 HP + 100 Green armor + 50 dmg → HP 65, armor 85. Include the 0.3f×50 float-epsilon case.
+- [x] Unit: shared-base CDO cast returns non-null for `_Melee` subclass.
+- [x] Functional: dummy at 100 HP, Axe hit → HP 80; five hits → dead.
 
 **Manual:**
-- [ ] Axe swing in `PhysSandbox` reduces dummy HP by 20.
-- [ ] Dummy returns fire → pain flash, HUD HP drops.
-- [ ] Axe 64u range — too far whiffs.
+- [x] Axe swing in `PhysSandbox` reduces dummy HP by 20.
+- [x] Dummy returns fire → pain flash, HUD HP drops.
+- [x] Axe 64u range — too far whiffs.
 
 **Exit.** Damage flows both directions; Phase 0–2 tests green.
 
@@ -161,16 +161,16 @@ v1 is the first playable milestone: 1 hub + 3 levels, 4 weapons, 3 enemies. Deli
 - `OnDamaged(Instigator, Amount)` plumbing pawn → controller.
 
 **Tests:**
-- [ ] Unit: `ComputePainChance(damage, maxHealth) = min(0.8, (dmg/maxHP) × 2)`. Regress the 0.8 cap.
-- [ ] Functional: Grunt in `Idle`; player steps into sight cone → `Alert`; pulse elapses → `Chase`.
-- [ ] Functional: Grunt at 30 HP + 30 dmg from player → `Dead` + unpossessed.
-- [ ] Functional: Axe fire behind wall (noise) → Grunt becomes `Alert` from hearing.
+- [x] Unit: `ComputePainChance(damage, maxHealth) = min(0.8, (dmg/maxHP) × 2)`. Regress the 0.8 cap.
+- [x] Functional: Grunt in `Idle`; player steps into sight cone → `Alert`; pulse elapses → `Chase`.
+- [x] Functional: Grunt at 30 HP + 30 dmg from player → `Dead` + unpossessed.
+- [x] Functional: Axe fire behind wall (noise) → Grunt becomes `Alert` from hearing.
 
 **Manual:**
-- [ ] Drop a Grunt in `PhysSandbox`. It alerts, chases, fires.
-- [ ] Hide behind wall → loses sight after 5 s.
-- [ ] `'` key → AI debugger shows state, cone, target.
-- [ ] Grunt killed by Axe enters `Dead`, collapses, turns corpse-channel after 2 s.
+- [x] Drop a Grunt in `PhysSandbox`. It alerts, chases, fires.
+- [x] Hide behind wall → loses sight after 5 s.
+- [x] `'` key → AI debugger shows state, cone, target.
+- [x] Grunt killed by Axe enters `Dead`, collapses, turns corpse-channel after 2 s.
 
 **Exit.** AI debugger transitions visible; hearing-through-walls works; Grunt killable.
 
@@ -190,16 +190,16 @@ v1 is the first playable milestone: 1 hub + 3 levels, 4 weapons, 3 enemies. Deli
 - Click stub on empty fire.
 
 **Tests:**
-- [ ] Unit: `GetAmmoCap` table (Shells 100, Nails 200, Rockets 100, Cells 100).
-- [ ] Unit: `GiveAmmo` below/at/over cap; return = delta applied.
-- [ ] Unit: `ConsumeAmmo` success vs insufficient; None short-circuit (Axe).
-- [ ] Functional: shell pickup adds 20; health pickup at full HP refused.
+- [x] Unit: `GetAmmoCap` table (Shells 100, Nails 200, Rockets 100, Cells 100).
+- [x] Unit: `GiveAmmo` below/at/over cap; return = delta applied.
+- [x] Unit: `ConsumeAmmo` success vs insufficient; None short-circuit (Axe).
+- [x] Functional: shell pickup adds 20; health pickup at full HP refused.
 
 **Manual:**
-- [ ] Pick up shell pack, HUD ammo updates.
-- [ ] Switch 1↔2, fire empty click, fire with ammo.
-- [ ] Health pickup at full HP stays in world; at 50 HP → 75 + destroyed.
-- [ ] Megahealth at 100 HP overcharges.
+- [x] Pick up shell pack, HUD ammo updates.
+- [x] Switch 1↔2, fire empty click, fire with ammo.
+- [x] Health pickup at full HP stays in world; at 50 HP → 75 + destroyed.
+- [x] Megahealth at 100 HP overcharges.
 
 **Exit.** HUD ammo + HP both update; conditional consumption works; Shotgun kills Grunts.
 
@@ -221,16 +221,16 @@ v1 is the first playable milestone: 1 hub + 3 levels, 4 weapons, 3 enemies. Deli
 - BPs: `BP_Weapon_RocketLauncher`, `BP_Projectile_Rocket`, `BP_Pickup_AmmoRockets`.
 
 **Tests:**
-- [ ] Unit: `ComputeLinearFalloffDamage` — d=0 full; d=r/2 half; d≥r zero; d>r zero.
-- [ ] Functional: detonate at known origin with pawns at varying distances; each takes expected falloff.
-- [ ] Functional: rocket spawn transform is 60u in front of pawn.
-- [ ] Functional: rocket fired on spawn frame → no self-damage.
+- [x] Unit: `ComputeLinearFalloffDamage` — d=0 full; d=r/2 half; d≥r zero; d>r zero.
+- [x] Functional: detonate at known origin with pawns at varying distances; each takes expected falloff.
+- [x] Functional: rocket spawn transform is 60u in front of pawn.
+- [x] Functional: rocket fired on spawn frame → no self-damage.
 
 **Manual:**
-- [ ] Rockets kill Grunts on imperfect aim.
-- [ ] **Rocket-jump feel test (binary):** look down, fire, jump → launched up, ~25 HP loss.
-- [ ] Rocket into wall 60u away explodes on wall, not face.
-- [ ] Rocket at floor 5u away doesn't self-detonate instantly.
+- [x] Rockets kill Grunts on imperfect aim.
+- [x] **Rocket-jump feel test (binary):** look down, fire, jump → launched up, ~25 HP loss.
+- [x] Rocket into wall 60u away explodes on wall, not face.
+- [x] Rocket at floor 5u away doesn't self-detonate instantly.
 
 **Exit.** Rocket-jump feels right; falloff matches unit test.
 
@@ -249,15 +249,15 @@ v1 is the first playable milestone: 1 hub + 3 levels, 4 weapons, 3 enemies. Deli
 - **Auto-switch on empty.** `AQuakeCharacter::AutoSwitchFromEmptyWeapon()` + pure-static `PickAutoSwitchWeaponSlot` implementing DESIGN 2.2 priority (RL → SNG → SSG → NG → SG → Axe; Thunderbolt and GL excluded).
 
 **Tests:**
-- [ ] Unit: `PickAutoSwitchWeaponSlot` priority — given various ownership + ammo masks, returns correct slot. Verify Thunderbolt/GL excluded even when owned + fueled. Axe is terminal fallback.
-- [ ] Functional: hold-fire 1 s with full ammo → 8 nails spawned + 8 ammo consumed.
-- [ ] Functional: nail at 500u → 9 dmg applied.
+- [x] Unit: `PickAutoSwitchWeaponSlot` priority — given various ownership + ammo masks, returns correct slot. Verify Thunderbolt/GL excluded even when owned + fueled. Axe is terminal fallback.
+- [x] Functional: hold-fire 1 s with full ammo → 8 nails spawned + 8 ammo consumed.
+- [x] Functional: nail at 500u → 9 dmg applied.
 
 **Manual:**
-- [ ] Hose a Grunt with Nailgun.
-- [ ] Ammo depletes at 8/sec.
-- [ ] Switch 1/2/4/7 — instant swap.
-- [ ] Deplete shells, fire SG → auto-switches per priority.
+- [x] Hose a Grunt with Nailgun.
+- [x] Ammo depletes at 8/sec.
+- [x] Switch 1/2/4/7 — instant swap.
+- [x] Deplete shells, fire SG → auto-switches per priority.
 
 **Exit.** All 4 weapons fire, swap, auto-switch correctly.
 
@@ -277,16 +277,16 @@ v1 is the first playable milestone: 1 hub + 3 levels, 4 weapons, 3 enemies. Deli
 - BPs: `BP_Enemy_Knight`, `BP_Enemy_Ogre`, `BP_Projectile_Grenade`, `BP_Pickup_BackpackShells`, `BP_Pickup_BackpackRockets`.
 
 **Tests:**
-- [ ] Functional: Grunt with `DropTable=[{BackpackShells, 5, 1.0}]` + player kill → pickup spawned at death location.
-- [ ] Functional: Grunt with `Chance = 0.0` → no pickup.
-- [ ] Functional: Ogre grenade lands near Knight → Knight's `CurrentTarget` switches to Ogre; grudge timer > 0.
-- [ ] Functional: gib with overkill ≥ 2× HP → capsule destroyed, no drop.
+- [x] Functional: Grunt with `DropTable=[{BackpackShells, 5, 1.0}]` + player kill → pickup spawned at death location.
+- [x] Functional: Grunt with `Chance = 0.0` → no pickup.
+- [x] Functional: Ogre grenade lands near Knight → Knight's `CurrentTarget` switches to Ogre; grudge timer > 0.
+- [x] Functional: gib with overkill ≥ 2× HP → capsule destroyed, no drop.
 
 **Manual:**
-- [ ] Fight all 3 types in sandbox.
-- [ ] Pick up backpack drops.
-- [ ] **Infighting.** Lure Ogre near Knight, dodge so grenade bounces on Knight → Knight charges Ogre.
-- [ ] Gib a Grunt with direct rocket → scattered pieces, no drop.
+- [x] Fight all 3 types in sandbox.
+- [x] Pick up backpack drops.
+- [x] **Infighting.** Lure Ogre near Knight, dodge so grenade bounces on Knight → Knight charges Ogre.
+- [x] Gib a Grunt with direct rocket → scattered pieces, no drop.
 
 **Exit.** Infighting is emergent (no infighting-specific damage code).
 
@@ -306,16 +306,16 @@ v1 is the first playable milestone: 1 hub + 3 levels, 4 weapons, 3 enemies. Deli
 - `Content/Maps/Tests/LevelStructureSandbox.umap` — small room: door + button + lava + relay + exit.
 
 **Tests:**
-- [ ] Functional: button overlap → door transitions Opening then Open.
-- [ ] Functional: pawn in swept volume → door doesn't start Closing.
-- [ ] Functional: pawn in lava for 1 tick → 30 dmg.
-- [ ] Functional: `_Relay` with 3 mock targets → all 3 `Activate` calls received exactly once.
-- [ ] Functional: `_Hurt` with `DamagePerTick=100` over `TickRate` → 100 dmg.
-- [ ] Functional: `_Teleport` with `Destination=ATargetPoint` → pawn at destination.
-- [ ] Functional: closed door blocks rocket (explodes on door, not through).
+- [x] Functional: button overlap → door transitions Opening then Open.
+- [x] Functional: pawn in swept volume → door doesn't start Closing.
+- [x] Functional: pawn in lava for 1 tick → 30 dmg.
+- [x] Functional: `_Relay` with 3 mock targets → all 3 `Activate` calls received exactly once.
+- [x] Functional: `_Hurt` with `DamagePerTick=100` over `TickRate` → 100 dmg.
+- [x] Functional: `_Teleport` with `Destination=ATargetPoint` → pawn at destination.
+- [x] Functional: closed door blocks rocket (explodes on door, not through).
 
 **Manual:**
-- [ ] Walk `LevelStructureSandbox`. Button → door opens. Lava → 30/sec. Exit trigger logs "level complete." Rocket on closed door explodes on the face.
+- [x] Walk `LevelStructureSandbox`. Button → door opens. Lava → 30/sec. Exit trigger logs "level complete." Rocket on closed door explodes on the face.
 
 **Exit.** Activation chains work without name lookups; lava + doors behave per spec.
 
@@ -338,17 +338,17 @@ v1 is the first playable milestone: 1 hub + 3 levels, 4 weapons, 3 enemies. Deli
 - `Content/Maps/Tests/StatsSandbox.umap` — 3 marked + 1 unmarked + 1 deferred spawn point, 2 secrets, clear-gated exit.
 
 **Tests:**
-- [ ] Unit: `IsEligibleForDifficulty` — marked Easy eligible at Normal/Nightmare; Nightmare-only excluded at Easy/Hard.
-- [ ] Unit: `IsEligible` — unmarked always excluded; deferred still counts.
-- [ ] Unit: `IsSatisfied` — unspawned = no; spawned + alive = no; spawned + dead = yes.
-- [ ] Unit: `IsLevelClearedForSet` — empty = clear; all-null = clear; unmarked unsatisfied = clear; marked unsatisfied = block; deferred-unfired = block.
-- [ ] Unit: forward-compat — revived-zombie (`Health > 0` on marked point) = unsatisfied; permanent kill = satisfied.
-- [ ] Unit: `AQuakePlayerState::AddKillCredit`/`AddSecretCredit`/`AddDeath`; `ClearPerLifeState` preserves score.
+- [x] Unit: `IsEligibleForDifficulty` — marked Easy eligible at Normal/Nightmare; Nightmare-only excluded at Easy/Hard.
+- [x] Unit: `IsEligible` — unmarked always excluded; deferred still counts.
+- [x] Unit: `IsSatisfied` — unspawned = no; spawned + alive = no; spawned + dead = yes.
+- [x] Unit: `IsLevelClearedForSet` — empty = clear; all-null = clear; unmarked unsatisfied = clear; marked unsatisfied = block; deferred-unfired = block.
+- [x] Unit: forward-compat — revived-zombie (`Health > 0` on marked point) = unsatisfied; permanent kill = satisfied.
+- [x] Unit: `AQuakePlayerState::AddKillCredit`/`AddSecretCredit`/`AddDeath`; `ClearPerLifeState` preserves score.
 
 **Manual:**
-- [ ] `StatsSandbox` — kill 3 marked Grunts → HUD `3/4`. Exit blocked. Fire deferred trigger → 4th spawns. Kill → `4/4`. Exit unlocks.
-- [ ] Find both secrets → `2/2`, message shown.
-- [ ] Level-end stats screen shows kills/secrets/time/deaths.
+- [x] `StatsSandbox` — kill 3 marked Grunts → HUD `3/4`. Exit blocked. Fire deferred trigger → 4th spawns. Kill → `4/4`. Exit unlocks.
+- [x] Find both secrets → `2/2`, message shown.
+- [x] Level-end stats screen shows kills/secrets/time/deaths.
 
 **Exit.** Clear gating works for immediate + deferred; stats match reality.
 
@@ -374,25 +374,25 @@ v1 is the first playable milestone: 1 hub + 3 levels, 4 weapons, 3 enemies. Deli
 - BPs: `BP_Pickup_Quad`, `BP_Pickup_KeySilver`/`Gold`, `BP_Pickup_Armor_Green`/`Yellow`/`Red`, `BP_Pickup_Weapon_Shotgun`.
 
 **Tests:**
-- [ ] Unit: `Quake.Powerup.Grant.FreshEntry` — fresh grant creates entry at exact duration.
-- [ ] Unit: `Quake.Powerup.Grant.AdditiveCapAt60` — two 30 s grants = 60 s (not 2 entries; third no-overflow).
-- [ ] Unit: `Quake.Powerup.Grant.DifferentTypesStack` — Quad + Pentagram = 2 entries.
-- [ ] Unit: `Quake.Powerup.Expiry.TickPrunes` — `Tick(31)` removes entry.
-- [ ] Unit: `Quake.Powerup.Grant.RejectsNoneAndZeroDuration`.
-- [ ] Unit: `Quake.Key.GiveAndHas` — re-grant no-op; None sentinel rejected.
-- [ ] Unit: `Quake.Key.ClearPerLifeStateEmptiesKeys` — powerups + keys empty; score preserved.
-- [ ] Unit: `Quake.Armor.TierTable` — amount + absorption for all 3 tiers.
+- [x] Unit: `Quake.Powerup.Grant.FreshEntry` — fresh grant creates entry at exact duration.
+- [x] Unit: `Quake.Powerup.Grant.AdditiveCapAt60` — two 30 s grants = 60 s (not 2 entries; third no-overflow).
+- [x] Unit: `Quake.Powerup.Grant.DifferentTypesStack` — Quad + Pentagram = 2 entries.
+- [x] Unit: `Quake.Powerup.Expiry.TickPrunes` — `Tick(31)` removes entry.
+- [x] Unit: `Quake.Powerup.Grant.RejectsNoneAndZeroDuration`.
+- [x] Unit: `Quake.Key.GiveAndHas` — re-grant no-op; None sentinel rejected.
+- [x] Unit: `Quake.Key.ClearPerLifeStateEmptiesKeys` — powerups + keys empty; score preserved.
+- [x] Unit: `Quake.Armor.TierTable` — amount + absorption for all 3 tiers.
 
 **Manual:** see [HUD.md](HUD.md) for layout reference + [Phase 10 manual test setup](#phase-10-manual-setup) below.
 
 **Phase 10 manual setup.** Duplicate `LevelStructureSandbox` → `Phase10Sandbox.umap`. Place one of each pickup; a `BP_Door` with `RequiredKey=Silver` beside a silver key; a second `BP_Door` with `RequiredKey=Gold` (no gold key); an Ogre spawn point near Green armor + RL pickup.
 
-- [ ] Quad + RL on Ogre: top-center shows `QUAD 30` blue; rocket deals ~400 splash, gibs Ogre.
-- [ ] Stand still 30 s → Quad timer reaches 0 and disappears.
-- [ ] Silver key pickup → bottom-left `[SILVER]` indicator. Silver door opens.
-- [ ] Gold door without gold key → "You need the gold key." top-center for 2 s, door stays shut.
-- [ ] Green armor → bottom-left `AR 100` green. Take 5 dmg in `_Hurt` → HP -4, armor -2 (30% absorb, `ceil(0.3×5)=2`).
-- [ ] First Shotgun pickup → auto-switch + ammo grant. Second → shells increase, no switch.
+- [x] Quad + RL on Ogre: top-center shows `QUAD 30` blue; rocket deals ~400 splash, gibs Ogre.
+- [x] Stand still 30 s → Quad timer reaches 0 and disappears.
+- [x] Silver key pickup → bottom-left `[SILVER]` indicator. Silver door opens.
+- [x] Gold door without gold key → "You need the gold key." top-center for 2 s, door stays shut.
+- [x] Green armor → bottom-left `AR 100` green. Take 5 dmg in `_Hurt` → HP -4, armor -2 (30% absorb, `ceil(0.3×5)=2`).
+- [x] First Shotgun pickup → auto-switch + ammo grant. Second → shells increase, no switch.
 
 *Note: the blue post-process tint is a content task (PostProcessVolume + MID) and not strictly required for test 1 verification — the timer + damage do the work.*
 
