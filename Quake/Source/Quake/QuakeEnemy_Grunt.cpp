@@ -86,7 +86,7 @@ void AQuakeEnemy_Grunt::FireAtTarget(AActor* Target)
 	// actor — the Grunt's rifle is a visual primitive, not an AActor).
 	UGameplayStatics::ApplyPointDamage(
 		Hit.GetActor(),
-		AttackDamage,
+		AttackDamage * AttackDamageMultiplier,
 		AimDir,
 		Hit,
 		GetController(),

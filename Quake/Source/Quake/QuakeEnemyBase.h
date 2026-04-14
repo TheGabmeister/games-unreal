@@ -5,6 +5,7 @@
 // Full include needed for TSubclassOf<AQuakePickupBase> in FQuakeDropEntry
 // (same gotcha as TSubclassOf<AQuakeWeaponBase> in QuakeGameInstance.h).
 #include "QuakePickupBase.h"
+#include "QuakeDifficultyMultipliers.h"
 #include "QuakeEnemyBase.generated.h"
 
 class UStaticMeshComponent;
@@ -148,6 +149,14 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enemy|Health", meta = (ClampMin = "1.0"))
 	float MaxHealth = 30.f;
 
+	/**
+	 * DESIGN 6.1 outgoing-damage scale, baked by ApplyDifficultyScaling in
+	 * BeginPlay. Per-type fire paths multiply their damage by this before
+	 * calling ApplyPointDamage / projectile spawn. 1.0 on Normal.
+	 */
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Enemy|Difficulty")
+	float AttackDamageMultiplier = 1.f;
+
 	UFUNCTION(BlueprintCallable, Category = "Enemy|Health")
 	float GetHealth() const { return Health; }
 
@@ -174,6 +183,28 @@ public:
 	 * MaxHealth <= 0 degenerately returns 0 rather than dividing by zero.
 	 */
 	static float ComputePainChance(float Damage, float InMaxHealth);
+
+	/**
+	 * DESIGN 6.1 difficulty scaling hook. Called from BeginPlay after the
+	 * stats table load so BaseMaxHealth already reflects per-type authoring.
+	 * Bakes MaxHealth *= M.EnemyHP and stores AttackDamageMultiplier =
+	 * M.EnemyDamage. Virtual so per-type subclasses (e.g. the future Zombie)
+	 * can tack on extra coefficients (ReviveScale) without duplicating the
+	 * base math.
+	 */
+	virtual void ApplyDifficultyScaling(const FQuakeDifficultyMultipliers& Multipliers);
+
+	/**
+	 * Pure helper behind ApplyDifficultyScaling. Extracted so tests can
+	 * assert `MaxHealth = 30 × 1.25 = 37.5` without instantiating a world
+	 * or a controller (matches the ApplyQuakeAirAccel / ApplyArmorAbsorption
+	 * / ComputePainChance / PickAutoSwitchWeaponSlot pattern).
+	 */
+	static void ComputeScaledEnemyStats(
+		float BaseMaxHealth,
+		const FQuakeDifficultyMultipliers& Multipliers,
+		float& OutMaxHealth,
+		float& OutAttackDamageMultiplier);
 
 	// --- Action methods called by the AIController ---
 

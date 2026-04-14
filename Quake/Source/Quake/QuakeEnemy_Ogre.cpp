@@ -58,7 +58,7 @@ void AQuakeEnemy_Ogre::FireAtTarget(AActor* Target)
 
 	UGameplayStatics::ApplyPointDamage(
 		Hit.GetActor(),
-		MeleeDamage,
+		MeleeDamage * AttackDamageMultiplier,
 		AimDir,
 		Hit,
 		GetController(),
@@ -94,5 +94,14 @@ void AQuakeEnemy_Ogre::FireGrenadeAtTarget(AActor* Target)
 	SpawnParams.Instigator = this;
 	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
-	World->SpawnActor<AQuakeProjectile>(GrenadeClass, SpawnLoc, SpawnRot, SpawnParams);
+	AQuakeProjectile* Grenade = World->SpawnActor<AQuakeProjectile>(
+		GrenadeClass, SpawnLoc, SpawnRot, SpawnParams);
+	if (Grenade)
+	{
+		// DESIGN 6.1: bake the outgoing-damage multiplier onto the shot.
+		// Matches the Quad pattern from weapons — damage is frozen at launch,
+		// not re-read at impact, so a difficulty change mid-flight doesn't
+		// affect in-flight grenades.
+		Grenade->DamageScale = AttackDamageMultiplier;
+	}
 }

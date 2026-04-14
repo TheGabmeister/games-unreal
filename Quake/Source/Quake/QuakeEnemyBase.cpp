@@ -4,6 +4,7 @@
 #include "QuakeCollisionChannels.h"
 #include "QuakeDamageType.h"
 #include "QuakeEnemyAIController.h"
+#include "QuakeGameMode.h"
 #include "QuakePlayerState.h"
 #include "QuakeProjectSettings.h"
 
@@ -81,6 +82,16 @@ void AQuakeEnemyBase::BeginPlay()
 {
 	Super::BeginPlay();
 
+	// DESIGN 6.1: difficulty scaling bakes into MaxHealth before we seed
+	// Health from it. Pulls multipliers from the authoritative GameMode.
+	if (const UWorld* World = GetWorld())
+	{
+		if (const AQuakeGameMode* GM = World->GetAuthGameMode<AQuakeGameMode>())
+		{
+			ApplyDifficultyScaling(GM->GetDifficultyMultipliers());
+		}
+	}
+
 	Health = MaxHealth;
 
 	// Apply per-enemy walk speed to the stock CMC. Doing this in BeginPlay
@@ -135,6 +146,23 @@ float AQuakeEnemyBase::ComputePainChance(float Damage, float InMaxHealth)
 		return 0.f;
 	}
 	return FMath::Min(0.8f, (Damage / InMaxHealth) * 2.f);
+}
+
+void AQuakeEnemyBase::ComputeScaledEnemyStats(
+	float BaseMaxHealth,
+	const FQuakeDifficultyMultipliers& Multipliers,
+	float& OutMaxHealth,
+	float& OutAttackDamageMultiplier)
+{
+	OutMaxHealth              = BaseMaxHealth * Multipliers.EnemyHP;
+	OutAttackDamageMultiplier = Multipliers.EnemyDamage;
+}
+
+void AQuakeEnemyBase::ApplyDifficultyScaling(const FQuakeDifficultyMultipliers& Multipliers)
+{
+	float ScaledMaxHealth = MaxHealth;
+	ComputeScaledEnemyStats(MaxHealth, Multipliers, ScaledMaxHealth, AttackDamageMultiplier);
+	MaxHealth = ScaledMaxHealth;
 }
 
 void AQuakeEnemyBase::MoveToTarget(const FVector& TargetLocation)

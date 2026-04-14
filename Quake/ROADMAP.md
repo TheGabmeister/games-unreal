@@ -425,9 +425,9 @@ v1 is the first playable milestone: 1 hub + 3 levels, 4 weapons, 3 enemies. Deli
 - [x] Functional: actor with no matching record on load → level-default state, no crash.
 
 **Manual:**
-- [ ] Mid-level F5. Take damage. F9 → state restored (HP, ammo, Quad timer, doors, dead enemies, pickups).
-- [ ] Save in E1M2, restart editor, F9 → E1M2 loads with weapons from E1M1.
-- [ ] F5 mid-jump → rejection message.
+- [x] Mid-level F5. Take damage. F9 → state restored (HP, ammo, Quad timer, doors, dead enemies, pickups).
+- [x] Save in E1M2, restart editor, F9 → E1M2 loads with weapons from E1M1.
+- [x] F5 mid-jump → rejection message.
 
 **Exit.** Round-trip works across PIE restarts; `GetFName()` identity is stable.
 
@@ -447,13 +447,13 @@ v1 is the first playable milestone: 1 hub + 3 levels, 4 weapons, 3 enemies. Deli
 - `BP_QuakeGameMode` populates multiplier map.
 
 **Tests:**
-- [ ] Functional: Grunt on Easy → `MaxHealth == 30`; on Hard → `MaxHealth == 37.5`.
-- [ ] Functional: 5 `MinDifficulty=Easy` + 3 `MinDifficulty=Hard` spawn points → `KillsTotal == 5` on Easy, `== 8` on Hard.
-- [ ] Functional: enemy fire at player — damage applied matches per-difficulty multiplier.
+- [x] Functional: Grunt on Easy → `MaxHealth == 30`; on Hard → `MaxHealth == 37.5`.
+- [x] Functional: 5 `MinDifficulty=Easy` + 3 `MinDifficulty=Hard` spawn points → `KillsTotal == 5` on Easy, `== 8` on Hard.
+- [x] Functional: enemy fire at player — damage applied matches per-difficulty multiplier.
 
 **Manual:**
-- [ ] Easy: fight Grunts, note TTK + damage taken.
-- [ ] Restart Normal, same room → perceptibly harder (0.75 → 1.0).
+- [x] Easy: fight Grunts, note TTK + damage taken.
+- [x] Restart Normal, same room → perceptibly harder (0.75 → 1.0).
 
 **Exit.** Multipliers apply at spawn; filtering excludes higher-tier placements.
 

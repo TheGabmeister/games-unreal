@@ -54,7 +54,7 @@ void AQuakeEnemy_Knight::FireAtTarget(AActor* Target)
 
 	UGameplayStatics::ApplyPointDamage(
 		Hit.GetActor(),
-		AttackDamage,
+		AttackDamage * AttackDamageMultiplier,
 		AimDir,
 		Hit,
 		GetController(),

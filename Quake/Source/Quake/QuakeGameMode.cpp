@@ -25,6 +25,61 @@ AQuakeGameMode::AQuakeGameMode()
 	PlayerControllerClass = AQuakePlayerController::StaticClass();
 	PlayerStateClass = AQuakePlayerState::StaticClass();
 	HUDClass = AQuakeHUD::StaticClass();
+
+	// DESIGN 6.1 default multipliers. BP_QuakeGameMode can override any row.
+	// An unconfigured BP inherits these defaults via the C++ constructor.
+	{
+		FQuakeDifficultyMultipliers Easy;
+		Easy.EnemyDamage = 0.75f;
+		Easy.EnemyHP     = 1.0f;
+		DifficultyTable.Add(EQuakeDifficulty::Easy, Easy);
+	}
+	{
+		FQuakeDifficultyMultipliers Normal;
+		DifficultyTable.Add(EQuakeDifficulty::Normal, Normal);
+	}
+	{
+		FQuakeDifficultyMultipliers Hard;
+		Hard.EnemyDamage = 1.5f;
+		Hard.EnemyHP     = 1.25f;
+		DifficultyTable.Add(EQuakeDifficulty::Hard, Hard);
+	}
+	{
+		FQuakeDifficultyMultipliers Nightmare;
+		Nightmare.EnemyDamage      = 2.0f;
+		Nightmare.EnemyHP          = 1.5f;
+		Nightmare.bSuppressPain    = true;
+		Nightmare.ZombieReviveScale = 0.5f;
+		DifficultyTable.Add(EQuakeDifficulty::Nightmare, Nightmare);
+	}
+}
+
+EQuakeDifficulty AQuakeGameMode::GetDifficulty() const
+{
+	if (const UWorld* World = GetWorld())
+	{
+		if (const UQuakeGameInstance* GI = World->GetGameInstance<UQuakeGameInstance>())
+		{
+			return GI->GetDifficulty();
+		}
+	}
+	return EQuakeDifficulty::Normal;
+}
+
+FQuakeDifficultyMultipliers AQuakeGameMode::GetDifficultyMultipliers() const
+{
+	return LookupMultipliers(DifficultyTable, GetDifficulty());
+}
+
+FQuakeDifficultyMultipliers AQuakeGameMode::LookupMultipliers(
+	const TMap<EQuakeDifficulty, FQuakeDifficultyMultipliers>& Table,
+	EQuakeDifficulty Difficulty)
+{
+	if (const FQuakeDifficultyMultipliers* Found = Table.Find(Difficulty))
+	{
+		return *Found;
+	}
+	return FQuakeDifficultyMultipliers{};
 }
 
 void AQuakeGameMode::BeginPlay()
@@ -86,7 +141,7 @@ void AQuakeGameMode::CaptureWorldSnapshot(UQuakeSaveGame& Out) const
 		return;
 	}
 
-	Out.Difficulty      = CurrentDifficulty;
+	Out.Difficulty       = GetDifficulty();
 	Out.CurrentLevelName = UGameplayStatics::GetCurrentLevelName(World, /*bRemovePrefixString*/ true);
 
 	// Pawn transform + HP.
@@ -151,8 +206,14 @@ void AQuakeGameMode::RestoreWorldFromSave(UQuakeSaveGame& Save)
 		PS->ApplyFromSave(Save, World->GetTimeSeconds());
 	}
 
-	// Difficulty — v1 lives on GameMode; Phase 12 moves it to GameInstance.
-	CurrentDifficulty = Save.Difficulty;
+	// Difficulty lives on the GameInstance so it survives OpenLevel. The
+	// LoadFromSlot path restores inventory fields BEFORE OpenLevel, but
+	// Difficulty is small enough to restore here too — keeps the save
+	// schema readable (one section per subsystem).
+	if (UQuakeGameInstance* GI = World->GetGameInstance<UQuakeGameInstance>())
+	{
+		GI->SetDifficulty(Save.Difficulty);
+	}
 
 	// Pawn transform.
 	AQuakeCharacter* Char = PC ? Cast<AQuakeCharacter>(PC->GetPawn()) : nullptr;

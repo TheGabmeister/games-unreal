@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Engine/GameInstance.h"
 #include "QuakeAmmoType.h"
+#include "QuakeDifficulty.h"
 #include "QuakeGameInstance.generated.h"
 
 class AQuakeWeaponBase;
@@ -144,6 +145,20 @@ public:
 	static FString BuildAutoSlotName();
 	static FString BuildQuickSlotName();
 
+	// --- Phase 12: difficulty ---
+
+	/**
+	 * Current difficulty. Persists across OpenLevel and Character respawn
+	 * per DESIGN 6.1 "cannot change mid-playthrough". The GameMode reads
+	 * this on BeginPlay and feeds it to AQuakeEnemyBase::ApplyDifficultyScaling
+	 * and AQuakeEnemySpawnPoint::IsEligible.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Difficulty")
+	EQuakeDifficulty GetDifficulty() const { return CurrentDifficulty; }
+
+	UFUNCTION(BlueprintCallable, Category = "Difficulty")
+	void SetDifficulty(EQuakeDifficulty NewDifficulty) { CurrentDifficulty = NewDifficulty; }
+
 	// --- Init hook ---
 
 	virtual void Init() override;
@@ -151,6 +166,11 @@ public:
 private:
 	/** Live ammo counts. Keyed on uint8(EQuakeAmmoType) so reflection is unnecessary. */
 	TMap<EQuakeAmmoType, int32> AmmoCounts;
+
+	/** DESIGN 6.1 difficulty state. Defaults to Normal; set via SetDifficulty. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Difficulty",
+		meta = (AllowPrivateAccess = "true"))
+	EQuakeDifficulty CurrentDifficulty = EQuakeDifficulty::Normal;
 
 	/**
 	 * Populated by LoadFromSlot before OpenLevel; consumed by the new

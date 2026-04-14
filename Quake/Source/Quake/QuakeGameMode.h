@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/GameModeBase.h"
 #include "QuakeDifficulty.h"
+#include "QuakeDifficultyMultipliers.h"
 #include "QuakeGameMode.generated.h"
 
 class AQuakeEnemySpawnPoint;
@@ -53,13 +54,35 @@ public:
 	static bool IsLevelClearedForSet(const TArray<const AQuakeEnemySpawnPoint*>& SpawnPoints);
 
 	/**
-	 * Current difficulty. Phase 12 wires this to UQuakeGameInstance so the
-	 * value persists across OpenLevel / respawn; until then, Normal is the
-	 * hardcoded default. Spawn points call this via IsEligible() to decide
-	 * whether to participate in stat counting and the clear scan.
+	 * Current difficulty. Phase 12: authoritative storage lives on
+	 * UQuakeGameInstance (survives OpenLevel and Character respawn). This
+	 * getter forwards there; on null GameInstance (test harness) it falls
+	 * back to Normal so pure helpers don't explode.
 	 */
 	UFUNCTION(BlueprintPure, Category = "Difficulty")
-	EQuakeDifficulty GetDifficulty() const { return CurrentDifficulty; }
+	EQuakeDifficulty GetDifficulty() const;
+
+	/**
+	 * DESIGN 6.1 multipliers table. Authored as a BP-tunable TMap; the C++
+	 * constructor seeds the SPEC 6.1 defaults so an unconfigured BP still
+	 * plays correctly. Read by AQuakeEnemyBase::ApplyDifficultyScaling and
+	 * by the Nightmare pain-immunity gate in the AI controller.
+	 */
+	UFUNCTION(BlueprintPure, Category = "Difficulty")
+	FQuakeDifficultyMultipliers GetDifficultyMultipliers() const;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Difficulty")
+	TMap<EQuakeDifficulty, FQuakeDifficultyMultipliers> DifficultyTable;
+
+	/**
+	 * Pure helper behind GetDifficultyMultipliers so the per-difficulty
+	 * lookup can be exercised by unit tests without a world. Returns the
+	 * table entry if present, otherwise a Normal-default (1.0/1.0, no
+	 * pain immunity) so callers never deal with null.
+	 */
+	static FQuakeDifficultyMultipliers LookupMultipliers(
+		const TMap<EQuakeDifficulty, FQuakeDifficultyMultipliers>& Table,
+		EQuakeDifficulty Difficulty);
 
 	// --- Phase 11: save/load orchestration ---
 
@@ -86,8 +109,4 @@ protected:
 	 * ConsumedPickupNames is derived at save time as `Initial \ Live`.
 	 */
 	TArray<FName> InitialPickupNames;
-
-	/** Phase 12 replaces this with a GameInstance read. */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Difficulty")
-	EQuakeDifficulty CurrentDifficulty = EQuakeDifficulty::Normal;
 };

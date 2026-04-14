@@ -1,6 +1,7 @@
 #include "QuakeEnemyAIController.h"
 #include "QuakeCharacter.h"
 #include "QuakeEnemyBase.h"
+#include "QuakeGameMode.h"
 
 #include "CollisionQueryParams.h"
 #include "Engine/EngineTypes.h"
@@ -251,15 +252,28 @@ void AQuakeEnemyAIController::OnDamaged(AController* EventInstigator, float Dama
 
 	// Pain roll: SPEC 3.3 pain_chance = min(0.8, damage / max_health * 2).
 	// The formula lives on the pawn (pure static) so unit tests can exercise
-	// it directly — we just consume the result here.
+	// it directly — we just consume the result here. DESIGN 6.1: Nightmare
+	// fully suppresses the roll (and the flinch) via bSuppressPain.
 	if (AQuakeEnemyBase* Enemy = GetEnemyPawn())
 	{
-		const float PainChance = AQuakeEnemyBase::ComputePainChance(DamageAmount, Enemy->GetMaxHealth());
-		if (PainChance > 0.f && FMath::FRand() < PainChance)
+		bool bPainSuppressed = false;
+		if (const UWorld* World = GetWorld())
 		{
-			Enemy->PlayPainReaction();
-			TransitionTo(EQuakeEnemyState::Pain);
-			return;
+			if (const AQuakeGameMode* GM = World->GetAuthGameMode<AQuakeGameMode>())
+			{
+				bPainSuppressed = GM->GetDifficultyMultipliers().bSuppressPain;
+			}
+		}
+
+		if (!bPainSuppressed)
+		{
+			const float PainChance = AQuakeEnemyBase::ComputePainChance(DamageAmount, Enemy->GetMaxHealth());
+			if (PainChance > 0.f && FMath::FRand() < PainChance)
+			{
+				Enemy->PlayPainReaction();
+				TransitionTo(EQuakeEnemyState::Pain);
+				return;
+			}
 		}
 	}
 
