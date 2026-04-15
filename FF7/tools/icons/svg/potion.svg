@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="liquid" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6fe38b"/>
+      <stop offset="1" stop-color="#1f7a3a"/>
+    </linearGradient>
+    <linearGradient id="glass" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.35"/>
+      <stop offset="0.5" stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.15"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="0" y="0" width="64" height="64" rx="8" ry="8" fill="#1a1d24"/>
+  <rect x="0" y="0" width="64" height="64" rx="8" ry="8" fill="none" stroke="#3a414d" stroke-width="2"/>
+
+  <rect x="26" y="10" width="12" height="6" fill="#b58b4a" stroke="#2a1a0a" stroke-width="1"/>
+  <path d="M 24 18 L 24 26 L 18 38 L 18 52 Q 18 56 22 56 L 42 56 Q 46 56 46 52 L 46 38 L 40 26 L 40 18 Z"
+        fill="url(#liquid)" stroke="#0f3a1c" stroke-width="1.5"/>
+  <path d="M 24 18 L 24 26 L 18 38 L 18 52 Q 18 56 22 56 L 42 56 Q 46 56 46 52 L 46 38 L 40 26 L 40 18 Z"
+        fill="url(#glass)"/>
+
+  <ellipse cx="24" cy="32" rx="2" ry="3" fill="#ffffff" opacity="0.4"/>
+
+  <text x="32" y="50" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="#ffffff">HP</text>
+</svg>

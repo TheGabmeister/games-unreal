@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Program Files/Inkscape/bin/**)",
+      "Read(//c/Program Files \\(x86\\)/Inkscape/bin/**)",
+      "Bash(where inkscape *)",
+      "Bash(\"/c/Program Files/Inkscape/bin/inkscape.exe\" --export-type=png --export-width=64 --export-height=64 --export-filename=\"c:/dev/games-unreal/FF7/tools/icons/png/potion.png\" \"c:/dev/games-unreal/FF7/tools/icons/svg/potion.svg\")",
+      "Bash(chmod +x \"c:/dev/games-unreal/FF7/tools/rasterize_icons.sh\")",
+      "Bash(\"c:/dev/games-unreal/FF7/tools/rasterize_icons.sh\")"
+    ]
+  }
+}

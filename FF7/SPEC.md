@@ -95,16 +95,16 @@ Rules:
 - All asset references may be null — the subsystem logs missing tracks and remains silent, never crashes. Drop in a WAV later, the row fills, playback works.
 - Gameplay fires multicast delegates (`OnBattleStart`, `OnBattleVictory`, `OnLevelUp`, `OnMenuOpen`, `OnFieldEnter`); the audio subsystem binds to them and never references assets directly.
 
-### Out of scope
+### v2 (deferred to next iteration)
 
-Explicitly not planned, to keep the learning arc focused:
+Not in v1 so the learning arc stays focused; picked up once v1 is complete:
 - Story content, cutscenes, pre-rendered backgrounds, FMV.
 - Row (Front/Back) positional damage modifier.
 - Battle-start modifiers (pre-emptive, back attack, side attack, pincer).
-- Weapon AP-growth multipliers (all weapons pass AP through 1:1 for now).
+- Weapon AP-growth multipliers (v1: all weapons pass AP through 1:1).
 - Morph / W-Item / W-Magic / W-Summon (double-cast command-materia variants).
 - Manipulate enemy control, Sense damage inspection.
-- Sadness/Fury as proper long-term stats (Berserk still used as a battle-scope status).
+- Sadness/Fury as proper long-term stats (v1 uses Berserk only as a battle-scope status).
 - Network / multiplayer.
 
 ### Stretch (late phase, scaffolding only)
@@ -120,7 +120,7 @@ This section is the source of truth for class names, APIs, data layouts, and arc
 
 ### 2.1 Build and module layout
 
-- Single `FF7` runtime module. Split into `FF7Core` / `FF7UI` / `FF7Combat` later if compile times hurt.
+- Single `FF7` runtime module.
 - `.Build.cs` deps: `Core`, `CoreUObject`, `Engine`, `InputCore`, `EnhancedInput`, `Slate`, `SlateCore`, `UMG`, `GameplayTags`, `DeveloperSettings`. Test-only: `AutomationController`, `FunctionalTesting`.
 - Module lifecycle in [Source/FF7/FF7.cpp](Source/FF7/FF7.cpp); the Slate style set (§2.8) registers in `StartupModule` and unregisters in `ShutdownModule`.
 - `DefaultEngine.ini` → `[/Script/EngineSettings.GameMapsSettings]`:
@@ -301,3 +301,22 @@ Deliberately thin. Only:
 - `BP_FF7PlayerController` — holds `UInputMappingContext` + `UInputAction` asset refs.
 - `BP_FF7FieldGameMode`, `BP_FF7BattleGameMode`, `BP_FF7WorldMapGameMode` — set default pawn/controller/HUD classes.
 - `BP_Item_<Name>`, `BP_Materia_<Name>` — only if per-asset tuning is needed (most live directly in DataTables/DataAssets).
+
+---
+
+## 3. Tools and asset pipeline
+
+Developer tooling that lives alongside the project but isn't part of the shipped game.
+
+### 3.1 Placeholder icon pipeline
+
+Placeholder icons (item / equipment / materia) are authored as SVG and rasterized to PNG via Inkscape CLI. UE has no native runtime SVG support, so the PNG is what `DT_Items`, `DT_Equipment`, and `UFF7MateriaDataAsset` reference through `TSoftObjectPtr<UTexture2D> Icon` fields (wired up in the phases that need them).
+
+**Directory layout:**
+- `tools/icons/svg/` — committed SVG sources (authoring format).
+- `tools/icons/png/` — committed rasterized output (consumed by Unreal).
+- `Content/UI/Icons/` — where PNGs are copied into the UE project once a phase actually needs them in-editor.
+
+**Rasterize script:** [tools/rasterize_icons.sh](tools/rasterize_icons.sh) — batch-converts every SVG in `tools/icons/svg/` to a matching PNG in `tools/icons/png/` at 64×64 (override with `SIZE=128 ./tools/rasterize_icons.sh`). Re-run manually when icons change; not part of the UE build.
+
+**When to swap for real art:** only the row values change — the `Icon` soft-ref path gets repointed from `tools/icons/png/potion.png` → `Content/UI/Icons/Potion_Final.png`. No code touches.
