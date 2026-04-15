@@ -168,6 +168,7 @@ This section is the source of truth for class names, APIs, data layouts, and arc
   - `TOptional<FReturnContext> PendingReturn` where `FReturnContext { FName LevelName; FTransform PlayerTransform; }` — survives `OpenLevel` so the field GM can teleport the pawn back.
   - Owned subobjects: `UFF7Inventory` (§2.7), audio subsystem hooks (§2.15).
 - `FPartyMember` (USTRUCT) — `FName CharacterId`, `FCharacterStats Stats`, `UFF7Equipment* Equipment`, `FLimitGauge Limit`.
+- **Extraction rule:** when a domain living on `UFF7GameInstance` grows past any of — (a) ~5 methods, (b) its own change-notification delegate, (c) a unit test that has to construct unrelated GameInstance state to compile — extract it into its own UObject owned by the GameInstance (pattern: `UFF7Inventory`). Don't split preemptively; do split before "add it to GameInstance too" becomes the default answer.
 - Game modes (subclasses of `AGameModeBase`):
   - `AFF7FieldGameMode`
   - `AFF7BattleGameMode`
@@ -347,6 +348,49 @@ Widgets not sketched (Status, Equip, Shop, Config, PHS) reuse the main-menu chro
 - PlayerController (same class as field, §2.3) hosts `SFF7BattleHUD` + `SFF7TargetPicker`. No separate battle controller class.
 - Escape rolls against a simple placeholder formula until Phase-15 polish replaces it; always fails against bosses.
 
+**Enemy data and AI.**
+
+Each enemy type is a row in `DT_Enemies`:
+
+```
+FEnemyRow : FTableRowBase {
+  FName                     Id;
+  FText                     DisplayName;
+  FCharacterStats           BaseStats;           // HP, MP, Str, Mag, Dex, etc.
+  TArray<FEnemyActionEntry> AI;                  // decision table; see below
+  TArray<FName>             DropTable;           // row ids from DT_Items / DT_Equipment
+  int32                     ExpReward;
+  int32                     APReward;
+  int32                     GilReward;
+  bool                      bIsBoss;             // disables Escape, blocks Manipulate later
+}
+```
+
+Decision-making is a **data-driven condition table** — not a behavior tree, not a scripting language. Each entry pairs a guard with an action and a weight:
+
+```
+FEnemyActionEntry {
+  EEnemyCondition Condition;     // Always | SelfHPBelowPct | TurnAtLeast
+                                 //  | SelfHasStatus | AnyAllyDefeated
+                                 //  | TargetHasStatus | Random
+  float           ConditionParam;// overloaded (percent, turn number, tag id)
+  FName           ActionId;      // resolves to a UFF7BattleAction: spell row,
+                                 //   attack id, or enemy-unique ability
+  int32           Weight;        // relative probability among eligible entries
+}
+```
+
+Decision algorithm, run when an enemy's ATB gauge fills:
+
+1. Filter `AI` entries whose `Condition` evaluates true against current battle state.
+2. If the filtered set is empty, fall back to entries with `Condition == Always`. (Every enemy must have at least one `Always` entry — enforced by a data validator.)
+3. Pick one entry by weighted random over the filtered set.
+4. Instantiate the action via `ActionId`, resolve target via the action's `TargetType` (§2.10 earlier), execute.
+
+Target selection for enemy single-target actions defaults to uniform random among non-KO'd active party members. A per-action `EEnemyTargetPreference { Random, LowestHP, HighestHP }` field on `FSpellRow` / attack rows lets specific abilities bias selection (added when an enemy needs it, not speculatively).
+
+The AI evaluator is a pure function of `(FEnemyRow.AI, FBattleState) → FEnemyActionEntry`, making it fully unit-testable without a world — feed a synthetic battle state, assert the chosen action. Boss-specific scripted behavior (phase transitions, turn-counter specials) stays expressible by growing the `EEnemyCondition` enum rather than escaping to a scripting layer.
+
 ### 2.11 ATB
 
 - `FATBGauge` per combatant, range `0..1000`. Fill rate `= f(Dex) * HasteMod` per second.
@@ -373,11 +417,58 @@ Widgets not sketched (Status, Equip, Shop, Config, PHS) reuse the main-menu chro
 
 ### 2.14 Save / Load
 
-- `UFF7SaveGame : USaveGame` — fields tagged `UPROPERTY(SaveGame)`. Serializes party, inventory, equipment (by row id), materia defs (as `FSoftObjectPath`) + AP, gil, world flags, current level, player-start tag, save version.
+- `UFF7SaveGame : USaveGame` — fields tagged `UPROPERTY(SaveGame)`; all fields are **plain-data structs**, never live UObject pointers (see serialization strategy below).
 - `UFF7SaveSubsystem : UGameInstanceSubsystem` — `Save(int32 Slot)`, `Load(int32 Slot)`, `ListSlots()` returning `TArray<FSaveSlotSummary>`.
 - 3 slots. Header `int32 SaveVersion = 1`; mismatch logs + refuses load (never silently corrupts).
 - `SFF7SaveMenu` (§2.8) lists slots with portraits-stub, play time, location name.
 - `AFF7SavePoint : AActor` (placed in field levels) — interact opens the save menu; Tent restores HP/MP; opens PHS.
+
+**Serialization strategy — flatten the live graph.**
+
+The runtime state has UObject pointers inside USTRUCTs (e.g. `FEquippedItem::Sockets` is `TArray<UFF7MateriaInstance*>`, and the same instance appears once in `UFF7GameInstance::MateriaPool`). `UPROPERTY(SaveGame)` on raw UObject pointers is a trap: instances need explicit re-creation on load, and shared references lose identity. The save layer *does not* save UObject pointers directly; it flattens the graph to plain structs at save time and reconstructs it at load time.
+
+Plain-struct schema (the entire contents of `UFF7SaveGame`):
+
+```
+FMateriaInstanceSerialized { int32 Id; FSoftObjectPath DefPath; int32 CurrentAP; }
+FEquippedItemSerialized    { FName EquipRowId; TArray<int32> SocketIds; }   // -1 = empty
+FEquipmentSerialized       { FEquippedItemSerialized Weapon, Armor, Accessory; }
+FPartyMemberSerialized     { FName CharacterId; FCharacterStats Stats;
+                             FEquipmentSerialized Equipment; FLimitGauge Limit; }
+
+UFF7SaveGame {
+  int32                             SaveVersion;
+  FDateTime                         SavedAt;
+  FName                             CurrentLevel;
+  FName                             PlayerStartTag;
+  TArray<FPartyMemberSerialized>    Roster;              // size 9
+  TArray<int32>                     ActivePartyIndices;  // size 3
+  int32                             Gil;
+  TMap<FName, int32>                WorldFlags;
+  TArray<FMateriaInstanceSerialized> AllMateria;         // pool + socketed, flat
+  TArray<int32>                     PoolMateriaIds;      // indices into AllMateria
+  FSaveSlotSummary                  Summary;             // denormalized for the slot list
+}
+```
+
+**Save procedure** (`UFF7SaveSubsystem::Save`):
+1. Assign each live `UFF7MateriaInstance` a stable `Id` (its index in a freshly built flat list).
+2. Emit every materia into `AllMateria` with its `Def` translated to `FSoftObjectPath` and its `CurrentAP`.
+3. Walk `UFF7GameInstance::MateriaPool` → `PoolMateriaIds`.
+4. Walk each `FPartyMember::Equipment` → emit `FEquippedItemSerialized` with sockets resolved to `Id`s (or `-1`).
+5. Copy scalars (`Gil`, `WorldFlags`, `ActivePartyIndices`, etc.) as-is.
+6. Write `Summary` with location, play time, and active-party levels for the slot list.
+7. `UGameplayStatics::SaveGameToSlot`.
+
+**Load procedure** (`UFF7SaveSubsystem::Load`):
+1. Read the save; reject on `SaveVersion` mismatch.
+2. Build a fresh `TArray<UFF7MateriaInstance*>` by `NewObject`ing one per `FMateriaInstanceSerialized`, setting `Def` (resolving the `FSoftObjectPath` via the AssetManager) and `CurrentAP`. Key lookup table: `Id → UFF7MateriaInstance*`.
+3. Reconstruct `UFF7GameInstance::MateriaPool` from `PoolMateriaIds` via the lookup.
+4. For each `FPartyMemberSerialized`, `NewObject<UFF7Equipment>()`, populate its three slots (`EquipRowId` + socket pointers resolved via the lookup; `-1` stays empty).
+5. Copy scalars back.
+6. `OpenLevel(CurrentLevel)`; field GM re-applies `PlayerStartTag` on BeginPlay.
+
+**Invariant:** every `UFF7MateriaInstance` appears in exactly one place post-load (pool or a single socket), matching the §2.9 rule. The save format makes this verifiable: check that `PoolMateriaIds ∪ {all socket ids ≠ -1}` is a partition of `AllMateria` ids.
 
 ### 2.15 Audio
 
