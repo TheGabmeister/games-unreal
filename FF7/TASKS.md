@@ -38,7 +38,7 @@ After each phase is implemented, I will walk through the code and explain every 
 
 ## Phase 1 — Player pawn and top-down camera
 
-**Scope:** [§2.2 Character representation](SPEC.md#22-character-representation), [§2.3 Player pawn and camera](SPEC.md#23-player-pawn-and-camera).
+**Scope:** [§2.2 Character representation](SPEC.md#22-character-representation), [§2.3 Player pawn and camera](SPEC.md#23-player-pawn-and-camera). Generate + import the Cloud placeholder mesh ([§3.2](SPEC.md#32-placeholder-3d-model-pipeline)) and reference it from the player pawn's `UStaticMeshComponent`.
 
 **Concepts**
 - `UCLASS`, `UPROPERTY`, `UFUNCTION` and the reflection system.
@@ -78,7 +78,7 @@ After each phase is implemented, I will walk through the code and explain every 
 
 ## Phase 3 — Game state and party roster
 
-**Scope:** [§2.5 Party and game state](SPEC.md#25-party-and-game-state) — GameInstance, Roster, Gil plumbing, `FPartyMember` shell, exec debug commands. Equipment/materia refs on the struct stay empty until Phase 7.
+**Scope:** [§2.5 Party and game state](SPEC.md#25-party-and-game-state) — GameInstance, Roster, Gil plumbing, `FPartyMember` shell, exec debug commands. Equipment/materia refs on the struct stay empty until Phase 7. Generate + import placeholder meshes for the remaining 8 party members (Barret, Tifa, Aerith, Red XIII, Yuffie, Cait Sith, Vincent, Cid); Red XIII and Cait Sith need non-humanoid recipes. Stub `UFF7CharacterDefinition` assets point at each mesh.
 
 **Concepts**
 - `UGameInstance` lifecycle — why persistent state lives here, not GameMode.
@@ -177,6 +177,10 @@ After each phase is implemented, I will walk through the code and explain every 
 - `FF7.Equip.UnequipReverts` (spec).
 - `FF7.Materia.APGrowsTier` (spec).
 - `FF7.Equip.LinkedPairDetection` (spec).
+- `FF7.Materia.AcquireGoesToPool` (spec) — new instance created → lands in `MateriaPool`.
+- `FF7.Materia.SocketMovesFromPool` (spec) — socketing removes from pool, inserts into `FEquippedItem.Sockets`.
+- `FF7.Materia.UnsocketReturnsToPool` (spec).
+- `FF7.Materia.OneLocationInvariant` (spec) — no instance appears in both pool and a socket.
 
 **Manual**
 - Equip Buster Sword on Cloud; Attack rises on Status tab.
@@ -186,7 +190,7 @@ After each phase is implemented, I will walk through the code and explain every 
 
 ## Phase 8 — Combat scaffold (turn-based skeleton)
 
-**Scope:** [§2.10 Combat framework](SPEC.md#210-combat-framework). ATB deferred to Phase 9 — this phase runs sequential turns. Commands: Attack + Escape. Creates `L_BattleArena.umap`.
+**Scope:** [§2.10 Combat framework](SPEC.md#210-combat-framework). ATB deferred to Phase 9 — this phase runs sequential turns. Commands: Attack + Escape. Creates `L_BattleArena.umap`. Generate + import placeholder meshes for the starter enemy set (Guard Hound, Grashtrike, MP soldier, Sweeper) via recipes in `tools/generate_meshes.py`; wire `FEnemyRow.PlaceholderMesh` in `DT_Enemies`.
 
 **Concepts**
 - Multi-GameMode project — per-level mode selection.
@@ -199,8 +203,12 @@ After each phase is implemented, I will walk through the code and explain every 
 - `FF7.Battle.TurnOrderRoundRobin` (spec).
 - `FF7.Battle.AttackReducesHP` (spec).
 - `FF7.Battle.EscapeReturnsToField` (spec).
+- `FF7.EnemyAI.AlwaysFallback` (spec) — empty eligible set → picks an `Always` entry.
+- `FF7.EnemyAI.ConditionFilter` (spec) — `SelfHPBelowPct 50` gates correctly above/below threshold.
+- `FF7.EnemyAI.WeightedPick` (spec) — deterministic RNG seed → expected entry selected.
+- `FF7.EnemyAI.MissingAlwaysFailsValidation` (spec) — `FEnemyRow` without any `Always` entry rejected by the data validator.
 - `FF7.Battle.VictoryAwardsEXP` (functional).
-- `FF7.Battle.FieldToBattleTransition` (functional).
+- `FF7.Battle.FieldToBattleTransition` (functional) — encounter trigger → `PendingEnemies` populated → arena spawns them.
 
 **Manual**
 - Walk into encounter trigger → arena loads; 3 allies vs enemies.
@@ -280,15 +288,16 @@ After each phase is implemented, I will walk through the code and explain every 
 **Concepts**
 - `USaveGame` + `SaveGame` UPROPERTY flag.
 - `UGameplayStatics::SaveGameToSlot` / `LoadGameFromSlot` / `DoesSaveGameExist`.
-- `FSoftObjectPath` for serializing asset references (materia defs).
-- `FArchive` basics.
+- Why live UObject pointers don't go into `UPROPERTY(SaveGame)` — the flatten-to-plain-struct pattern (§2.14 save/load procedures).
+- `FSoftObjectPath` + AssetManager resolution for asset refs (materia defs).
 - `UGameInstanceSubsystem` lifecycle vs singletons.
 
 **Tests**
 - `FF7.Save.RoundTrip` (spec).
 - `FF7.Save.VersionMismatchRefuses` (spec).
 - `FF7.Save.MissingSlotEmptyList` (spec).
-- `FF7.Save.EndToEnd` (functional).
+- `FF7.Save.PartitionInvariant` (spec) — after save, `PoolMateriaIds ∪ socket ids` partitions `AllMateria`; no duplicates, no orphans.
+- `FF7.Save.EndToEnd` (functional) — field state → save → wipe GameInstance → load → state recovered.
 
 **Manual**
 - Grant items/EXP, save to slot 0, close PIE, reopen, load, state intact.
@@ -342,7 +351,7 @@ After each phase is implemented, I will walk through the code and explain every 
 
 **Concepts**
 - Data-flow consolidation (shops touch inventory + gil + UI; save points touch save + PHS + party).
-- Module split revisit — if compile times hurt, split now.
+- Integration-test design — the end-to-end test is where separately-phased systems prove they compose.
 
 **Tests**
 - `FF7.Shop.BuySellBalancesGil` (spec).

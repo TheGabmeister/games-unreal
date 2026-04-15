@@ -130,9 +130,10 @@ This section is the source of truth for class names, APIs, data layouts, and arc
 
 ### 2.2 Character representation
 
-- `AFF7CharacterBase : APawn` — capsule collision as root + `USceneComponent` visual pivot with placeholder `UStaticMeshComponent` children (cube body, cube head, direction indicator).
+- `AFF7CharacterBase : APawn` — capsule collision as root + `USceneComponent` visual pivot hosting a single `UStaticMeshComponent` for the placeholder model.
+- The placeholder mesh is a generated OBJ (see §3.2) imported as a `UStaticMesh` asset. Per-character-type definitions point at the asset via `TSoftObjectPtr<UStaticMesh> PlaceholderMesh` — on `UFF7CharacterDefinition` (§2.13) for party members, on `FEnemyRow` (§2.10) for enemies. Placeholder meshes are static T-pose figures with no rigging or animation; the goal is distinguishable silhouettes, not fidelity.
 - Base class is `APawn` (not `AActor`) so any subclass can be possessed by a `PlayerController`. Party and enemy subclasses never actually get possessed in battle — they're driven by the battle subsystem — but being pawns keeps the hierarchy uniform and avoids a split the moment the player pawn needs the same visuals.
-- Replacing placeholders with a `USkeletalMeshComponent` later is an isolated edit to the visual pivot; no gameplay code changes.
+- Replacing the placeholder with a skeletal mesh later is an isolated change to the visual pivot's component type — the existing soft-pointer field (or a parallel `TSoftObjectPtr<USkeletalMesh>`) swaps in. No gameplay code changes.
 - `AFF7PartyMemberPawn : AFF7CharacterBase` — party member in battle arenas (spawned, not possessed).
 - `AFF7EnemyPawn : AFF7CharacterBase` — enemy unit (spawned, not possessed).
 - Both implement `IFF7Damageable` and `IFF7StatusTarget` (§2.10) so battle code is side-agnostic.
@@ -165,8 +166,12 @@ This section is the source of truth for class names, APIs, data layouts, and arc
   - `int32 Gil` with `AddGil(int32)`, `SpendGil(int32)`, `OnGilChanged` delegate
   - `TMap<FName, int32> WorldFlags`
   - `TArray<UFF7MateriaInstance*> MateriaPool` — all materia the player owns that isn't currently socketed (§2.9).
+  - `UFF7Inventory* Inventory` (UPROPERTY, instanced; §2.7).
+  - `FGameConfig Config { EATBMode ATBMode = Active; int32 ATBSpeed = 3; float BGMVolume = 1.0f; float SFXVolume = 1.0f; }` — player settings; `OnConfigChanged` delegate fires on mutation.
+  - `float PlayTimeSeconds` — accumulates on field/battle tick; included in `FSaveSlotSummary` (§2.14).
+  - `FName CurrentEncounterId` + `TArray<FName> PendingEnemies` — scratch handoff from `AFF7EncounterTrigger` (field world) to `AFF7BattleGameMode` (battle world). Cleared after the arena spawns its enemies.
   - `TOptional<FReturnContext> PendingReturn` where `FReturnContext { FName LevelName; FTransform PlayerTransform; }` — survives `OpenLevel` so the field GM can teleport the pawn back.
-  - Owned subobjects: `UFF7Inventory` (§2.7), audio subsystem hooks (§2.15).
+  - Audio subsystem (§2.15) auto-created by the subsystem framework; not stored as an owned field.
 - `FPartyMember` (USTRUCT) — `FName CharacterId`, `FCharacterStats Stats`, `UFF7Equipment* Equipment`, `FLimitGauge Limit`.
 - **Extraction rule:** when a domain living on `UFF7GameInstance` grows past any of — (a) ~5 methods, (b) its own change-notification delegate, (c) a unit test that has to construct unrelated GameInstance state to compile — extract it into its own UObject owned by the GameInstance (pattern: `UFF7Inventory`). Don't split preemptively; do split before "add it to GameInstance too" becomes the default answer.
 - Game modes (subclasses of `AGameModeBase`):
@@ -337,14 +342,16 @@ Widgets not sketched (Status, Equip, Shop, Config, PHS) reuse the main-menu chro
 ### 2.10 Combat framework
 
 - `UFF7BattleSubsystem : UTickableWorldSubsystem` — lives only in the battle world; owns combatants, action queue, turn state, delegates. The subsystem itself ticks; no separate ticking actor.
-- State machine: `EBattleState { SelectAction, Executing, Resolving, Victory, Defeat }` owned by the subsystem.
+- State machine enum: `EBattleState { SelectAction, Executing, Resolving, Victory, Defeat }` owned by the subsystem.
+- `FBattleState` (runtime snapshot passed to AI / tests) — `int32 TurnNumber; TArray<FCombatantSnapshot> Allies; TArray<FCombatantSnapshot> Enemies;` where `FCombatantSnapshot { AFF7CharacterBase* Pawn; FCharacterStats Stats; FGameplayTagContainer Statuses; bool bIsKO; }`. Pure-data view, not the live subsystem state.
 - `UFF7BattleAction : UObject` — base class for concrete actions (Attack, Magic, Item, Limit, Summon, Escape). Virtual `Execute(FBattleContext&)`.
+- `FBattleContext` — passed into `Execute`: `UFF7BattleSubsystem* Subsystem; AFF7CharacterBase* Source; TArray<AFF7CharacterBase*> Targets; FName ActionId; int32 ActionParam;`.
 - Interfaces:
   - `IFF7Damageable` — `TakePhysicalDamage(...)`, `TakeMagicalDamage(...)`.
   - `IFF7StatusTarget` — `ApplyStatus(...)`, `RemoveStatus(...)`, `HasStatus(...)`.
 - Multicast delegates: `OnBattleStart`, `OnBattleVictory`, `OnBattleDefeat`, `OnCombatantActed`, `OnDamageDealt`, `OnGaugeFull`, `OnATBModeChanged`.
 - `AFF7BattleGameMode` spawns active party + encounter enemies on BeginPlay. On victory it sets `PendingReturn` and calls `OpenLevel(PendingReturn.LevelName)`; `AFF7FieldGameMode::BeginPlay` checks for a pending return, teleports the possessed pawn to `PlayerTransform`, and clears it. (`OpenLevel` doesn't carry a transform — hence the re-apply.)
-- `AFF7EncounterTrigger : AActor` — overlap volume; on player overlap, populates `PendingReturn` with current field + pawn transform, then `OpenLevel(L_BattleArena)`.
+- `AFF7EncounterTrigger : AActor` — overlap volume with a designer-authored `TArray<FName> EnemyIds` (resolved against `DT_Enemies`) and a `FName EncounterId`. On player overlap: writes `EnemyIds` into GameInstance's pending encounter (via `CurrentEncounterId` + an `PendingEnemies` scratch array), populates `PendingReturn` with current field + pawn transform, then `OpenLevel(L_BattleArena)`. `AFF7BattleGameMode::BeginPlay` reads `PendingEnemies`, spawns each as `AFF7EnemyPawn`, clears the scratch array. (Random-encounter tables deferred — v1 uses placed triggers only.)
 - PlayerController (same class as field, §2.3) hosts `SFF7BattleHUD` + `SFF7TargetPicker`. No separate battle controller class.
 - Escape rolls against a simple placeholder formula until Phase-15 polish replaces it; always fails against bosses.
 
@@ -409,7 +416,7 @@ The AI evaluator is a pure function of `(FEnemyRow.AI, FBattleState) → FEnemyA
 
 ### 2.13 Limit Breaks
 
-- `FLimitGauge` per party member, range `0..255`, fills on damage taken (bound to `OnDamageDealt` in §2.10).
+- `FLimitGauge` per party member — `uint8 Fill` (0..255), `uint8 TierUnlocked` (which Limit tier the character has reached), `uint8 ActiveBranch` (which tier-branch is currently selected), `int32 KillCount`, `int32 BranchUseCount`. Fills via `OnDamageDealt` in §2.10.
 - `UFF7CharacterDefinition : UPrimaryDataAsset` — per-character starting stats, weapon restriction, Limit branches, tier unlock conditions (kill counts, branch usage). Also the home for other per-character constants earlier phases implicitly assumed.
 - `UFF7LimitAction : UFF7BattleAction` subclasses — Braver, Cross-Slash (Cloud), Beat Rush (Tifa), etc.
 - When a party member's gauge is full, Limit replaces Attack in their command menu. Executing resets the gauge.
@@ -420,6 +427,7 @@ The AI evaluator is a pure function of `(FEnemyRow.AI, FBattleState) → FEnemyA
 - `UFF7SaveGame : USaveGame` — fields tagged `UPROPERTY(SaveGame)`; all fields are **plain-data structs**, never live UObject pointers (see serialization strategy below).
 - `UFF7SaveSubsystem : UGameInstanceSubsystem` — `Save(int32 Slot)`, `Load(int32 Slot)`, `ListSlots()` returning `TArray<FSaveSlotSummary>`.
 - 3 slots. Header `int32 SaveVersion = 1`; mismatch logs + refuses load (never silently corrupts).
+- `FSaveSlotSummary` — `FText LocationName; FTimespan PlayTime; TArray<FName> ActiveCharIds; TArray<int32> ActiveLevels; FDateTime SavedAt;` — denormalized for the save-slot list so `ListSlots` doesn't have to deserialize each full save.
 - `SFF7SaveMenu` (§2.8) lists slots with portraits-stub, play time, location name.
 - `AFF7SavePoint : AActor` (placed in field levels) — interact opens the save menu; Tent restores HP/MP; opens PHS.
 
@@ -474,7 +482,7 @@ UFF7SaveGame {
 
 - `UFF7AudioSubsystem : UGameInstanceSubsystem`.
 - API: `PlayBGM(FName)`, `StopBGM(float FadeSeconds)`, `PlaySFX(FName)`, `PlayJingle(FName)` (pauses BGM, plays jingle, resumes).
-- `FAudioTrackRow : FTableRowBase { TSoftObjectPtr<USoundBase> Asset; float Volume; bool bLooping; }` in `DT_AudioTracks`.
+- `FAudioTrackRow : FTableRowBase { TSoftObjectPtr<USoundBase> Asset; float Volume; bool bLooping; }` in `DT_AudioTracks`. Row-id naming convention: `BGM_*` (looping music), `Jingle_*` (short interrupts), `SFX_*` (one-shots).
 - Two `UAudioComponent` slots for BGM crossfade; async-load via `FStreamableManager`.
 - Null `Asset` → log once, play nothing. Never crash. Drop in a WAV by editing the row.
 - Subsystem binds to gameplay delegates from §2.10, §2.6, §2.8 — `OnBattleStart → PlayBGM("BGM_Battle")`, `OnBattleVictory → PlayJingle("Jingle_Victory")`, etc. Gameplay never references audio assets directly.
@@ -530,3 +538,36 @@ Placeholder icons (item / equipment / materia) are authored as SVG and rasterize
 **Rasterize script:** [tools/rasterize_icons.sh](tools/rasterize_icons.sh) — batch-converts every SVG in `tools/icons/svg/` to a matching PNG in `tools/icons/png/` at 64×64 (override with `SIZE=128 ./tools/rasterize_icons.sh`). Re-run manually when icons change; not part of the UE build.
 
 **When to swap for real art:** only the row values change — the `Icon` soft-ref path gets repointed from `tools/icons/png/potion.png` → `Content/UI/Icons/Potion_Final.png`. No code touches.
+
+### 3.2 Placeholder 3D model pipeline
+
+Character and enemy placeholders are generated as OBJ files from Python recipes, then imported once into Unreal as `UStaticMesh` assets. No bespoke modeling, no rigging, no animations — static T-pose figures whose silhouettes distinguish entities. The goal is "I can tell Cloud from Barret from a Guard Hound at a glance," not visual fidelity.
+
+**Directory layout:**
+- `tools/generate_meshes.py` — primitive builders (`cuboid`, `cylinder_z`, `uv_sphere`), recipe dataclasses (`HumanoidRecipe`, etc.), and the `RECIPES` dispatch dict.
+- `tools/meshes/characters/` — committed OBJ outputs for party members.
+- `tools/meshes/enemies/` — committed OBJ outputs for enemies.
+- `Content/Placeholder/Characters/`, `Content/Placeholder/Enemies/` — imported `.uasset` destinations inside the UE project.
+
+**Coordinate convention:**
+- Z-up (Unreal-native), units in centimeters, feet at `Z = 0`, character faces `+Y` in OBJ space. Default UE OBJ import maps this correctly (character stands upright, `+Y` → UE `+X` forward).
+
+**Generate:**
+```bash
+python tools/generate_meshes.py              # all recipes
+python tools/generate_meshes.py Cloud Tifa   # specific
+```
+Each run reports vert/tri counts and bounds per mesh — useful for sanity-checking proportions.
+
+**Recipes:**
+`HumanoidRecipe` (dataclass of head radius, torso size, arm radius, hip size, etc.) drives parameterized humans. Non-humanoid forms (Red XIII quadruped, Cait Sith on Moogle, mechanical enemies) get dedicated builder functions that return a `Mesh`. Every recipe registers itself in the `RECIPES` dict.
+
+**Import:**
+One-time manual step per mesh. Drag the OBJ into the Content Browser at `Content/Placeholder/<Kind>/`. Enable "Auto Generate Collision" so the capsule isn't the only collider; the visual mesh doesn't need precise collision, so the auto-generated hull is adequate. Re-importing over an existing asset preserves any per-material overrides.
+
+**Data wiring:**
+- `UFF7CharacterDefinition` (§2.13) → `TSoftObjectPtr<UStaticMesh> PlaceholderMesh`.
+- `FEnemyRow` (§2.10) → `TSoftObjectPtr<UStaticMesh> PlaceholderMesh`.
+- `AFF7CharacterBase` resolves the soft pointer on spawn and assigns the result to its `UStaticMeshComponent`. Null/unresolved → a fallback cube so the pawn is still visible during development.
+
+**When to swap for real art:** the soft-pointer field gets repointed (or a parallel `TSoftObjectPtr<USkeletalMesh>` added) and the `UStaticMeshComponent` swaps to `USkeletalMeshComponent`. Recipe scripts and gameplay code untouched.
