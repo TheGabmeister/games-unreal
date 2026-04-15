@@ -220,10 +220,94 @@ def build_humanoid(recipe: HumanoidRecipe) -> Mesh:
     return m
 
 
+# ---------- non-humanoid builders ---------- #
+
+def build_redxiii() -> Mesh:
+    """Quadruped: long body along +Y, four legs, head forward, tail up-back."""
+    m = Mesh()
+    body_len = 110.0
+    body_w = 32.0
+    body_h = 38.0
+    body_cz = 52.0   # body center Z (leg_top + body_h / 2)
+    leg_top = body_cz - body_h / 2
+    # Body
+    m.merge(cuboid(0.0, 0.0, body_cz, body_w, body_len, body_h))
+    # Head at +Y end, direction indicator (+Y nose)
+    head_cy = body_len / 2 + 18.0
+    head_cz = body_cz + 8.0
+    m.merge(uv_sphere(0.0, head_cy, head_cz, 18.0, segments=16, rings=10))
+    m.merge(cuboid(0.0, head_cy + 18.0, head_cz, 4.0, 8.0, 4.0))  # nose
+    # 4 legs
+    leg_r = 6.0
+    for dx, dy in [(-12.0, -38.0), (12.0, -38.0), (-12.0, 38.0), (12.0, 38.0)]:
+        m.merge(cylinder_z(dx, dy, 0.0, leg_top, leg_r, segments=10))
+    # Tail (back, up)
+    m.merge(cylinder_z(0.0, -body_len / 2 - 8.0, body_cz, body_cz + 44.0, 4.0, segments=8))
+    return m
+
+
+def build_caitsith() -> Mesh:
+    """Small cat perched atop a stubby moogle body. Two stacked silhouettes."""
+    m = Mesh()
+    # Moogle body (big sphere, short legs)
+    moogle_cz = 55.0
+    m.merge(uv_sphere(0.0, 0.0, moogle_cz, 32.0, segments=18, rings=12))
+    # Stubby legs
+    for dx in (-12.0, 12.0):
+        m.merge(cylinder_z(dx, 0.0, 0.0, 28.0, 6.0, segments=10))
+    # Side arms (short nubs)
+    for dx in (-34.0, 34.0):
+        m.merge(cylinder_z(dx, 0.0, 48.0, 68.0, 4.0, segments=8))
+    # Cat body on top
+    cat_cz = moogle_cz + 40.0
+    m.merge(uv_sphere(0.0, 0.0, cat_cz, 18.0, segments=14, rings=10))
+    # Cat head
+    head_cz = cat_cz + 22.0
+    m.merge(uv_sphere(0.0, 0.0, head_cz, 12.0, segments=12, rings=8))
+    # Ears
+    for dx in (-6.0, 6.0):
+        m.merge(cuboid(dx, 0.0, head_cz + 10.0, 4.0, 4.0, 8.0))
+    # Direction indicator (+Y nose on cat head)
+    m.merge(cuboid(0.0, 13.0, head_cz, 3.0, 4.0, 3.0))
+    return m
+
+
 # ---------- recipes ---------- #
 
+def _tall_humanoid(height_mul: float, width_mul: float = 1.0) -> HumanoidRecipe:
+    """Helper: scale a base humanoid by percentages for silhouette distinction."""
+    base = HumanoidRecipe()
+    s = height_mul
+    w = width_mul
+    return HumanoidRecipe(
+        total_height=base.total_height * s,
+        head_radius=base.head_radius * s,
+        neck_radius=base.neck_radius * s,
+        neck_height=base.neck_height * s,
+        torso_size=(base.torso_size[0] * w, base.torso_size[1] * w, base.torso_size[2] * s),
+        torso_top_z=base.torso_top_z * s,
+        hip_size=(base.hip_size[0] * w, base.hip_size[1] * w, base.hip_size[2] * s),
+        hip_top_z=base.hip_top_z * s,
+        arm_radius=base.arm_radius * w,
+        arm_offset_x=base.arm_offset_x * w,
+        arm_top_z=base.arm_top_z * s,
+        arm_bottom_z=base.arm_bottom_z * s,
+        leg_radius=base.leg_radius * w,
+        leg_offset_x=base.leg_offset_x * w,
+        leg_top_z=base.leg_top_z * s,
+    )
+
+
 RECIPES: dict[str, Callable[[], Mesh]] = {
-    "Cloud": lambda: build_humanoid(HumanoidRecipe()),
+    "Cloud":    lambda: build_humanoid(HumanoidRecipe()),
+    "Barret":   lambda: build_humanoid(_tall_humanoid(1.10, 1.25)),   # tall, broad
+    "Tifa":     lambda: build_humanoid(_tall_humanoid(0.93, 0.90)),   # slim, athletic
+    "Aerith":   lambda: build_humanoid(_tall_humanoid(0.92, 0.85)),   # slim
+    "RedXIII":  build_redxiii,                                        # quadruped
+    "Yuffie":   lambda: build_humanoid(_tall_humanoid(0.88, 0.85)),   # shortest humanoid
+    "CaitSith": build_caitsith,                                       # stacked
+    "Vincent":  lambda: build_humanoid(_tall_humanoid(1.04, 0.92)),   # tall, slim
+    "Cid":      lambda: build_humanoid(_tall_humanoid(0.99, 1.10)),   # stocky
 }
 
 
