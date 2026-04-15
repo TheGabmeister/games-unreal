@@ -10,7 +10,7 @@ class AFF7PlayerController;
 
 /**
  * Two-class UINTERFACE pattern (SPEC §2.4). UHT generates `Execute_Interact`
- * on UFF7Interactable; callers use `IFF7Interactable::Execute_Interact(Obj, By)`
+ * on UFF7Interactable; callers use `IFF7Interactable::Execute_Interact(Obj, Interactor)`
  * which dispatches to the C++ or BP implementation transparently.
  */
 UINTERFACE(MinimalAPI, Blueprintable)
@@ -25,6 +25,6 @@ class FF7_API IFF7Interactable
 
 public:
 	UFUNCTION(BlueprintNativeEvent, Category = "FF7|Interact")
-	void Interact(AFF7PlayerController* By);
-	virtual void Interact_Implementation(AFF7PlayerController* By) {}
+	void Interact(AFF7PlayerController* Interactor);
+	virtual void Interact_Implementation(AFF7PlayerController* Interactor) {}
 };

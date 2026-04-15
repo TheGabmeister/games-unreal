@@ -30,12 +30,12 @@ AFF7NPCActor::AFF7NPCActor()
 	InteractVolume->SetCollisionResponseToChannel(FF7::ECC_Interact, ECR_Block);
 }
 
-void AFF7NPCActor::Interact_Implementation(AFF7PlayerController* By)
+void AFF7NPCActor::Interact_Implementation(AFF7PlayerController* Interactor)
 {
-	if (!By || !DialogueTable || StartRowId.IsNone())
+	if (!Interactor || !DialogueTable || StartRowId.IsNone())
 	{
 		return;
 	}
 
-	By->StartDialogue(DialogueTable, StartRowId);
+	Interactor->StartDialogue(DialogueTable, StartRowId);
 }

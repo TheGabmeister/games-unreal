@@ -33,7 +33,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "FF7|Dialogue")
 	FName StartRowId;
 
-	virtual void Interact_Implementation(AFF7PlayerController* By) override;
+	virtual void Interact_Implementation(AFF7PlayerController* Interactor) override;
 
 	UCapsuleComponent* GetCapsule() const { return Capsule; }
 	UStaticMeshComponent* GetMesh() const { return Mesh; }
