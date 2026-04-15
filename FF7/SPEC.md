@@ -130,10 +130,11 @@ This section is the source of truth for class names, APIs, data layouts, and arc
 
 ### 2.2 Character representation
 
-- `AFF7CharacterBase : AActor` — capsule collision + `USceneComponent` visual root with placeholder `UStaticMeshComponent` children (cube body, cube head, direction indicator).
-- Replacing placeholders with a `USkeletalMeshComponent` later is an isolated edit to the visual root; no gameplay code changes.
-- `AFF7PartyMemberActor : AFF7CharacterBase` — party member in battle arenas.
-- `AFF7EnemyActor : AFF7CharacterBase` — enemy unit.
+- `AFF7CharacterBase : APawn` — capsule collision as root + `USceneComponent` visual pivot with placeholder `UStaticMeshComponent` children (cube body, cube head, direction indicator).
+- Base class is `APawn` (not `AActor`) so any subclass can be possessed by a `PlayerController`. Party and enemy subclasses never actually get possessed in battle — they're driven by the battle subsystem — but being pawns keeps the hierarchy uniform and avoids a split the moment the player pawn needs the same visuals.
+- Replacing placeholders with a `USkeletalMeshComponent` later is an isolated edit to the visual pivot; no gameplay code changes.
+- `AFF7PartyMemberPawn : AFF7CharacterBase` — party member in battle arenas (spawned, not possessed).
+- `AFF7EnemyPawn : AFF7CharacterBase` — enemy unit (spawned, not possessed).
 - Both implement `IFF7Damageable` and `IFF7StatusTarget` (§2.10) so battle code is side-agnostic.
 
 ### 2.3 Player pawn and camera
@@ -163,6 +164,7 @@ This section is the source of truth for class names, APIs, data layouts, and arc
   - `TArray<int32> ActivePartyIndices` (size 3; default `[0,1,2]`)
   - `int32 Gil` with `AddGil(int32)`, `SpendGil(int32)`, `OnGilChanged` delegate
   - `TMap<FName, int32> WorldFlags`
+  - `TArray<UFF7MateriaInstance*> MateriaPool` — all materia the player owns that isn't currently socketed (§2.9).
   - `TOptional<FReturnContext> PendingReturn` where `FReturnContext { FName LevelName; FTransform PlayerTransform; }` — survives `OpenLevel` so the field GM can teleport the pawn back.
   - Owned subobjects: `UFF7Inventory` (§2.7), audio subsystem hooks (§2.15).
 - `FPartyMember` (USTRUCT) — `FName CharacterId`, `FCharacterStats Stats`, `UFF7Equipment* Equipment`, `FLimitGauge Limit`.
@@ -205,14 +207,131 @@ This section is the source of truth for class names, APIs, data layouts, and arc
   - `SFF7BattleHUD`, `SFF7TargetPicker` (§2.10).
 - Live binding via `TAttribute<T>` closures; change notifications via multicast delegates.
 
+**Layout sketches**
+
+Placeholders — geometry and information hierarchy, not final visuals. Typography, color, and spacing are defined in `FFF7MenuStyle` and reused across widgets.
+
+*Field — dialogue popup anchored bottom-center, no ambient HUD:*
+```
+┌──────────────────────────────────────────────────────────┐
+│                                                          │
+│                                                          │
+│                    [ field level 3D ]                    │
+│                                                          │
+│                         (player)                         │
+│                                                          │
+│                                                          │
+│   ┌──────────────────────────────────────────────────┐   │
+│   │ Cloud                                            │   │
+│   │ The mako reactor is just ahead. Let's move.    ▶ │   │
+│   └──────────────────────────────────────────────────┘   │
+└──────────────────────────────────────────────────────────┘
+```
+
+*Main menu — tab row at top, active-tab content on the left, persistent party sidebar on the right (shared chrome used by Item/Magic/Materia/Equip/Status/Config/Save/PHS):*
+```
+┌──────────────────────────────────────────────────────────┐
+│ ┌─────┬──────┬───────┬──────┬──────┬──────┬─────┬─────┐  │
+│ │Item▾│Magic │Materia│ Equip│Status│Config│ Save│ PHS │  │
+│ └─────┴──────┴───────┴──────┴──────┴──────┴─────┴─────┘  │
+│                                                          │
+│  ┌────────────────────────────┐  ┌───────────────────┐   │
+│  │▶ Potion                x12 │  │ Cloud             │   │
+│  │  Hi-Potion             x 3 │  │ Lv 14  HP 340/340 │   │
+│  │  Ether                 x 1 │  │        MP  47/ 47 │   │
+│  │  Phoenix Down          x 2 │  ├───────────────────┤   │
+│  │  Tent                  x 2 │  │ Barret            │   │
+│  │                            │  │ Lv 13  HP 410/410 │   │
+│  │                            │  │        MP  38/ 38 │   │
+│  └────────────────────────────┘  ├───────────────────┤   │
+│                                  │ Tifa              │   │
+│   Gil  1,248                     │ Lv 13  HP 320/320 │   │
+│                                  │        MP  52/ 52 │   │
+│                                  └───────────────────┘   │
+└──────────────────────────────────────────────────────────┘
+```
+
+*Materia screen — equipment sockets on the left with linked pairs drawn as connecting lines; loose materia list on the right:*
+```
+┌──────────────────────────────────────────────────────────┐
+│ [ tab row ]                                              │
+│                                                          │
+│  Cloud's equipment                 Available materia     │
+│  ┌──────────────────────────────┐  ┌───────────────────┐ │
+│  │ Weapon  Buster Sword         │  │ ● Fire     Lv 2   │ │
+│  │   ●───●   ○   ○              │  │ ● Cure     Lv 1   │ │
+│  │   Fire All                   │  │ ● All      Lv 1   │ │
+│  │                              │  │ ● Bolt     Lv 1   │ │
+│  │ Armor   Bronze Bangle        │  │ ● Restore  MASTER │ │
+│  │   ●   ○                      │  │ ● HP Plus  Lv 2   │ │
+│  │   Bolt                       │  │                   │ │
+│  │                              │  │                   │ │
+│  │ Accessory   —                │  │                   │ │
+│  └──────────────────────────────┘  └───────────────────┘ │
+│                                                          │
+│  ○ empty socket   ● filled   ●─● linked pair             │
+└──────────────────────────────────────────────────────────┘
+```
+
+*Battle HUD — enemies top, party models middle, party status + ATB strip below, active character's command menu bottom-left, target selection overlays the enemy row:*
+```
+┌──────────────────────────────────────────────────────────┐
+│                                                          │
+│      Guard Hound     Guard Hound ◀      Grashtrike       │
+│                                                          │
+│                  [ party 3D ]                            │
+│                                                          │
+├──────────────────────────────────────────────────────────┤
+│ Cloud    HP 340/340  MP 47/47  ATB [██████████]  ★Limit  │
+│ Barret   HP 410/410  MP 38/38  ATB [██████░░░░]          │
+│ Tifa     HP 252/320  MP 52/52  ATB [███░░░░░░░]          │
+├──────────────────────┬───────────────────────────────────┤
+│ ▶ Attack             │                                   │
+│   Magic              │    (target cursor ◀ on enemy)     │
+│   Summon             │                                   │
+│   Item               │                                   │
+│   Defend             │                                   │
+│   Escape             │                                   │
+└──────────────────────┴───────────────────────────────────┘
+```
+
+*Save menu — 3 slots showing `FSaveSlotSummary` (location, play time, active party levels):*
+```
+┌──────────────────────────────────────────────────────────┐
+│ Save Game                                                │
+│                                                          │
+│  ┌────────────────────────────────────────────────────┐  │
+│  │ Slot 1   Sector 7 Slums                 03:14:22   │  │
+│  │ Cloud Lv 14   Barret Lv 13   Tifa Lv 13            │  │
+│  └────────────────────────────────────────────────────┘  │
+│  ┌────────────────────────────────────────────────────┐  │
+│  │ Slot 2   — Empty —                                 │  │
+│  └────────────────────────────────────────────────────┘  │
+│  ┌────────────────────────────────────────────────────┐  │
+│  │ Slot 3   — Empty —                                 │  │
+│  └────────────────────────────────────────────────────┘  │
+│                                                          │
+└──────────────────────────────────────────────────────────┘
+```
+
+Widgets not sketched (Status, Equip, Shop, Config, PHS) reuse the main-menu chrome (tab row + left content panel + right party sidebar); their body content is a list or grid that's obvious from their feature description.
+
 ### 2.9 Equipment and Materia
 
 - `UFF7Equipment : UObject` — owned per `FPartyMember`; three `FEquippedItem { FName EquipRowId; TArray<UFF7MateriaInstance*> Sockets; }` (Weapon, Armor, Accessory).
 - `FEquipmentRow : FTableRowBase` — `Id, Slot enum, StatMods, uint8 SocketCount, uint16 LinkMask` (bit N set = socket N linked to N+1), elemental/status affinities, character restriction.
 - `UFF7MateriaDataAsset : UPrimaryDataAsset` — `EMateriaFamily, DisplayName, TArray<FMateriaTier>` (AP threshold → granted ability id).
 - `UFF7MateriaInstance : UObject` — hard `UFF7MateriaDataAsset* Def`, `int32 CurrentAP`, computed `int32 Tier`. Hard ref because the instance is useless without its def loaded; SaveGame (§2.14) persists the def by `FSoftObjectPath` and re-resolves on load.
+- Each materia is an individual UObject because it carries per-instance state (`CurrentAP`). Two `Fire` instances at different AP are *not* interchangeable — the regular stack-counted inventory (§2.7) can't represent them.
+- **Storage model — single global pool.** Every unsocketed `UFF7MateriaInstance` lives in `UFF7GameInstance::MateriaPool`. Any character's socket can hold a reference to any pool instance; the game does not track a per-character "owner" for materia.
+  - *Acquire* (drop / shop / chest): `NewObject<UFF7MateriaInstance>` with the GameInstance as Outer, initialize `Def` + `CurrentAP = 0`, push into `MateriaPool`.
+  - *Socket* (equip materia into a slot): move pointer from `MateriaPool` into `FEquippedItem.Sockets[n]`.
+  - *Unsocket* (remove from slot): move pointer back into `MateriaPool`.
+  - *Transfer between characters*: unsocket from A, socket into B — the pool is the rendezvous. There is no separate "transfer" operation.
+  - A materia is in exactly one place at any time: either the pool or exactly one socket. Never both.
 - Equip → stat modifier application: recompute-on-change, not per-tick. Materia grants its effects while equipped; unequipping reverts.
 - Support materia effects only fire when paired via `LinkMask` to an adjacent socket.
+- UI presentation is independent of storage: the Materia screen (§2.8) may group the pool by "last socketed by" character as a display convenience without the data model carrying that ownership.
 
 ### 2.10 Combat framework
 
