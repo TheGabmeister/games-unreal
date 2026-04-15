@@ -11,7 +11,14 @@
       "Bash(py tools/generate_meshes.py)",
       "Bash(python -c ' *)",
       "Bash('/c/Program Files/Epic Games/UE_5.7/Engine/Build/BatchFiles/Build.bat' -projectfiles -project=__TRACKED_VAR__/FF7.uproject -game -rocket -progress)",
-      "Bash('/c/Program Files/Epic Games/UE_5.7/Engine/Build/BatchFiles/Build.bat' FF7Editor Win64 Development -Project=__TRACKED_VAR__/FF7.uproject -WaitMutex -FromMsBuild)"
+      "Bash('/c/Program Files/Epic Games/UE_5.7/Engine/Build/BatchFiles/Build.bat' FF7Editor Win64 Development -Project=__TRACKED_VAR__/FF7.uproject -WaitMutex -FromMsBuild)",
+      "Bash('/c/Program Files/Epic Games/UE_5.7/Engine/Binaries/Win64/UnrealEditor-Cmd.exe' __TRACKED_VAR__/FF7.uproject '-ExecCmds=Automation RunTests FF7.Interact+;Quit' -unattended -NullRHI -Log)",
+      "Bash('/c/Program Files/Epic Games/UE_5.7/Engine/Binaries/Win64/UnrealEditor-Cmd.exe' __TRACKED_VAR__/FF7.uproject '-ExecCmds=Automation RunTests FF7.Interact+;Quit' -unattended -NullRHI)",
+      "Bash(ls c:/dev/games-unreal/FF7/Saved/Logs/*.log)",
+      "Bash(find c:/dev/games-unreal/FF7/Intermediate/Build -name \"FF7NPCActor.gen.cpp\" -exec grep -l \"IFF7Interactable\\\\|Interface\" {} \\\\;)",
+      "Bash('/c/Program Files/Epic Games/UE_5.7/Engine/Binaries/Win64/UnrealEditor-Cmd.exe' __TRACKED_VAR__/FF7.uproject '-ExecCmds=Automation RunTests FF7.Interact.InterfaceDispatch+;Quit' -unattended -NullRHI)",
+      "Bash(grep -v \"//\")",
+      "Bash('/c/Program Files/Epic Games/UE_5.7/Engine/Binaries/Win64/UnrealEditor-Cmd.exe' __TRACKED_VAR__/FF7.uproject '-ExecCmds=Automation RunTests FF7+;Quit' -unattended -NullRHI)"
     ]
   }
 }

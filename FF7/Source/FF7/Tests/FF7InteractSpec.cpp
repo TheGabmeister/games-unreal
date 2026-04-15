@@ -39,8 +39,15 @@ void FFF7InteractSpec::Define()
 {
 	BeforeEach([this]()
 	{
-		TransientWorld = UWorld::CreateWorld(EWorldType::Game, /*bInformEngineOfWorld*/ false);
+		// InitializeActorsForPlay + BeginPlay are required so Interface UFunction dispatch
+		// (ProcessEvent path used by Execute_*) is fully wired in the transient world.
+		TransientWorld = UWorld::CreateWorld(EWorldType::Game, /*bInformEngineOfWorld*/ true);
 		TestNotNull(TEXT("Transient world created"), TransientWorld);
+		if (TransientWorld)
+		{
+			TransientWorld->InitializeActorsForPlay(FURL());
+			TransientWorld->BeginPlay();
+		}
 	});
 
 	AfterEach([this]()

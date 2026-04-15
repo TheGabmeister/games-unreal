@@ -19,7 +19,7 @@ class UFF7Interactable : public UInterface
 	GENERATED_BODY()
 };
 
-class FF7_API IFF7Interactable
+class FF7_API IFF7Interactable : public IInterface
 {
 	GENERATED_BODY()
 
