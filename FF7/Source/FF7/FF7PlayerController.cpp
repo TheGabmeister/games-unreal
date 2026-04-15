@@ -62,7 +62,7 @@ void AFF7PlayerController::SetupInputComponent()
 	}
 	if (UInputAction* InteractAction = IA_Interact.LoadSynchronous())
 	{
-		EIC->BindAction(InteractAction, ETriggerEvent::Triggered, this, &AFF7PlayerController::HandleInteract);
+		EIC->BindAction(InteractAction, ETriggerEvent::Started, this, &AFF7PlayerController::HandleInteract);
 	}
 	// IA_MenuToggle / IA_Escape bindings land in later phases.
 }
