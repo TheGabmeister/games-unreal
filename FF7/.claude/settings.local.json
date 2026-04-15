@@ -9,7 +9,9 @@
       "Bash(\"c:/dev/games-unreal/FF7/tools/rasterize_icons.sh\")",
       "Bash(python tools/generate_meshes.py)",
       "Bash(py tools/generate_meshes.py)",
-      "Bash(python -c ' *)"
+      "Bash(python -c ' *)",
+      "Bash('/c/Program Files/Epic Games/UE_5.7/Engine/Build/BatchFiles/Build.bat' -projectfiles -project=__TRACKED_VAR__/FF7.uproject -game -rocket -progress)",
+      "Bash('/c/Program Files/Epic Games/UE_5.7/Engine/Build/BatchFiles/Build.bat' FF7Editor Win64 Development -Project=__TRACKED_VAR__/FF7.uproject -WaitMutex -FromMsBuild)"
     ]
   }
 }
