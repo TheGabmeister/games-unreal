@@ -7,6 +7,7 @@
 #include "Engine/Engine.h"
 #include "Engine/GameViewportClient.h"
 #include "Engine/World.h"
+#include "FF7CollisionChannels.h"
 #include "FF7DialogueTypes.h"
 #include "FF7Interactable.h"
 #include "InputAction.h"
@@ -111,10 +112,10 @@ AActor* AFF7PlayerController::FindInteractable() const
 	const FVector Forward = ControlledPawn->GetActorForwardVector();
 	const FVector End = Start + Forward * InteractTraceDistance;
 
-	// Primary: forward line trace on the custom Interact channel (ECC_GameTraceChannel1).
+	// Primary: forward line trace on the custom Interact channel.
 	FHitResult Hit;
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(FF7Interact), /*bTraceComplex*/ false, ControlledPawn);
-	if (World->LineTraceSingleByChannel(Hit, Start, End, ECC_GameTraceChannel1, Params))
+	if (World->LineTraceSingleByChannel(Hit, Start, End, FF7::ECC_Interact, Params))
 	{
 		if (AActor* HitActor = Hit.GetActor())
 		{

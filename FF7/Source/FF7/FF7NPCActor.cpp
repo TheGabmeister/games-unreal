@@ -5,6 +5,7 @@
 #include "Components/SphereComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
+#include "FF7CollisionChannels.h"
 #include "FF7PlayerController.h"
 
 AFF7NPCActor::AFF7NPCActor()
@@ -25,8 +26,8 @@ AFF7NPCActor::AFF7NPCActor()
 	InteractVolume->SetupAttachment(Capsule);
 	InteractVolume->InitSphereRadius(150.0f);
 	InteractVolume->SetCollisionProfileName(TEXT("OverlapAllDynamic"));
-	// Respond to the custom Interact trace channel (ECC_GameTraceChannel1; see DefaultEngine.ini).
-	InteractVolume->SetCollisionResponseToChannel(ECC_GameTraceChannel1, ECR_Block);
+	// Respond to the custom Interact trace channel (see FF7CollisionChannels.h).
+	InteractVolume->SetCollisionResponseToChannel(FF7::ECC_Interact, ECR_Block);
 }
 
 void AFF7NPCActor::Interact_Implementation(AFF7PlayerController* By)
