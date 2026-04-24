@@ -32,6 +32,7 @@
 #include "Animation/Skeleton.h"
 #include "AnimGraphNode_StateMachine.h"
 #include "AnimGraphNode_SequencePlayer.h"
+#include "AnimGraphNode_Root.h"
 #include "AnimGraphNode_StateResult.h"
 #include "AnimGraphNode_TransitionResult.h"
 #include "AnimStateNode.h"
@@ -389,19 +390,18 @@ void FDiabloAssetGenerator::CreateTransitionRule(
 	SpeedGet->NodePosX = -400;
 	SpeedGet->NodePosY = 0;
 	VarCreator.Finalize();
-	SpeedGet->AllocateDefaultPins();
 
-	// Create Greater_DoubleDouble (or Less) comparison
-	FGraphNodeCreator<UK2Node_CallFunction> CompCreator(*TransGraph);
-	UK2Node_CallFunction* Compare = CompCreator.CreateNode();
+	// Create Greater_DoubleDouble (or LessEqual) comparison
 	const FName FuncName = bGreaterThan
 		? GET_FUNCTION_NAME_CHECKED(UKismetMathLibrary, Greater_DoubleDouble)
 		: GET_FUNCTION_NAME_CHECKED(UKismetMathLibrary, LessEqual_DoubleDouble);
+
+	FGraphNodeCreator<UK2Node_CallFunction> CompCreator(*TransGraph);
+	UK2Node_CallFunction* Compare = CompCreator.CreateNode();
 	Compare->FunctionReference.SetExternalMember(FuncName, UKismetMathLibrary::StaticClass());
 	Compare->NodePosX = -200;
 	Compare->NodePosY = 0;
 	CompCreator.Finalize();
-	Compare->AllocateDefaultPins();
 
 	// Wire Speed output -> comparison A pin
 	UEdGraphPin* SpeedOutPin = SpeedGet->FindPin(TEXT("Speed"), EGPD_Output);
@@ -562,7 +562,7 @@ void FDiabloAssetGenerator::GenerateAnimBlueprint()
 
 	for (UEdGraphNode* Node : AnimGraph->Nodes)
 	{
-		if (Node->IsA<UAnimGraphNode_StateResult>())
+		if (Node->IsA<UAnimGraphNode_Root>())
 		{
 			for (UEdGraphPin* Pin : Node->Pins)
 			{
