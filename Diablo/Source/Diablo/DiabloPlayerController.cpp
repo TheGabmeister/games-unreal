@@ -130,11 +130,6 @@ void ADiabloPlayerController::OnHeroDeath()
 
 	DisableInput(this);
 
-	if (PlayerCameraManager)
-	{
-		PlayerCameraManager->StartCameraFade(0.f, 1.f, 0.5f, FLinearColor::Black, false, true);
-	}
-
 	GetWorldTimerManager().SetTimer(RespawnTimerHandle, this,
 		&ADiabloPlayerController::OnRespawnTimerExpired, 2.f, false);
 }
@@ -153,11 +148,6 @@ void ADiabloPlayerController::OnRespawnTimerExpired()
 	}
 
 	EnableInput(this);
-
-	if (PlayerCameraManager)
-	{
-		PlayerCameraManager->StartCameraFade(1.f, 0.f, 0.5f, FLinearColor::Black);
-	}
 }
 
 void ADiabloPlayerController::Tick(float DeltaTime)

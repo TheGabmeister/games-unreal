@@ -172,7 +172,7 @@ LMB on `ADiabloEnemy` → hero walks into range, plays attack `UAnimMontage` (ge
 **Teaches:** `AAIController`, `AIMoveTo`, tick-based state machines. Sets up the "state machine pain" that justifies StateTree in M19.
 
 ### M4 — HP + Death + Respawn
-Shared `FDiabloStats` struct (HP/MaxHP/Mana/MaxMana, Str/Mag/Dex/Vit) used by hero and enemy — just a USTRUCT, not a component yet. Hero death → 2s blackout → `AGameModeBase::RestartPlayer` at `PlayerStart` (placeholder — pre-town; in M15 this becomes respawn in Tristram). Enemy death → play death animation → destroy. Add a simple Healing Potion: `ADroppedItem` with hardcoded restore amount, click-to-use (no inventory yet, direct HP heal on pickup).
+Shared `FDiabloStats` struct (HP/MaxHP/Mana/MaxMana, Str/Mag/Dex/Vit) used by hero and enemy — just a USTRUCT, not a component yet. Hero death → `AGameModeBase::RestartPlayer` at `PlayerStart` (placeholder — pre-town; in M15 this becomes respawn in Tristram). Enemy death → play death animation → destroy. Add a simple Healing Potion: `ADroppedItem` with hardcoded restore amount, click-to-use (no inventory yet, direct HP heal on pickup).
 
 **Teaches:** `USTRUCT`, GameMode respawn flow, `FTimerManager`, basic pickup interaction.
 
