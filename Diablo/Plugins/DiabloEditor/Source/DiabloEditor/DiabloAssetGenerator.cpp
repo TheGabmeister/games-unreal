@@ -96,6 +96,14 @@ void FDiabloAssetGenerator::GenerateDefaultMap()
 	SpawnFloorPlane(NewWorld);
 	SpawnNavMeshVolume(NewWorld);
 
+	// Spawn a test enemy from the BP class
+	UBlueprint* EnemyBP = LoadObject<UBlueprint>(nullptr, TEXT("/Game/Blueprints/BP_DiabloEnemy.BP_DiabloEnemy"));
+	if (EnemyBP && EnemyBP->GeneratedClass)
+	{
+		NewWorld->SpawnActor<AActor>(EnemyBP->GeneratedClass, FTransform(FVector(500.f, 0.f, 100.f)), SpawnParams);
+		UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Spawned BP_DiabloEnemy in map"));
+	}
+
 	const FString FilePath = FPackageName::LongPackageNameToFilename(MapPackagePath, FPackageName::GetMapPackageExtension());
 	FEditorFileUtils::SaveMap(NewWorld, FilePath);
 
