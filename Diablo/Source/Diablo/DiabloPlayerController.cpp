@@ -1,6 +1,7 @@
 #include "DiabloPlayerController.h"
 #include "DiabloHero.h"
 #include "DiabloEnemy.h"
+#include "Diablo.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "Blueprint/AIBlueprintHelperLibrary.h"
@@ -40,11 +41,17 @@ void ADiabloPlayerController::OnClickStarted()
 		return;
 	}
 
-	if (ADiabloEnemy* Enemy = Cast<ADiabloEnemy>(HitResult.GetActor()))
+	AActor* HitActor = HitResult.GetActor();
+	UE_LOG(LogDiablo, Display, TEXT("Click hit: %s (Component: %s)"),
+		HitActor ? *HitActor->GetName() : TEXT("null"),
+		HitResult.GetComponent() ? *HitResult.GetComponent()->GetName() : TEXT("null"));
+
+	if (ADiabloEnemy* Enemy = Cast<ADiabloEnemy>(HitActor))
 	{
 		if (!Enemy->IsDead())
 		{
 			TargetEnemy = Enemy;
+			UE_LOG(LogDiablo, Display, TEXT("Targeting enemy: %s"), *Enemy->GetName());
 			UAIBlueprintHelperLibrary::SimpleMoveToActor(this, TargetEnemy);
 			return;
 		}
@@ -90,6 +97,7 @@ void ADiabloPlayerController::Tick(float DeltaTime)
 
 		if (!Hero->IsAttacking())
 		{
+			UE_LOG(LogDiablo, Display, TEXT("In range (%.0f <= %.0f), attacking"), Distance, AttackRange);
 			Hero->StartAttack();
 		}
 	}
