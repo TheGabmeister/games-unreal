@@ -69,12 +69,12 @@ IntelliSense errors like `cannot open source file "X.h"` are usually false posit
 | `GenerateBlueprintSubclasses` | Creates `BP_DiabloGameMode`, `BP_DiabloHero`, `BP_DiabloPlayerController` — **skips if exists** |
 | `GenerateDefaultMap` | Creates `Lvl_Diablo` with PlayerStart, DirectionalLight, floor plane, NavMeshBoundsVolume — **always recreates** |
 | `GenerateInputAssets` | Creates/updates IA_Click/Move/Look and IMC_Diablo — **updates in place** |
-| `ImportWarriorFBX` | Imports `Tools/blender/out/Warrior.fbx` as skeletal mesh + animations — **replaces existing** |
+| `ImportWarriorFBX` | Deletes all Warrior assets except `ABP_Warrior`, then reimports `Tools/blender/out/Warrior.fbx` as skeletal mesh + animations — **always recreates** |
 | `ConfigureBlueprintDefaults` | Sets skeletal mesh, anim class, input slots, game mode classes on BP CDOs — **always updates** |
 
 **Do not attempt programmatic AnimBP generation.** State machine graph construction via K2 nodes is too fragile (wrong pin names, function reference ordering, MinimalAPI exports). AnimBPs are the one asset type authored manually in the editor.
 
-**Do not use `ObjectTools::ForceDeleteObjects`** to delete existing assets — it crashes the editor by triggering content browser notifications during the operation. If an asset needs recreation, either update it in place or have the user delete it manually first.
+**Do not use `ObjectTools::ForceDeleteObjects`** to delete existing assets — it crashes the editor by triggering content browser notifications during the operation. Use `IFileManager::Delete` on the `.uasset` files after unloading packages (see `ImportWarriorFBX` for the pattern).
 
 ## Asset Pipeline
 
@@ -89,9 +89,11 @@ All assets are generated programmatically — no manual art creation. Scripts li
 
 ### Blender FBX Export Convention
 
+- Build meshes facing +Y in Blender (natural convention), then rotate mesh + armature -90° around Z and apply transform **before** parenting with auto-weights — this makes the character face +X (UE forward) with correct bone weights
+- Animation bone rotations use local Y axis `(0, angle, 0)` for forward/back swing (not X, because the skeleton was rotated before parenting)
 - `global_scale=1.0` (not 100 — UE's importer handles meter→cm conversion via `apply_unit_scale=True`)
 - `axis_forward="-Z"`, `axis_up="Y"`
-- Animations: use NLA strips (unmuted) with `bake_anim_use_nla_strips=True`, `bake_anim_use_all_actions=False` — each NLA strip exports as a separate FBX animation stack
+- Animations: use NLA strips (unmuted) with `bake_anim_use_nla_strips=True`, `bake_anim_use_all_actions=False` — each NLA strip exports as a separate FBX animation stack. NLA strip names determine UE asset names (`Idle` → `Warrior_Anim_Idle`)
 - Character meshes are built at real-world scale in Blender (1.8m tall = 180cm in UE)
 
 Animations are keyframed in the same Blender scripts that generate meshes — armature + bone keyframes baked into the FBX.

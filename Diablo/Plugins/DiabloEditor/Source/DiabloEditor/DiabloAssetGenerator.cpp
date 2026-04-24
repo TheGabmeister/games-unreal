@@ -263,24 +263,25 @@ void FDiabloAssetGenerator::ImportWarriorFBX()
 		return;
 	}
 
-	// Delete existing assets (except ABP_Warrior) so the skeleton reference
+	// Delete all existing assets except ABP_Warrior so the skeleton reference
 	// pose is recreated fresh and animations re-link automatically.
-	const TArray<FString> AssetsToDelete = {
-		TEXT("Warrior"),
-		TEXT("Warrior_Skeleton"),
-		TEXT("Warrior_PhysicsAsset"),
-		TEXT("Warrior_Anim_Idle"),
-		TEXT("Warrior_Anim_Walk"),
-	};
-
 	IFileManager& FM = IFileManager::Get();
-	for (const FString& AssetName : AssetsToDelete)
+	const FString ContentDir = FPackageName::LongPackageNameToFilename(DestPath, TEXT(""));
+	TArray<FString> AssetFiles;
+	FM.FindFiles(AssetFiles, *(ContentDir / TEXT("*.uasset")), true, false);
+
+	for (const FString& FileName : AssetFiles)
 	{
-		FString PackagePath = FString::Printf(TEXT("/Game/Characters/Warrior/%s"), *AssetName);
+		if (FileName.Contains(TEXT("ABP_Warrior")))
+		{
+			continue;
+		}
+
+		FString AssetName = FPaths::GetBaseFilename(FileName);
+		FString PackagePath = DestPath / AssetName;
 		UPackage* Pkg = FindPackage(nullptr, *PackagePath);
 		if (Pkg)
 		{
-			// Unload all objects in the package so the file isn't locked
 			TArray<UObject*> ObjectsInPackage;
 			GetObjectsWithPackage(Pkg, ObjectsInPackage);
 			for (UObject* Obj : ObjectsInPackage)
@@ -293,12 +294,8 @@ void FDiabloAssetGenerator::ImportWarriorFBX()
 			}
 		}
 
-		FString FilePath = FPackageName::LongPackageNameToFilename(PackagePath, TEXT(".uasset"));
-		if (FM.FileExists(*FilePath))
-		{
-			FM.Delete(*FilePath);
-			UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Deleted %s"), *FilePath);
-		}
+		FM.Delete(*(ContentDir / FileName));
+		UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Deleted %s"), *FileName);
 	}
 
 	CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS);
