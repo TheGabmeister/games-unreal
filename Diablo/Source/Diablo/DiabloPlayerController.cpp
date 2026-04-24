@@ -95,6 +95,7 @@ void ADiabloPlayerController::Tick(float DeltaTime)
 		if (!Hero->IsAttacking())
 		{
 			UE_LOG(LogDiablo, Display, TEXT("In range (%.0f <= %.0f), attacking"), Distance, AttackRange);
+			Hero->AttackTarget = TargetEnemy;
 			Hero->StartAttack();
 		}
 	}

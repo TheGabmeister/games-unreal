@@ -7,6 +7,7 @@
 class USpringArmComponent;
 class UCameraComponent;
 class UAnimMontage;
+class ADiabloEnemy;
 
 UCLASS(Abstract)
 class DIABLO_API ADiabloHero : public ACharacter
@@ -18,6 +19,9 @@ public:
 
 	void StartAttack();
 	bool IsAttacking() const { return bIsAttacking; }
+
+	UPROPERTY()
+	TObjectPtr<ADiabloEnemy> AttackTarget;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")
 	TObjectPtr<USpringArmComponent> CameraBoom;

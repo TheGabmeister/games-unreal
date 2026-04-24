@@ -15,11 +15,5 @@ public:
 	virtual FString GetNotifyName_Implementation() const override;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Attack")
-	float TraceRadius = 50.f;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Attack")
-	float TraceLength = 100.f;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Attack")
 	float Damage = 10.f;
 };
