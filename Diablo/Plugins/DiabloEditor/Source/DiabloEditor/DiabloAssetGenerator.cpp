@@ -25,6 +25,7 @@
 #include "Model.h"
 #include "Components/BrushComponent.h"
 #include "Animation/AnimBlueprint.h"
+#include "Animation/AnimSequence.h"
 #include "AssetImportTask.h"
 #include "AssetToolsModule.h"
 #include "IAssetTools.h"
@@ -262,6 +263,47 @@ void FDiabloAssetGenerator::ImportWarriorFBX()
 		return;
 	}
 
+	// Delete existing assets (except ABP_Warrior) so the skeleton reference
+	// pose is recreated fresh and animations re-link automatically.
+	const TArray<FString> AssetsToDelete = {
+		TEXT("Warrior"),
+		TEXT("Warrior_Skeleton"),
+		TEXT("Warrior_PhysicsAsset"),
+		TEXT("Warrior_Anim_Idle"),
+		TEXT("Warrior_Anim_Walk"),
+	};
+
+	IFileManager& FM = IFileManager::Get();
+	for (const FString& AssetName : AssetsToDelete)
+	{
+		FString PackagePath = FString::Printf(TEXT("/Game/Characters/Warrior/%s"), *AssetName);
+		UPackage* Pkg = FindPackage(nullptr, *PackagePath);
+		if (Pkg)
+		{
+			// Unload all objects in the package so the file isn't locked
+			TArray<UObject*> ObjectsInPackage;
+			GetObjectsWithPackage(Pkg, ObjectsInPackage);
+			for (UObject* Obj : ObjectsInPackage)
+			{
+				if (!Obj->IsRooted())
+				{
+					Obj->ClearFlags(RF_Standalone | RF_Public);
+					Obj->MarkAsGarbage();
+				}
+			}
+		}
+
+		FString FilePath = FPackageName::LongPackageNameToFilename(PackagePath, TEXT(".uasset"));
+		if (FM.FileExists(*FilePath))
+		{
+			FM.Delete(*FilePath);
+			UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Deleted %s"), *FilePath);
+		}
+	}
+
+	CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS);
+	FAssetRegistryModule::GetRegistry().ScanPathsSynchronous({DestPath}, true);
+
 	UFbxFactory* FbxFactory = NewObject<UFbxFactory>();
 	FbxFactory->ImportUI->bImportMesh = true;
 	FbxFactory->ImportUI->bImportAnimations = true;
@@ -289,6 +331,31 @@ void FDiabloAssetGenerator::ImportWarriorFBX()
 	for (UObject* Obj : ImportedObjects)
 	{
 		UE_LOG(LogTemp, Display, TEXT("[DiabloTools]   -> %s (%s)"), *Obj->GetName(), *Obj->GetClass()->GetName());
+	}
+
+	// The importer creates animation sequences in memory but may not save them
+	// when the skeleton was freshly recreated. Scan for unsaved AnimSequences
+	// in the destination package path and save them explicitly.
+	FAssetRegistryModule::GetRegistry().ScanPathsSynchronous({DestPath}, true);
+	FARFilter Filter;
+	Filter.PackagePaths.Add(FName(*DestPath));
+	Filter.ClassPaths.Add(UAnimSequence::StaticClass()->GetClassPathName());
+	TArray<FAssetData> AnimAssets;
+	FAssetRegistryModule::GetRegistry().GetAssets(Filter, AnimAssets);
+	for (const FAssetData& Asset : AnimAssets)
+	{
+		if (UObject* AnimObj = Asset.GetAsset())
+		{
+			UPackage* Pkg = AnimObj->GetOutermost();
+			if (Pkg && Pkg->IsDirty())
+			{
+				FString PackageFilename = FPackageName::LongPackageNameToFilename(Pkg->GetName(), FPackageName::GetAssetPackageExtension());
+				FSavePackageArgs SaveArgs;
+				SaveArgs.TopLevelFlags = RF_Standalone;
+				UPackage::SavePackage(Pkg, AnimObj, *PackageFilename, SaveArgs);
+				UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Saved animation: %s"), *AnimObj->GetName());
+			}
+		}
 	}
 }
 
