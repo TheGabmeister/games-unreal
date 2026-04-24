@@ -7,6 +7,7 @@ ADiabloEnemy::ADiabloEnemy()
 	CurrentHP = MaxHP;
 
 	GetCapsuleComponent()->InitCapsuleSize(34.f, 90.f);
+	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
 	GetMesh()->SetRelativeLocation(FVector(0.f, 0.f, -90.f));
 
 	bUseControllerRotationPitch = false;
