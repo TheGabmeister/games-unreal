@@ -8,4 +8,7 @@ UCLASS(Abstract)
 class DIABLO_API ADiabloGameMode : public AGameModeBase
 {
 	GENERATED_BODY()
+
+public:
+	ADiabloGameMode();
 };

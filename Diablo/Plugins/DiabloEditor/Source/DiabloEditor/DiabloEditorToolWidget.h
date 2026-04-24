@@ -21,4 +21,13 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Diablo Tools")
 	void GenerateInputAssets();
+
+	UFUNCTION(BlueprintCallable, Category = "Diablo Tools")
+	void ImportWarriorFBX();
+
+	UFUNCTION(BlueprintCallable, Category = "Diablo Tools")
+	void GenerateAnimBlueprint();
+
+	UFUNCTION(BlueprintCallable, Category = "Diablo Tools")
+	void ConfigureBlueprintDefaults();
 };

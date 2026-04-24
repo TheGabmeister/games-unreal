@@ -18,7 +18,13 @@ public class DiabloEditor : ModuleRules
 			"Slate",
 			"SlateCore",
 			"EnhancedInput",
+			"NavigationSystem",
+			"BSPUtils",
 			"ToolMenus",
+			"AnimGraph",
+			"AnimGraphRuntime",
+			"BlueprintGraph",
+			"AssetTools",
 			"Diablo"
 		});
 

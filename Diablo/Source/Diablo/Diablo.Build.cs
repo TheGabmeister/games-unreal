@@ -15,6 +15,7 @@ public class Diablo : ModuleRules
 			"InputCore",
 			"EnhancedInput",
 			"AIModule",
+			"NavigationSystem",
 			"StateTreeModule",
 			"GameplayStateTreeModule",
 			"UMG",
