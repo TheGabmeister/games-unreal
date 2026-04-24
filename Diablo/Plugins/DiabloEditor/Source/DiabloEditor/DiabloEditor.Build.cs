@@ -18,6 +18,7 @@ public class DiabloEditor : ModuleRules
 			"Slate",
 			"SlateCore",
 			"EnhancedInput",
+			"ToolMenus",
 			"Diablo"
 		});
 

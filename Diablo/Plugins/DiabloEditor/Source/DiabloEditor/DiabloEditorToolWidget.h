@@ -21,9 +21,4 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Diablo Tools")
 	void GenerateInputAssets();
-
-private:
-	bool CreateBlueprintFromClass(UClass* ParentClass, const FString& AssetPath, const FString& AssetName);
-	bool SaveAsset(UObject* Asset, UPackage* Package, const FString& PackagePath);
-	void NotifyAssetCreated(UObject* Asset);
 };
