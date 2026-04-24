@@ -123,12 +123,13 @@ True isometric: orthographic projection, fixed 45° pitch, no yaw, no zoom. Scre
 
 ## Asset Pipeline
 
-### 3D Models — Blender (`C:\Program Files\Blender Foundation\Blender 5.1\blender.exe`)
+### 3D Models + Animations — Blender (`C:\Program Files\Blender Foundation\Blender 5.1\blender.exe`)
 - Headless: `blender.exe --background --python <script>.py`
 - Scripts: [Tools/blender/](Tools/blender/)
 - Output: FBX to `Tools/blender/out/`, then imported into UE
 - Convention: Z-up, centimeter scale, single armature per character
 - Style: low-poly primitive composition (boxes/cylinders)
+- **Animations** are keyframed in the same scripts that generate meshes (armature + bone keyframes baked into the FBX). Diablo 1's original animations were very few frames per state — the quality bar is low. No Mixamo or manual animation.
 
 ### Icons/Sprites — Inkscape (`C:\Program Files\Inkscape\bin\inkscape.exe`)
 - `inkscape.exe --export-type=png --export-dpi=<N> --export-filename=<out.png> <in.svg>`
@@ -148,20 +149,22 @@ True isometric: orthographic projection, fixed 45° pitch, no yaw, no zoom. Scre
 
 Each milestone ends with a manual play-test. No unit tests until complexity demands them.
 
-### M0 — Clean Slate
-Delete template (all Variant_* folders, ThirdPerson content, template root C++ classes). Strip `Diablo.Build.cs` include paths. Update `Config/DefaultEngine.ini`. Minimal `ADiabloGameMode` in C++. Bootstrap asset tooling (Blender/Inkscape/Python smoke tests). Build an **Editor Utility Widget** (`UDiabloEditorToolWidget`) that generates editor-authored assets (BP subclasses, maps, input assets) via button press — eliminating manual editor work for reproducible project setup.
+### M0 — Clean Slate ✅ (done)
+Template deleted (all Variant_* folders, ThirdPerson content, template root classes). `Diablo.Build.cs` include paths stripped. `Config/DefaultEngine.ini` cleared. Minimal `ADiabloGameMode` created. Asset tooling bootstrapped (Blender/Inkscape/Python smoke tests pass). DiabloEditor plugin built with `UDiabloEditorToolWidget` that generates BP subclasses, maps, and input assets via button press.
 
-**Teaches:** UBT build loop, `.uproject`/`.Build.cs` basics, Editor Utility Widgets, programmatic asset creation (`UBlueprintFactory`, `FKismetEditorUtilities`, `UWorld::SaveMap`).
+**Remaining editor step:** Open the project in UE Editor, run the Editor Utility Widget to generate `BP_DiabloGameMode`, `Lvl_Diablo`, and input assets. Then set `DefaultEngine.ini` map/game-mode paths.
+
+**Taught:** UBT build loop, `.uproject`/`.Build.cs` basics, editor-only plugins, programmatic asset creation.
 
 ### M1 — Isometric Camera + Click-to-Move Hero (Warrior)
-`ADiabloHero : ACharacter` with `USpringArmComponent` (fixed pitch −45°, yaw 45°, length ~1200, no rotation inheritance) + `UCameraComponent` (`ProjectionMode = Orthographic`, `OrthoWidth` tuned for isometric framing). `ADiabloPlayerController`: Enhanced Input `IA_Click` → trace from cursor → `UAIBlueprintHelperLibrary::SimpleMoveToLocation`. Navmesh covers the test level. Placeholder low-poly hero mesh via Blender script.
+`ADiabloHero : ACharacter` with `USpringArmComponent` (fixed pitch −45°, yaw 225° for classic Diablo SW-facing view, length ~1800, no rotation inheritance, `bDoCollisionTest = false`) + `UCameraComponent` (`ProjectionMode = Orthographic`, `OrthoWidth` tuned for isometric framing ~2048). `ADiabloPlayerController`: Enhanced Input `IA_Click` → deproject mouse to world → line trace to ground → `UAIBlueprintHelperLibrary::SimpleMoveToLocation`. `UNavigationSystemV1` navmesh volume covers the test level. Low-poly Warrior mesh + idle/walk animations generated via Blender Python script ([Tools/blender/](Tools/blender/)).
 
-**Teaches:** `ACharacter`, `USpringArmComponent`, orthographic `UCameraComponent`, navmesh, Enhanced Input basics.
+**Teaches:** `ACharacter`, `USpringArmComponent`, orthographic `UCameraComponent`, navmesh, Enhanced Input basics, Blender-to-UE animation pipeline.
 
 ### M2 — Basic Melee Attack
-LMB on `ADiabloEnemy` → hero walks into range, plays `UAnimMontage`, `UAnimNotify_Attack` triggers sphere trace from forward bone, `AActor::TakeDamage` overrides deal hardcoded damage. Enemy has HP `UPROPERTY`, no AI yet (stationary target).
+LMB on `ADiabloEnemy` → hero walks into range, plays attack `UAnimMontage` (generated via Blender Python — sword swing keyframes baked into the Warrior FBX), `UAnimNotify_Attack` triggers sphere trace from forward bone, any `ADiabloEnemy` hit takes hardcoded damage via `AActor::TakeDamage` override. Enemy has HP `UPROPERTY`, no AI yet (stationary target). Generate attack SFX (sword swing + hit) via [Tools/audio/](Tools/audio/).
 
-**Teaches:** `UAnimMontage`, `UAnimNotify`, traces, damage events.
+**Teaches:** `UAnimMontage`, `UAnimNotify`, traces, damage events, Blender animation→UE montage workflow.
 
 ### M3 — Enemy AI (C++ State Machine)
 `ADiabloAIController : AAIController`. Logic is a plain `enum class EAIState` + switch in `Tick` (Idle / Chase / Attack / Dead), with `AIMoveTo` for pathing and a 0.5s distance-check for aggro. **Deliberately no StateTree** — abstraction not justified for ≤4 states.
@@ -169,9 +172,9 @@ LMB on `ADiabloEnemy` → hero walks into range, plays `UAnimMontage`, `UAnimNot
 **Teaches:** `AAIController`, `AIMoveTo`, tick-based state machines. Sets up the "state machine pain" that justifies StateTree in M19.
 
 ### M4 — HP + Death + Respawn
-Shared `FCombatStats` struct (HP/MaxHP) used by hero and enemy — just a struct, not a component yet. Hero death → 2s timer → `AGameModeBase::RestartPlayer`. Enemy death → destroy after death animation.
+Shared `FDiabloStats` struct (HP/MaxHP/Mana/MaxMana, Str/Mag/Dex/Vit) used by hero and enemy — just a USTRUCT, not a component yet. Hero death → 2s blackout → `AGameModeBase::RestartPlayer` at `PlayerStart` (placeholder — pre-town; in M15 this becomes respawn in Tristram). Enemy death → play death animation → destroy. Add a simple Healing Potion: `ADroppedItem` with hardcoded restore amount, click-to-use (no inventory yet, direct HP heal on pickup).
 
-**Teaches:** `USTRUCT`, GameMode respawn flow, `FTimerManager`.
+**Teaches:** `USTRUCT`, GameMode respawn flow, `FTimerManager`, basic pickup interaction.
 
 ### M5 — HUD v1 (Life Globe + XP Bar)
 `UDiabloHUDWidget : UUserWidget` with red life globe (left), blue mana globe (right, placeholder 0/0), XP bar between. `NativeTick` binds to hero. Added to viewport in `ADiabloPlayerController::BeginPlay`.
@@ -179,7 +182,7 @@ Shared `FCombatStats` struct (HP/MaxHP) used by hero and enemy — just a struct
 **Teaches:** UMG, `UUserWidget`, `NativeTick` binding, viewport HUD.
 
 ### M6 — XP + Leveling + Stat Points
-Enemies award XP on death. XP table is a `TArray<int32>` constant in `ADiabloHero` (hardcoded quartic curve). On level-up: play SFX, grant +5 unspent stat points, recompute derived stats (`MaxHP`, `MaxMana`, damage range). Character panel UMG with +/− buttons for Str/Mag/Dex/Vit (respecting class caps — Warrior Str 250, etc.).
+Enemies award XP on death. XP thresholds stored as `TArray<int64>` in `ADiabloHero` (quartic curve — L49→50 needs ~1.3 billion, exceeds `int32` max). On level-up: play SFX (generated via Python audio), grant +5 unspent stat points, recompute derived stats (`MaxHP`, `MaxMana`, damage range, ToHit%, AC). Character panel UMG with +/− buttons for Str/Mag/Dex/Vit (respecting class caps — Warrior Str 250, etc.).
 
 **Teaches:** Derived-stat recomputation (first justified helper function), UMG button bindings, class caps.
 
@@ -197,13 +200,12 @@ First real abstractions — complexity demands them:
 
 **Teaches:** Actor spawning, overlap events, world ↔ inventory handoff, weighted random selection.
 
-### M9 — Equipment Stats + `IEquippable` Interface
-Equipping modifies derived stats via `ApplyEquipBonuses` / `RemoveEquipBonuses` called by `UInventoryComponent`. Introduce `IEquippable` as a proper UE UINTERFACE — complexity now justifies it because item categories (weapon / armor / ring) need polymorphic equip behavior:
-- Weapon → updates attack damage range
-- Armor → updates AC
-- Ring/Amulet → stacks flat bonuses
+### M9 — Equipment Stats + Stat Recomputation
+Equipping modifies derived stats. `UInventoryComponent::Equip` / `Unequip` triggers `ADiabloHero::RecomputeDerivedStats()`, which iterates all equipped `FItemInstance`s and sums their base stat bonuses. Different item types contribute different stats (weapon → damage range, armor → AC, ring → flat bonuses), driven by fields on `UItemDefinition` (no polymorphic dispatch needed — item categories are an enum, not subclasses). This is just a `switch` on `EItemCategory` inside the recomputation function.
 
-**Teaches:** `UINTERFACE`/`IInterface` pattern, polymorphic dispatch. First use of a real UE interface.
+**Teaches:** Stat recomputation flow, enum-driven dispatch over item categories, derived-stat formulas from the D1 reference (To-Hit, AC, damage range).
+
+**Why no interface:** `FItemInstance` is a struct, not a `UObject` — UE interfaces require `UObject` inheritance. An `IEquippable` interface would force items to be actors or UObjects, which is over-engineered for data-driven stat bonuses. If polymorphic behavior becomes necessary later (e.g., on-equip special effects), introduce it then.
 
 ### M10 — First Spell (Firebolt) + Mana
 `ASpellProjectile` base actor with `UProjectileMovementComponent`. `AFirebolt` subclass with VFX placeholder. RMB cast: spawn projectile from hero forward, cost mana, cooldown. Hero gains a `Mana` stat (Sorcerer's domain — but Warrior can cast from scrolls/staves too in D1). Add Healing Potion as a consumable item that restores HP.
@@ -216,7 +218,7 @@ Equipping modifies derived stats via `ApplyEquipBonuses` / `RemoveEquipBonuses` 
 **Teaches:** Data-driven spell system, generalization from hardcoded Firebolt to table-driven dispatch.
 
 ### M12 — Hand-Placed Dungeon L1 (Cathedral)
-`Lvl_Cathedral_L1.umap` — hand-authored stone corridors and rooms. `ADungeonStairs` actor calls `UGameplayStatics::OpenLevel`. Pre-placed enemy spawn markers + loot.
+`Lvl_Cathedral_L1.umap` — generated via the DiabloEditor tool (empty map), then populated with stone corridor tile actors generated via Blender Python. `ADungeonStairs` actor calls `UGameplayStatics::OpenLevel`. Pre-placed enemy spawn markers + loot.
 
 **Teaches:** `OpenLevel`, level transitions, the "state loss on map change" problem that motivates M13.
 
@@ -263,10 +265,10 @@ Enable Fallen cheer/flee patterns.
 
 **Teaches:** StateTree tasks/conditions, `STATETREE_POD_INSTANCEDATA`, `EnterState`/`ExitState`/`Tick` virtuals. Justified by 6+ distinct AI behaviors.
 
-### M20 — Belt + Potions + Hotkeys (1–8)
-Belt = dedicated 8-slot sub-inventory on `UInventoryComponent`, potions/scrolls only. Keys 1–8 bound to `IA_Belt1..8`. Healing / Mana / Rejuvenation potions and scrolls of various spells. Scroll use dispatches through an `IConsumable` interface (third interface — justified by diverging scroll effects).
+### M20 — Belt + Hotkeys (1–8) + Scroll Casting
+Belt = dedicated 8-slot sub-inventory on `UInventoryComponent`, potions/scrolls only. Keys 1–8 bound to `IA_Belt1..8`. Healing / Mana / Rejuvenation potions restore HP/Mana/both. Scrolls cast their spell at the hero's learned level (or L1 if unlearned) and are consumed. Use dispatches through `UItemDefinition::OnUseEffect` — an enum (`EItemUseEffect::RestoreHP`, `RestoreMana`, `RestoreBoth`, `CastSpell`) plus data fields, not a polymorphic interface (same rationale as M9 — items are structs).
 
-**Teaches:** Hotkey input, per-slot action dispatch, third interface.
+**Teaches:** Hotkey input, per-slot action dispatch, enum-driven use effects.
 
 ### M21+ — Content, Polish, Boss
 - Full 16-level dungeon progression (Catacombs/Caves/Hell biome palettes via M18's palette system)
@@ -291,15 +293,16 @@ Every milestone ends with a manual play-test against specific criteria. Build vi
 ```
 
 **Milestone smoke tests:**
-- **M0:** Editor opens into `Lvl_Diablo.umap` with no errors; `LogDiablo` visible in Output Log; asset tool smoke tests pass.
-- **M1:** LMB on terrain → hero walks there. Camera stays fixed orthographic.
-- **M2:** LMB on enemy → hero attacks → enemy HP drops → dies at 0.
+- **M0:** ✅ Build succeeds. Asset pipeline smoke tests pass. DiabloEditor plugin compiles. **Remaining:** run editor tool to generate BP/map/input assets, set DefaultEngine.ini paths.
+- **M1:** LMB on terrain → hero walks there. Camera stays fixed orthographic. Blender-generated Warrior mesh + walk cycle visible.
+- **M2:** LMB on enemy → hero attacks (Blender animation) → enemy HP drops → dies at 0.
 - **M3:** Stationary enemy transitions Idle→Chase when hero approaches; attacks in range; returns to Idle if hero flees far.
-- **M4:** Hero death → respawn at `PlayerStart` after 2s.
+- **M4:** Hero death → respawn at `PlayerStart` after 2s. Healing potions drop and restore HP on pickup.
 - **M5+:** HUD globes reflect HP/mana in real time.
 - *(and so on per milestone)*
 
-**Asset pipeline smoke tests** (one-time before M0 relies on them):
-- `blender.exe --background --python Tools/blender/smoke_cube.py` → outputs `out/cube.fbx`
-- `inkscape.exe ... Tools/svg/smoke_icon.svg` → outputs `out/icon.png`
-- `python Tools/audio/smoke_sine.py` → outputs `out/sine.wav` (440 Hz, 1 s)
+**Asset pipeline smoke tests** (✅ all passing):
+- `blender.exe --background --python Tools/blender/smoke_cube.py` → `out/cube.fbx` ✅
+- `inkscape.exe ... Tools/svg/smoke_icon.svg` → `out/icon.png` ✅
+- `python Tools/audio/smoke_sine.py` → `out/sine.wav` (440 Hz, 1 s) ✅
+- 16 demo SFX generated via `python Tools/audio/demo_sfx.py` ✅

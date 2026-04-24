@@ -10,7 +10,9 @@
       "Bash(xargs grep *)",
       "Bash(export UE_DOTNET_DIR='/c/Program Files/Epic Games/UE_5.7/Engine/Binaries/ThirdParty/DotNet/8.0.412/win-x64')",
       "Bash(export DOTNET_ROOT=\"$UE_DOTNET_DIR\" PATH=\"$UE_DOTNET_DIR:$PATH\" DOTNET_MULTILEVEL_LOOKUP=0 DOTNET_ROLL_FORWARD=LatestMajor)",
-      "Bash(dotnet '/c/Program Files/Epic Games/UE_5.7/Engine/Binaries/DotNET/UnrealBuildTool/UnrealBuildTool.dll' -projectfiles -project='C:/dev/games-unreal/Diablo/Diablo.uproject' -game -engine -VSCode)"
+      "Bash(dotnet '/c/Program Files/Epic Games/UE_5.7/Engine/Binaries/DotNET/UnrealBuildTool/UnrealBuildTool.dll' -projectfiles -project='C:/dev/games-unreal/Diablo/Diablo.uproject' -game -engine -VSCode)",
+      "Bash(grep -v \"^\\\\.$\")",
+      "Bash(grep -v \"^\\\\.\\\\.$\")"
     ],
     "additionalDirectories": [
       "c:\\dev\\games-unreal\\Diablo\\Source\\DiabloEditor"
