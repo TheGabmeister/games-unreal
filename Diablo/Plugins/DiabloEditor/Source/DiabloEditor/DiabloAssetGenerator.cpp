@@ -208,8 +208,17 @@ void FDiabloAssetGenerator::GenerateInputAssets()
 	for (const FInputActionDef& Def : Actions)
 	{
 		const FString FullPath = InputBasePath / Def.Name;
+		const FString ObjPath = FullPath + TEXT(".") + Def.Name;
 
-		DeleteExistingAsset(FullPath);
+		UInputAction* Existing = LoadObject<UInputAction>(nullptr, *ObjPath);
+		if (Existing)
+		{
+			Existing->ValueType = Def.ValueType;
+			SaveAsset(Existing, Existing->GetOutermost(), FullPath);
+			CreatedActions.Add(Existing);
+			UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Updated input action: %s"), *Def.Name);
+			continue;
+		}
 
 		UPackage* Package = CreatePackage(*FullPath);
 		Package->FullyLoad();
@@ -230,28 +239,35 @@ void FDiabloAssetGenerator::GenerateInputAssets()
 	}
 
 	const FString IMCPath = TEXT("/Game/Input/IMC_Diablo");
+	const FString IMCObjPath = IMCPath + TEXT(".IMC_Diablo");
 	{
-		DeleteExistingAsset(IMCPath);
+		UInputMappingContext* IMC = LoadObject<UInputMappingContext>(nullptr, *IMCObjPath);
+		UPackage* IMCPackage = nullptr;
 
-		UPackage* IMCPackage = CreatePackage(*IMCPath);
-		IMCPackage->FullyLoad();
-
-		UInputMappingContext* IMC = NewObject<UInputMappingContext>(
-			IMCPackage,
-			TEXT("IMC_Diablo"),
-			RF_Public | RF_Standalone
-		);
+		if (IMC)
+		{
+			IMC->UnmapAll();
+			IMCPackage = IMC->GetOutermost();
+		}
+		else
+		{
+			IMCPackage = CreatePackage(*IMCPath);
+			IMCPackage->FullyLoad();
+			IMC = NewObject<UInputMappingContext>(
+				IMCPackage,
+				TEXT("IMC_Diablo"),
+				RF_Public | RF_Standalone
+			);
+			NotifyAssetCreated(IMC);
+		}
 
 		for (int32 i = 0; i < CreatedActions.Num(); ++i)
 		{
 			IMC->MapKey(CreatedActions[i], Actions[i].DefaultKey);
 		}
 
-		if (SaveAsset(IMC, IMCPackage, IMCPath))
-		{
-			NotifyAssetCreated(IMC);
-			UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Created input mapping context: IMC_Diablo"));
-		}
+		SaveAsset(IMC, IMCPackage, IMCPath);
+		UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Updated input mapping context: IMC_Diablo"));
 	}
 }
 
@@ -686,21 +702,36 @@ void FDiabloAssetGenerator::DeleteExistingAsset(const FString& PackagePath)
 {
 	if (!FPackageName::DoesPackageExist(PackagePath)) return;
 
-	UPackage* Package = LoadPackage(nullptr, *PackagePath, LOAD_NoWarn);
-	if (!Package) return;
+	const FString FilePath = FPackageName::LongPackageNameToFilename(
+		PackagePath, FPackageName::GetAssetPackageExtension());
 
-	Package->FullyLoad();
-
-	TArray<UObject*> ObjectsToDelete;
-	ForEachObjectWithPackage(Package, [&](UObject* Obj)
+	// Unload the package from memory if loaded
+	if (UPackage* Loaded = FindPackage(nullptr, *PackagePath))
 	{
-		ObjectsToDelete.Add(Obj);
-		return true;
-	});
+		TArray<UObject*> ObjectsInPackage;
+		ForEachObjectWithPackage(Loaded, [&](UObject* Obj)
+		{
+			ObjectsInPackage.Add(Obj);
+			return true;
+		});
 
-	if (ObjectsToDelete.Num() > 0)
+		for (UObject* Obj : ObjectsInPackage)
+		{
+			if (!Obj->IsRooted())
+			{
+				Obj->ClearFlags(RF_Public | RF_Standalone);
+				Obj->MarkAsGarbage();
+			}
+		}
+
+		Loaded->ClearFlags(RF_Public | RF_Standalone);
+		Loaded->MarkAsGarbage();
+	}
+
+	// Delete the file on disk
+	if (IFileManager::Get().FileExists(*FilePath))
 	{
-		ObjectTools::ForceDeleteObjects(ObjectsToDelete, false);
+		IFileManager::Get().Delete(*FilePath, false, true, true);
 		UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Deleted existing asset: %s"), *PackagePath);
 	}
 }
@@ -709,7 +740,11 @@ bool FDiabloAssetGenerator::CreateBlueprintFromClass(UClass* ParentClass, const 
 {
 	const FString FullPath = AssetPath / AssetName;
 
-	DeleteExistingAsset(FullPath);
+	if (FPackageName::DoesPackageExist(FullPath))
+	{
+		UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Blueprint already exists, skipping: %s"), *FullPath);
+		return true;
+	}
 
 	UPackage* Package = CreatePackage(*FullPath);
 	Package->FullyLoad();
