@@ -24,20 +24,7 @@ public class Diablo : ModuleRules
 		PrivateDependencyModuleNames.AddRange(new string[] { });
 
 		PublicIncludePaths.AddRange(new string[] {
-			"Diablo",
-			"Diablo/Variant_Platforming",
-			"Diablo/Variant_Platforming/Animation",
-			"Diablo/Variant_Combat",
-			"Diablo/Variant_Combat/AI",
-			"Diablo/Variant_Combat/Animation",
-			"Diablo/Variant_Combat/Gameplay",
-			"Diablo/Variant_Combat/Interfaces",
-			"Diablo/Variant_Combat/UI",
-			"Diablo/Variant_SideScrolling",
-			"Diablo/Variant_SideScrolling/AI",
-			"Diablo/Variant_SideScrolling/Gameplay",
-			"Diablo/Variant_SideScrolling/Interfaces",
-			"Diablo/Variant_SideScrolling/UI"
+			"Diablo"
 		});
 
 		// Uncomment if you are using Slate UI

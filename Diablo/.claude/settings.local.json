@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/dev/games-unreal/Quake/**)",
+      "Bash(\"/c/Program Files/Blender Foundation/Blender 5.1/blender.exe\" --background --python \"c:/dev/games-unreal/Diablo/Tools/blender/smoke_cube.py\")",
+      "Bash(\"/c/Program Files/Inkscape/bin/inkscape.exe\" --export-type=png --export-dpi=96 --export-filename=\"c:/dev/games-unreal/Diablo/Tools/svg/out/icon.png\" \"c:/dev/games-unreal/Diablo/Tools/svg/smoke_icon.svg\")",
+      "Bash(python \"c:/dev/games-unreal/Diablo/Tools/audio/smoke_sine.py\")",
+      "Bash(\"/c/Program Files/Epic Games/UE_5.7/Engine/Build/BatchFiles/Build.bat\" DiabloEditor Win64 Development -Project=\"c:/dev/games-unreal/Diablo/Diablo.uproject\" -WaitMutex -FromMsBuild)",
+      "Bash(python \"c:/dev/games-unreal/Diablo/Tools/audio/demo_sfx.py\")"
+    ]
+  }
+}
