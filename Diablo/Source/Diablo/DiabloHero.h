@@ -8,7 +8,10 @@
 class USpringArmComponent;
 class UCameraComponent;
 class UAnimMontage;
+class USoundWave;
 class ADiabloEnemy;
+
+DECLARE_MULTICAST_DELEGATE(FOnStatsChanged);
 
 UCLASS(Abstract)
 class DIABLO_API ADiabloHero : public ACharacter
@@ -25,9 +28,21 @@ public:
 	bool IsAttacking() const { return bIsAttacking; }
 	bool IsDead() const { return !Stats.IsAlive(); }
 	void Heal(float Amount);
+	void AwardXP(int64 Amount);
+
+	FOnStatsChanged OnStatsChanged;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Stats")
 	FDiabloStats Stats;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Progression")
+	int32 CharLevel = 1;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Progression")
+	int64 CurrentXP = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Progression")
+	int32 UnspentStatPoints = 0;
 
 	UPROPERTY()
 	TObjectPtr<ADiabloEnemy> AttackTarget;
@@ -44,10 +59,21 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Combat")
 	TObjectPtr<UAnimMontage> DeathMontage;
 
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Audio")
+	TObjectPtr<USoundWave> LevelUpSound;
+
+	int64 GetXPForLevel(int32 Level) const;
+	int64 GetXPForNextLevel() const;
+	float GetXPPercent() const;
+	void RecomputeDerivedStats();
+
 private:
 	bool bIsAttacking = false;
 
 	void Die();
+	void LevelUp();
+
+	static const TArray<int64>& GetXPTable();
 
 	UFUNCTION()
 	void OnAttackMontageEnded(UAnimMontage* Montage, bool bInterrupted);

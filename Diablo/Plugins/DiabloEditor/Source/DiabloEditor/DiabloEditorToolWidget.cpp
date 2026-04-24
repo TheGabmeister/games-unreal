@@ -26,6 +26,11 @@ void UDiabloEditorToolWidget::ImportAttackSFX()
 	FDiabloAssetGenerator::ImportAttackSFX();
 }
 
+void UDiabloEditorToolWidget::ImportLevelUpSFX()
+{
+	FDiabloAssetGenerator::ImportLevelUpSFX();
+}
+
 void UDiabloEditorToolWidget::ImportPotionSprite()
 {
 	FDiabloAssetGenerator::ImportPotionSprite();

@@ -34,6 +34,7 @@
 #include "IAssetTools.h"
 #include "Factories/FbxFactory.h"
 #include "Factories/FbxImportUI.h"
+#include "Sound/SoundWave.h"
 #include "Materials/Material.h"
 #include "Materials/MaterialExpressionTextureSample.h"
 #include "WidgetBlueprint.h"
@@ -46,6 +47,7 @@ void FDiabloAssetGenerator::GenerateAllAssets()
 	GenerateDefaultMap();
 	GenerateInputAssets();
 	ImportWarriorFBX();
+	ImportLevelUpSFX();
 	ImportPotionSprite();
 
 	UE_LOG(LogTemp, Display, TEXT("[DiabloTools] All assets generated."));
@@ -434,6 +436,35 @@ void FDiabloAssetGenerator::ImportAttackSFX()
 }
 
 // ---------------------------------------------------------------------------
+// Import level-up sound effect
+// ---------------------------------------------------------------------------
+
+void FDiabloAssetGenerator::ImportLevelUpSFX()
+{
+	const FString DestPath = TEXT("/Game/Audio/SFX");
+	const FString WavPath = FPaths::ProjectDir() / TEXT("Tools/audio/out/LevelUp.wav");
+
+	if (!FPaths::FileExists(WavPath))
+	{
+		UE_LOG(LogTemp, Error, TEXT("[DiabloTools] LevelUp.wav not found — run levelup_sfx.py first"));
+		return;
+	}
+
+	UAssetImportTask* Task = NewObject<UAssetImportTask>();
+	Task->Filename = WavPath;
+	Task->DestinationPath = DestPath;
+	Task->DestinationName = TEXT("LevelUp");
+	Task->bReplaceExisting = true;
+	Task->bAutomated = true;
+	Task->bSave = true;
+
+	IAssetTools& AssetTools = FAssetToolsModule::GetModule().Get();
+	AssetTools.ImportAssetTasks({ Task });
+
+	UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Imported LevelUp SFX"));
+}
+
+// ---------------------------------------------------------------------------
 // Import healing potion sprite texture
 // ---------------------------------------------------------------------------
 
@@ -546,6 +577,7 @@ void FDiabloAssetGenerator::SetupHero()
 	UAnimBlueprint* AnimBP = LoadObject<UAnimBlueprint>(nullptr, TEXT("/Game/Characters/Warrior/ABP_Warrior.ABP_Warrior"));
 	UAnimMontage* AttackMontage = LoadObject<UAnimMontage>(nullptr, TEXT("/Game/Characters/Warrior/AM_Attack.AM_Attack"));
 	UAnimMontage* DeathMontage = LoadObject<UAnimMontage>(nullptr, TEXT("/Game/Characters/Warrior/AM_Death.AM_Death"));
+	USoundWave* LevelUpSound = LoadObject<USoundWave>(nullptr, TEXT("/Game/Audio/SFX/LevelUp.LevelUp"));
 
 	if (!HeroBP || !HeroBP->GeneratedClass)
 	{
@@ -592,6 +624,18 @@ void FDiabloAssetGenerator::SetupHero()
 			{
 				ObjProp->SetObjectPropertyValue(ObjProp->ContainerPtrToValuePtr<void>(HeroCDO), DeathMontage);
 				UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_DiabloHero: set DeathMontage"));
+			}
+		}
+	}
+
+	if (LevelUpSound)
+	{
+		if (FProperty* Prop = HeroBP->GeneratedClass->FindPropertyByName(TEXT("LevelUpSound")))
+		{
+			if (FObjectProperty* ObjProp = CastField<FObjectProperty>(Prop))
+			{
+				ObjProp->SetObjectPropertyValue(ObjProp->ContainerPtrToValuePtr<void>(HeroCDO), LevelUpSound);
+				UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_DiabloHero: set LevelUpSound"));
 			}
 		}
 	}

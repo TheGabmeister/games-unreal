@@ -12,6 +12,7 @@ struct FDiabloAssetGenerator
 	static void GenerateInputAssets();
 	static void ImportWarriorFBX();
 	static void ImportAttackSFX();
+	static void ImportLevelUpSFX();
 	static void ImportPotionSprite();
 
 	static void SetupHero();

@@ -23,7 +23,8 @@
       "Bash(\"/c/Program Files/Blender Foundation/Blender 5.1/blender.exe\" --background --python c:/dev/games-unreal/Diablo/Tools/blender/warrior_anim_idle.py)",
       "Bash(\"/c/Program Files/Blender Foundation/Blender 5.1/blender.exe\" --background --python c:/dev/games-unreal/Diablo/Tools/blender/warrior_anim_walk.py)",
       "Bash(\"/c/Program Files/Blender Foundation/Blender 5.1/blender.exe\" --background --python c:/dev/games-unreal/Diablo/Tools/blender/warrior_anim_attack.py)",
-      "Bash(bash c:/dev/games-unreal/Diablo/Tools/svg/convert.sh c:/dev/games-unreal/Diablo/Tools/svg/healing_potion.svg c:/dev/games-unreal/Diablo/Tools/svg/out/HealingPotion.png 96)"
+      "Bash(bash c:/dev/games-unreal/Diablo/Tools/svg/convert.sh c:/dev/games-unreal/Diablo/Tools/svg/healing_potion.svg c:/dev/games-unreal/Diablo/Tools/svg/out/HealingPotion.png 96)",
+      "Bash(python Tools/audio/levelup_sfx.py)"
     ],
     "additionalDirectories": [
       "c:\\dev\\games-unreal\\Diablo\\Source\\DiabloEditor"

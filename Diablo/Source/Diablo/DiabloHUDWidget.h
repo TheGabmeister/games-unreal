@@ -4,10 +4,9 @@
 #include "Blueprint/UserWidget.h"
 #include "DiabloHUDWidget.generated.h"
 
-class UOverlay;
-class UImage;
 class UProgressBar;
 class USizeBox;
+class UTextBlock;
 class ADiabloHero;
 
 UCLASS(Abstract)
@@ -20,10 +19,12 @@ public:
 
 protected:
 	virtual void NativeConstruct() override;
-	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
+	virtual void NativeDestruct() override;
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 
 private:
+	void OnStatsChanged();
+	void RefreshBars();
 
 	UPROPERTY()
 	TObjectPtr<ADiabloHero> CachedHero;
@@ -36,4 +37,9 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<UProgressBar> XPBar;
+
+	UPROPERTY()
+	TObjectPtr<UTextBlock> LevelText;
+
+	FDelegateHandle StatsChangedHandle;
 };

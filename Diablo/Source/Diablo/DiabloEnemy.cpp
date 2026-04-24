@@ -1,9 +1,11 @@
 #include "DiabloEnemy.h"
+#include "DiabloHero.h"
 #include "DiabloAIController.h"
 #include "Diablo.h"
 #include "Components/CapsuleComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Animation/AnimMontage.h"
+#include "Kismet/GameplayStatics.h"
 
 ADiabloEnemy::ADiabloEnemy()
 {
@@ -42,6 +44,15 @@ float ADiabloEnemy::TakeDamage(float DamageAmount, FDamageEvent const& DamageEve
 	if (Stats.HP <= 0.f)
 	{
 		UE_LOG(LogDiablo, Display, TEXT("%s died"), *GetName());
+
+		if (ADiabloHero* Hero = Cast<ADiabloHero>(UGameplayStatics::GetPlayerPawn(this, 0)))
+		{
+			const int32 LevelDiff = Hero->CharLevel - MonsterLevel;
+			if (LevelDiff < 10)
+			{
+				Hero->AwardXP(XPReward);
+			}
+		}
 
 		GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		GetCharacterMovement()->DisableMovement();

@@ -26,6 +26,9 @@ public:
 	void ImportAttackSFX();
 
 	UFUNCTION(BlueprintCallable, Category = "Diablo Tools")
+	void ImportLevelUpSFX();
+
+	UFUNCTION(BlueprintCallable, Category = "Diablo Tools")
 	void ImportPotionSprite();
 
 	UFUNCTION(BlueprintCallable, Category = "Diablo Tools")

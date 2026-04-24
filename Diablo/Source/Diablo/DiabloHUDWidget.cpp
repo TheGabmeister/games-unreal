@@ -5,24 +5,51 @@
 #include "Components/CanvasPanelSlot.h"
 #include "Components/ProgressBar.h"
 #include "Components/SizeBox.h"
+#include "Components/TextBlock.h"
 #include "Blueprint/WidgetTree.h"
 
 void UDiabloHUDWidget::InitForHero(ADiabloHero* InHero)
 {
+	if (CachedHero && StatsChangedHandle.IsValid())
+	{
+		CachedHero->OnStatsChanged.Remove(StatsChangedHandle);
+		StatsChangedHandle.Reset();
+	}
+
 	CachedHero = InHero;
+
+	if (CachedHero)
+	{
+		StatsChangedHandle = CachedHero->OnStatsChanged.AddUObject(this, &UDiabloHUDWidget::OnStatsChanged);
+		RefreshBars();
+	}
 }
 
 void UDiabloHUDWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
-	UE_LOG(LogDiablo, Display, TEXT("HUD widget constructed"));
+	RefreshBars();
 }
 
-void UDiabloHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
+void UDiabloHUDWidget::NativeDestruct()
 {
-	Super::NativeTick(MyGeometry, InDeltaTime);
+	if (CachedHero && StatsChangedHandle.IsValid())
+	{
+		CachedHero->OnStatsChanged.Remove(StatsChangedHandle);
+		StatsChangedHandle.Reset();
+	}
 
-	if (!CachedHero || CachedHero->IsDead())
+	Super::NativeDestruct();
+}
+
+void UDiabloHUDWidget::OnStatsChanged()
+{
+	RefreshBars();
+}
+
+void UDiabloHUDWidget::RefreshBars()
+{
+	if (!CachedHero)
 	{
 		return;
 	}
@@ -41,7 +68,12 @@ void UDiabloHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime
 
 	if (XPBar)
 	{
-		XPBar->SetPercent(0.f);
+		XPBar->SetPercent(CachedHero->GetXPPercent());
+	}
+
+	if (LevelText)
+	{
+		LevelText->SetText(FText::FromString(FString::Printf(TEXT("Lv %d"), CachedHero->CharLevel)));
 	}
 }
 
@@ -140,6 +172,24 @@ TSharedRef<SWidget> UDiabloHUDWidget::RebuildWidget()
 			XPSlot->SetAnchors(FAnchors(0.f, 1.f, 1.f, 1.f));
 			XPSlot->SetAutoSize(false);
 			XPSlot->SetOffsets(FMargin(XPInset, -Margin - BarHeight, XPInset, Margin));
+		}
+
+		// --- Level Text (above XP bar, centered) ---
+		{
+			LevelText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("LevelText"));
+			LevelText->SetText(FText::FromString(TEXT("Lv 1")));
+			LevelText->SetJustification(ETextJustify::Center);
+
+			FSlateFontInfo Font = LevelText->GetFont();
+			Font.Size = 14;
+			LevelText->SetFont(Font);
+			LevelText->SetColorAndOpacity(FSlateColor(FLinearColor(0.9f, 0.85f, 0.6f, 1.f)));
+
+			UCanvasPanelSlot* LvSlot = Root->AddChildToCanvas(LevelText);
+			LvSlot->SetAnchors(FAnchors(0.5f, 1.f, 0.5f, 1.f));
+			LvSlot->SetAlignment(FVector2D(0.5f, 1.f));
+			LvSlot->SetPosition(FVector2D(0.f, -Margin - BarHeight - 4.f));
+			LvSlot->SetAutoSize(true);
 		}
 	}
 

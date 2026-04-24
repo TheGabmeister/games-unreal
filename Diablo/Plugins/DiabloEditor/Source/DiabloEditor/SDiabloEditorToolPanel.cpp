@@ -66,6 +66,15 @@ void SDiabloEditorToolPanel::Construct(const FArguments& InArgs)
 			.Padding(0.f, 4.f)
 			[
 				SNew(SButton)
+				.Text(FText::FromString(TEXT("Import Level-Up SFX")))
+				.OnClicked(this, &SDiabloEditorToolPanel::OnImportLevelUpSFX)
+			]
+
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(0.f, 4.f)
+			[
+				SNew(SButton)
 				.Text(FText::FromString(TEXT("Import Potion Sprite")))
 				.OnClicked(this, &SDiabloEditorToolPanel::OnImportPotion)
 			]
@@ -194,6 +203,12 @@ FReply SDiabloEditorToolPanel::OnImportWarrior()
 FReply SDiabloEditorToolPanel::OnImportAttackSFX()
 {
 	FDiabloAssetGenerator::ImportAttackSFX();
+	return FReply::Handled();
+}
+
+FReply SDiabloEditorToolPanel::OnImportLevelUpSFX()
+{
+	FDiabloAssetGenerator::ImportLevelUpSFX();
 	return FReply::Handled();
 }
 

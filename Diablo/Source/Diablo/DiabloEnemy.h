@@ -25,6 +25,12 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Stats")
 	FDiabloStats Stats;
 
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Stats")
+	int64 XPReward = 100;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Stats")
+	int32 MonsterLevel = 1;
+
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Combat")
 	TObjectPtr<UAnimMontage> AttackMontage;
 

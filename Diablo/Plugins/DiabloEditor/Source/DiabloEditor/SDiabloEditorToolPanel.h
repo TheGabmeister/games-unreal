@@ -17,6 +17,7 @@ private:
 	FReply OnGenerateInput();
 	FReply OnImportWarrior();
 	FReply OnImportAttackSFX();
+	FReply OnImportLevelUpSFX();
 	FReply OnImportPotion();
 	FReply OnSetupHero();
 	FReply OnSetupController();
