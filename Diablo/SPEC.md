@@ -149,9 +149,9 @@ True isometric: orthographic projection, fixed 45° pitch, no yaw, no zoom. Scre
 Each milestone ends with a manual play-test. No unit tests until complexity demands them.
 
 ### M0 — Clean Slate
-Delete template (all Variant_* folders, ThirdPerson content, template root C++ classes). Strip `Diablo.Build.cs` include paths. Update `Config/DefaultEngine.ini`. Create empty `Lvl_Diablo.umap` with a directional light, floor, and `PlayerStart`. Minimal `ADiabloGameMode` in C++ with `BP_DiabloGameMode` as its BP subclass. Bootstrap asset tooling (Blender/Inkscape/Python smoke tests).
+Delete template (all Variant_* folders, ThirdPerson content, template root C++ classes). Strip `Diablo.Build.cs` include paths. Update `Config/DefaultEngine.ini`. Minimal `ADiabloGameMode` in C++. Bootstrap asset tooling (Blender/Inkscape/Python smoke tests). Build an **Editor Utility Widget** (`UDiabloEditorToolWidget`) that generates editor-authored assets (BP subclasses, maps, input assets) via button press — eliminating manual editor work for reproducible project setup.
 
-**Teaches:** UBT build loop, `.uproject`/`.Build.cs` basics, blank map workflow, asset-pipeline verification.
+**Teaches:** UBT build loop, `.uproject`/`.Build.cs` basics, Editor Utility Widgets, programmatic asset creation (`UBlueprintFactory`, `FKismetEditorUtilities`, `UWorld::SaveMap`).
 
 ### M1 — Isometric Camera + Click-to-Move Hero (Warrior)
 `ADiabloHero : ACharacter` with `USpringArmComponent` (fixed pitch −45°, yaw 45°, length ~1200, no rotation inheritance) + `UCameraComponent` (`ProjectionMode = Orthographic`, `OrthoWidth` tuned for isometric framing). `ADiabloPlayerController`: Enhanced Input `IA_Click` → trace from cursor → `UAIBlueprintHelperLibrary::SimpleMoveToLocation`. Navmesh covers the test level. Placeholder low-poly hero mesh via Blender script.

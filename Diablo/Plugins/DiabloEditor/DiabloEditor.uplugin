@@ -1,0 +1,22 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "1.0",
+	"FriendlyName": "Diablo Editor Tools",
+	"Description": "Editor utility widget for programmatic asset generation (BP subclasses, maps, input assets).",
+	"Category": "Editor",
+	"CreatedBy": "Diablo Project",
+	"Modules": [
+		{
+			"Name": "DiabloEditor",
+			"Type": "Editor",
+			"LoadingPhase": "Default"
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "EnhancedInput",
+			"Enabled": true
+		}
+	]
+}
