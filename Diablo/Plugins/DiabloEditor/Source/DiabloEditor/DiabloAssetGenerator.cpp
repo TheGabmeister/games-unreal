@@ -295,47 +295,10 @@ void FDiabloAssetGenerator::ImportWarriorFBX()
 		return;
 	}
 
-	// Don't delete the skeletal mesh or skeleton — the FBX importer updates
-	// them in place via bReplaceExisting, which keeps scene proxies and the
-	// AnimBP valid. Only delete animation sequences so they get freshly
-	// recreated (the importer won't create new ones over existing files).
-	IFileManager& FM = IFileManager::Get();
-	const FString ContentDir = FPackageName::LongPackageNameToFilename(DestPath, TEXT(""));
-	TArray<FString> AssetFiles;
-	FM.FindFiles(AssetFiles, *(ContentDir / TEXT("*.uasset")), true, false);
-
-	for (const FString& FileName : AssetFiles)
-	{
-		const FString BaseName = FPaths::GetBaseFilename(FileName);
-
-		// Keep everything except animation sequences
-		if (!BaseName.StartsWith(TEXT("Warrior_Anim_")))
-		{
-			continue;
-		}
-
-		FString PackagePath = DestPath / BaseName;
-		UPackage* Pkg = FindPackage(nullptr, *PackagePath);
-		if (Pkg)
-		{
-			TArray<UObject*> ObjectsInPackage;
-			GetObjectsWithPackage(Pkg, ObjectsInPackage);
-			for (UObject* Obj : ObjectsInPackage)
-			{
-				if (!Obj->IsRooted())
-				{
-					Obj->ClearFlags(RF_Standalone | RF_Public);
-					Obj->MarkAsGarbage();
-				}
-			}
-		}
-
-		FM.Delete(*(ContentDir / FileName));
-		UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Deleted %s"), *FileName);
-	}
-
-	CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS);
-	FAssetRegistryModule::GetRegistry().ScanPathsSynchronous({DestPath}, true);
+	// Never delete existing assets — bReplaceExisting updates the mesh,
+	// skeleton, and animation sequences in place, preserving all references
+	// (AnimBP, montages, scene proxies). New animations that don't exist yet
+	// are imported from separate per-animation FBX files after the main import.
 
 	// If the skeleton already exists, tell the importer to reuse it so
 	// ABP_Warrior and AM_Attack references stay valid.
@@ -425,6 +388,9 @@ void FDiabloAssetGenerator::ImportWarriorFBX()
 	};
 
 	const FString AnimDir = FPaths::ProjectDir() / TEXT("Tools/blender/out");
+	ImportSingleAnim(AnimDir / TEXT("Warrior_Idle.fbx"), TEXT("Warrior_Anim_Idle"));
+	ImportSingleAnim(AnimDir / TEXT("Warrior_Walk.fbx"), TEXT("Warrior_Anim_Walk"));
+	ImportSingleAnim(AnimDir / TEXT("Warrior_Attack.fbx"), TEXT("Warrior_Anim_Attack"));
 	ImportSingleAnim(AnimDir / TEXT("Warrior_Death.fbx"), TEXT("Warrior_Anim_Death"));
 
 	// The importer creates animation sequences in memory but may not save them
