@@ -451,18 +451,35 @@ void FDiabloAssetGenerator::GenerateAnimBlueprint()
 		return;
 	}
 
-	// Find animation sequences — FBX import names vary
-	UAnimSequence* IdleAnim = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Characters/Warrior/Idle.Idle"));
-	if (!IdleAnim)
-		IdleAnim = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Characters/Warrior/Warrior_Anim_Idle.Warrior_Anim_Idle"));
-	if (!IdleAnim)
-		IdleAnim = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Characters/Warrior/Warrior_Idle.Warrior_Idle"));
+	// Find animation sequences — names depend on FBX NLA strip/track naming
+	const TCHAR* IdleCandidates[] = {
+		TEXT("/Game/Characters/Warrior/Idle.Idle"),
+		TEXT("/Game/Characters/Warrior/IdleTrack.IdleTrack"),
+		TEXT("/Game/Characters/Warrior/Warrior_Anim_Idle.Warrior_Anim_Idle"),
+		TEXT("/Game/Characters/Warrior/Warrior_Idle.Warrior_Idle"),
+		TEXT("/Game/Characters/Warrior/Warrior_Armature_IdleTrack.Warrior_Armature_IdleTrack"),
+	};
+	const TCHAR* WalkCandidates[] = {
+		TEXT("/Game/Characters/Warrior/Walk.Walk"),
+		TEXT("/Game/Characters/Warrior/WalkTrack.WalkTrack"),
+		TEXT("/Game/Characters/Warrior/Warrior_Anim_Walk.Warrior_Anim_Walk"),
+		TEXT("/Game/Characters/Warrior/Warrior_Walk.Warrior_Walk"),
+		TEXT("/Game/Characters/Warrior/Warrior_Armature_WalkTrack.Warrior_Armature_WalkTrack"),
+	};
 
-	UAnimSequence* WalkAnim = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Characters/Warrior/Walk.Walk"));
-	if (!WalkAnim)
-		WalkAnim = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Characters/Warrior/Warrior_Anim_Walk.Warrior_Anim_Walk"));
-	if (!WalkAnim)
-		WalkAnim = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Characters/Warrior/Warrior_Walk.Warrior_Walk"));
+	UAnimSequence* IdleAnim = nullptr;
+	for (const TCHAR* Path : IdleCandidates)
+	{
+		IdleAnim = LoadObject<UAnimSequence>(nullptr, Path);
+		if (IdleAnim) break;
+	}
+
+	UAnimSequence* WalkAnim = nullptr;
+	for (const TCHAR* Path : WalkCandidates)
+	{
+		WalkAnim = LoadObject<UAnimSequence>(nullptr, Path);
+		if (WalkAnim) break;
+	}
 
 	if (!IdleAnim || !WalkAnim)
 	{

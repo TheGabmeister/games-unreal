@@ -240,9 +240,9 @@ strip_walk = track_walk.strips.new("Walk", 0, walk_action)
 strip_walk.frame_end = 30
 armature_obj.animation_data.action = None
 
-# Mute NLA tracks so they export as separate actions
-track_idle.mute = True
-track_walk.mute = True
+# Keep NLA tracks active so they export as separate FBX animation stacks
+track_idle.mute = False
+track_walk.mute = False
 
 # ---------------------------------------------------------------------------
 # 5. Export FBX
@@ -251,7 +251,7 @@ track_walk.mute = True
 bpy.ops.export_scene.fbx(
     filepath=OUT_FBX,
     use_selection=False,
-    global_scale=100.0,
+    global_scale=1.0,
     apply_unit_scale=True,
     bake_space_transform=False,
     axis_forward="-Z",
@@ -259,8 +259,8 @@ bpy.ops.export_scene.fbx(
     object_types={"ARMATURE", "MESH"},
     add_leaf_bones=False,
     bake_anim=True,
-    bake_anim_use_all_actions=True,
-    bake_anim_use_nla_strips=False,
+    bake_anim_use_all_actions=False,
+    bake_anim_use_nla_strips=True,
     bake_anim_force_startend_keying=True,
 )
 

@@ -21,7 +21,7 @@ cube.scale = (1.0, 1.0, 1.0)
 bpy.ops.export_scene.fbx(
     filepath=OUT_FBX,
     use_selection=False,
-    global_scale=100.0,
+    global_scale=1.0,
     apply_unit_scale=True,
     bake_space_transform=False,
     axis_forward="-Z",
