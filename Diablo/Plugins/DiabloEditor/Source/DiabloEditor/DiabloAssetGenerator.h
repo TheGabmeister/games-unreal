@@ -8,18 +8,18 @@ class UBlueprint;
 struct FDiabloAssetGenerator
 {
 	static void GenerateAllAssets();
-	static void GenerateBlueprintSubclasses();
 	static void GenerateDefaultMap();
 	static void GenerateInputAssets();
 	static void ImportWarriorFBX();
 	static void ImportAttackSFX();
 	static void ImportPotionSprite();
-	static void ConfigureBlueprintDefaults();
-	static void ConfigureHeroDefaults();
-	static void ConfigureControllerDefaults();
-	static void ConfigureGameModeDefaults();
-	static void ConfigureEnemyDefaults();
-	static void ConfigureDroppedItemDefaults();
+
+	static void SetupHero();
+	static void SetupController();
+	static void SetupGameMode();
+	static void SetupEnemy();
+	static void SetupPotion();
+	static void SetupAllBlueprints();
 
 private:
 	static void SpawnFloorPlane(UWorld* World);

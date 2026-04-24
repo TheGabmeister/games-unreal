@@ -39,49 +39,22 @@
 
 void FDiabloAssetGenerator::GenerateAllAssets()
 {
-	GenerateBlueprintSubclasses();
+	SetupAllBlueprints();
 	GenerateDefaultMap();
 	GenerateInputAssets();
 	ImportWarriorFBX();
 	ImportPotionSprite();
-	ConfigureBlueprintDefaults();
 
 	UE_LOG(LogTemp, Display, TEXT("[DiabloTools] All assets generated."));
 }
 
-void FDiabloAssetGenerator::GenerateBlueprintSubclasses()
+void FDiabloAssetGenerator::SetupAllBlueprints()
 {
-	CreateBlueprintFromClass(
-		ADiabloGameMode::StaticClass(),
-		TEXT("/Game/Blueprints"),
-		TEXT("BP_DiabloGameMode")
-	);
-
-	CreateBlueprintFromClass(
-		ADiabloHero::StaticClass(),
-		TEXT("/Game/Blueprints"),
-		TEXT("BP_DiabloHero")
-	);
-
-	CreateBlueprintFromClass(
-		ADiabloPlayerController::StaticClass(),
-		TEXT("/Game/Blueprints"),
-		TEXT("BP_DiabloPlayerController")
-	);
-
-	CreateBlueprintFromClass(
-		ADiabloEnemy::StaticClass(),
-		TEXT("/Game/Blueprints"),
-		TEXT("BP_DiabloEnemy")
-	);
-
-	CreateBlueprintFromClass(
-		ADroppedItem::StaticClass(),
-		TEXT("/Game/Blueprints"),
-		TEXT("BP_HealingPotion")
-	);
-
-	ConfigureBlueprintDefaults();
+	SetupGameMode();
+	SetupHero();
+	SetupController();
+	SetupEnemy();
+	SetupPotion();
 }
 
 void FDiabloAssetGenerator::GenerateDefaultMap()
@@ -489,8 +462,10 @@ void FDiabloAssetGenerator::ImportPotionSprite()
 // Configure dropped item (healing potion) defaults
 // ---------------------------------------------------------------------------
 
-void FDiabloAssetGenerator::ConfigureDroppedItemDefaults()
+void FDiabloAssetGenerator::SetupPotion()
 {
+	CreateBlueprintFromClass(ADroppedItem::StaticClass(), TEXT("/Game/Blueprints"), TEXT("BP_HealingPotion"));
+
 	UBlueprint* PotionBP = LoadObject<UBlueprint>(nullptr, TEXT("/Game/Blueprints/BP_HealingPotion.BP_HealingPotion"));
 	UStaticMesh* PlaneMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Plane.Plane"));
 	UTexture2D* PotionTex = LoadObject<UTexture2D>(nullptr, TEXT("/Game/Items/Potions/T_HealingPotion.T_HealingPotion"));
@@ -540,7 +515,8 @@ void FDiabloAssetGenerator::ConfigureDroppedItemDefaults()
 		{
 			MeshComp->SetStaticMesh(PlaneMesh);
 			MeshComp->SetRelativeScale3D(FVector(0.3f, 0.3f, 0.3f));
-			MeshComp->SetRelativeRotation(FRotator(0.f, 0.f, 0.f));
+			// Stand upright facing the isometric camera (pitch -45, yaw 225)
+			MeshComp->SetRelativeRotation(FRotator(90.f, 45.f, 0.f));
 			if (PotionMat)
 			{
 				MeshComp->SetMaterial(0, PotionMat);
@@ -557,17 +533,10 @@ void FDiabloAssetGenerator::ConfigureDroppedItemDefaults()
 // Configure Blueprint CDO defaults (individual + combined)
 // ---------------------------------------------------------------------------
 
-void FDiabloAssetGenerator::ConfigureBlueprintDefaults()
+void FDiabloAssetGenerator::SetupHero()
 {
-	ConfigureHeroDefaults();
-	ConfigureControllerDefaults();
-	ConfigureGameModeDefaults();
-	ConfigureEnemyDefaults();
-	ConfigureDroppedItemDefaults();
-}
+	CreateBlueprintFromClass(ADiabloHero::StaticClass(), TEXT("/Game/Blueprints"), TEXT("BP_DiabloHero"));
 
-void FDiabloAssetGenerator::ConfigureHeroDefaults()
-{
 	UBlueprint* HeroBP = LoadObject<UBlueprint>(nullptr, TEXT("/Game/Blueprints/BP_DiabloHero.BP_DiabloHero"));
 	USkeletalMesh* SkMesh = LoadObject<USkeletalMesh>(nullptr, TEXT("/Game/Characters/Warrior/Warrior.Warrior"));
 	UAnimBlueprint* AnimBP = LoadObject<UAnimBlueprint>(nullptr, TEXT("/Game/Characters/Warrior/ABP_Warrior.ABP_Warrior"));
@@ -627,8 +596,10 @@ void FDiabloAssetGenerator::ConfigureHeroDefaults()
 	SaveAsset(HeroBP, HeroBP->GetOutermost(), TEXT("/Game/Blueprints/BP_DiabloHero"));
 }
 
-void FDiabloAssetGenerator::ConfigureControllerDefaults()
+void FDiabloAssetGenerator::SetupController()
 {
+	CreateBlueprintFromClass(ADiabloPlayerController::StaticClass(), TEXT("/Game/Blueprints"), TEXT("BP_DiabloPlayerController"));
+
 	UBlueprint* ControllerBP = LoadObject<UBlueprint>(nullptr, TEXT("/Game/Blueprints/BP_DiabloPlayerController.BP_DiabloPlayerController"));
 	UInputAction* ClickAction = LoadObject<UInputAction>(nullptr, TEXT("/Game/Input/Actions/IA_Click.IA_Click"));
 	UInputMappingContext* IMC = LoadObject<UInputMappingContext>(nullptr, TEXT("/Game/Input/IMC_Diablo.IMC_Diablo"));
@@ -669,8 +640,10 @@ void FDiabloAssetGenerator::ConfigureControllerDefaults()
 	SaveAsset(ControllerBP, ControllerBP->GetOutermost(), TEXT("/Game/Blueprints/BP_DiabloPlayerController"));
 }
 
-void FDiabloAssetGenerator::ConfigureGameModeDefaults()
+void FDiabloAssetGenerator::SetupGameMode()
 {
+	CreateBlueprintFromClass(ADiabloGameMode::StaticClass(), TEXT("/Game/Blueprints"), TEXT("BP_DiabloGameMode"));
+
 	UBlueprint* GameModeBP = LoadObject<UBlueprint>(nullptr, TEXT("/Game/Blueprints/BP_DiabloGameMode.BP_DiabloGameMode"));
 	UBlueprint* HeroBP = LoadObject<UBlueprint>(nullptr, TEXT("/Game/Blueprints/BP_DiabloHero.BP_DiabloHero"));
 	UBlueprint* ControllerBP = LoadObject<UBlueprint>(nullptr, TEXT("/Game/Blueprints/BP_DiabloPlayerController.BP_DiabloPlayerController"));
@@ -699,8 +672,10 @@ void FDiabloAssetGenerator::ConfigureGameModeDefaults()
 	SaveAsset(GameModeBP, GameModeBP->GetOutermost(), TEXT("/Game/Blueprints/BP_DiabloGameMode"));
 }
 
-void FDiabloAssetGenerator::ConfigureEnemyDefaults()
+void FDiabloAssetGenerator::SetupEnemy()
 {
+	CreateBlueprintFromClass(ADiabloEnemy::StaticClass(), TEXT("/Game/Blueprints"), TEXT("BP_DiabloEnemy"));
+
 	UBlueprint* EnemyBP = LoadObject<UBlueprint>(nullptr, TEXT("/Game/Blueprints/BP_DiabloEnemy.BP_DiabloEnemy"));
 	USkeletalMesh* SkMesh = LoadObject<USkeletalMesh>(nullptr, TEXT("/Game/Characters/Warrior/Warrior.Warrior"));
 	UAnimBlueprint* AnimBP = LoadObject<UAnimBlueprint>(nullptr, TEXT("/Game/Characters/Warrior/ABP_Warrior.ABP_Warrior"));

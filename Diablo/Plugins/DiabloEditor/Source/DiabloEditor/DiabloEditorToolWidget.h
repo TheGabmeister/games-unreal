@@ -14,9 +14,6 @@ public:
 	void GenerateAllAssets();
 
 	UFUNCTION(BlueprintCallable, Category = "Diablo Tools")
-	void GenerateBlueprintSubclasses();
-
-	UFUNCTION(BlueprintCallable, Category = "Diablo Tools")
 	void GenerateDefaultMap();
 
 	UFUNCTION(BlueprintCallable, Category = "Diablo Tools")
@@ -29,17 +26,23 @@ public:
 	void ImportAttackSFX();
 
 	UFUNCTION(BlueprintCallable, Category = "Diablo Tools")
-	void ConfigureBlueprintDefaults();
+	void ImportPotionSprite();
 
 	UFUNCTION(BlueprintCallable, Category = "Diablo Tools")
-	void ConfigureHeroDefaults();
+	void SetupAllBlueprints();
 
 	UFUNCTION(BlueprintCallable, Category = "Diablo Tools")
-	void ConfigureControllerDefaults();
+	void SetupHero();
 
 	UFUNCTION(BlueprintCallable, Category = "Diablo Tools")
-	void ConfigureGameModeDefaults();
+	void SetupController();
 
 	UFUNCTION(BlueprintCallable, Category = "Diablo Tools")
-	void ConfigureEnemyDefaults();
+	void SetupGameMode();
+
+	UFUNCTION(BlueprintCallable, Category = "Diablo Tools")
+	void SetupEnemy();
+
+	UFUNCTION(BlueprintCallable, Category = "Diablo Tools")
+	void SetupPotion();
 };

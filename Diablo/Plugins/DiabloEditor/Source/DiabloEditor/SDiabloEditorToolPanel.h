@@ -13,15 +13,14 @@ public:
 
 private:
 	FReply OnGenerateAll();
-	FReply OnGenerateBlueprints();
 	FReply OnGenerateMap();
 	FReply OnGenerateInput();
 	FReply OnImportWarrior();
 	FReply OnImportAttackSFX();
 	FReply OnImportPotion();
-	FReply OnConfigureAll();
-	FReply OnConfigureHero();
-	FReply OnConfigureController();
-	FReply OnConfigureGameMode();
-	FReply OnConfigureEnemy();
+	FReply OnSetupHero();
+	FReply OnSetupController();
+	FReply OnSetupGameMode();
+	FReply OnSetupEnemy();
+	FReply OnSetupPotion();
 };

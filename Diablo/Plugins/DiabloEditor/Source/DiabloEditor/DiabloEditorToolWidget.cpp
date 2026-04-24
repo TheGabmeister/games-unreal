@@ -6,11 +6,6 @@ void UDiabloEditorToolWidget::GenerateAllAssets()
 	FDiabloAssetGenerator::GenerateAllAssets();
 }
 
-void UDiabloEditorToolWidget::GenerateBlueprintSubclasses()
-{
-	FDiabloAssetGenerator::GenerateBlueprintSubclasses();
-}
-
 void UDiabloEditorToolWidget::GenerateDefaultMap()
 {
 	FDiabloAssetGenerator::GenerateDefaultMap();
@@ -31,27 +26,37 @@ void UDiabloEditorToolWidget::ImportAttackSFX()
 	FDiabloAssetGenerator::ImportAttackSFX();
 }
 
-void UDiabloEditorToolWidget::ConfigureBlueprintDefaults()
+void UDiabloEditorToolWidget::ImportPotionSprite()
 {
-	FDiabloAssetGenerator::ConfigureBlueprintDefaults();
+	FDiabloAssetGenerator::ImportPotionSprite();
 }
 
-void UDiabloEditorToolWidget::ConfigureHeroDefaults()
+void UDiabloEditorToolWidget::SetupAllBlueprints()
 {
-	FDiabloAssetGenerator::ConfigureHeroDefaults();
+	FDiabloAssetGenerator::SetupAllBlueprints();
 }
 
-void UDiabloEditorToolWidget::ConfigureControllerDefaults()
+void UDiabloEditorToolWidget::SetupHero()
 {
-	FDiabloAssetGenerator::ConfigureControllerDefaults();
+	FDiabloAssetGenerator::SetupHero();
 }
 
-void UDiabloEditorToolWidget::ConfigureGameModeDefaults()
+void UDiabloEditorToolWidget::SetupController()
 {
-	FDiabloAssetGenerator::ConfigureGameModeDefaults();
+	FDiabloAssetGenerator::SetupController();
 }
 
-void UDiabloEditorToolWidget::ConfigureEnemyDefaults()
+void UDiabloEditorToolWidget::SetupGameMode()
 {
-	FDiabloAssetGenerator::ConfigureEnemyDefaults();
+	FDiabloAssetGenerator::SetupGameMode();
+}
+
+void UDiabloEditorToolWidget::SetupEnemy()
+{
+	FDiabloAssetGenerator::SetupEnemy();
+}
+
+void UDiabloEditorToolWidget::SetupPotion()
+{
+	FDiabloAssetGenerator::SetupPotion();
 }

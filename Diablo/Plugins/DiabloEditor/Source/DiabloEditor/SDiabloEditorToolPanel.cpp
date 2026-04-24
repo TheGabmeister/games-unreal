@@ -32,31 +32,15 @@ void SDiabloEditorToolPanel::Construct(const FArguments& InArgs)
 				.OnClicked(this, &SDiabloEditorToolPanel::OnGenerateAll)
 			]
 
-			+ SVerticalBox::Slot()
-			.AutoHeight()
-			.Padding(0.f, 4.f)
-			[
-				SNew(SButton)
-				.Text(FText::FromString(TEXT("Generate Blueprint Subclasses")))
-				.OnClicked(this, &SDiabloEditorToolPanel::OnGenerateBlueprints)
-			]
+			// --- Import ---
 
 			+ SVerticalBox::Slot()
 			.AutoHeight()
-			.Padding(0.f, 4.f)
+			.Padding(0.f, 12.f, 0.f, 4.f)
 			[
-				SNew(SButton)
-				.Text(FText::FromString(TEXT("Generate Default Map")))
-				.OnClicked(this, &SDiabloEditorToolPanel::OnGenerateMap)
-			]
-
-			+ SVerticalBox::Slot()
-			.AutoHeight()
-			.Padding(0.f, 4.f)
-			[
-				SNew(SButton)
-				.Text(FText::FromString(TEXT("Generate Input Assets")))
-				.OnClicked(this, &SDiabloEditorToolPanel::OnGenerateInput)
+				SNew(STextBlock)
+				.Text(FText::FromString(TEXT("Import")))
+				.Font(FCoreStyle::GetDefaultFontStyle("Bold", 12))
 			]
 
 			+ SVerticalBox::Slot()
@@ -86,14 +70,14 @@ void SDiabloEditorToolPanel::Construct(const FArguments& InArgs)
 				.OnClicked(this, &SDiabloEditorToolPanel::OnImportPotion)
 			]
 
-			// --- Configure Defaults ---
+			// --- Blueprints ---
 
 			+ SVerticalBox::Slot()
 			.AutoHeight()
 			.Padding(0.f, 12.f, 0.f, 4.f)
 			[
 				SNew(STextBlock)
-				.Text(FText::FromString(TEXT("Configure Blueprint Defaults")))
+				.Text(FText::FromString(TEXT("Blueprints")))
 				.Font(FCoreStyle::GetDefaultFontStyle("Bold", 12))
 			]
 
@@ -102,8 +86,8 @@ void SDiabloEditorToolPanel::Construct(const FArguments& InArgs)
 			.Padding(0.f, 4.f)
 			[
 				SNew(SButton)
-				.Text(FText::FromString(TEXT("Configure All Defaults")))
-				.OnClicked(this, &SDiabloEditorToolPanel::OnConfigureAll)
+				.Text(FText::FromString(TEXT("Setup Hero")))
+				.OnClicked(this, &SDiabloEditorToolPanel::OnSetupHero)
 			]
 
 			+ SVerticalBox::Slot()
@@ -111,8 +95,8 @@ void SDiabloEditorToolPanel::Construct(const FArguments& InArgs)
 			.Padding(0.f, 4.f)
 			[
 				SNew(SButton)
-				.Text(FText::FromString(TEXT("Configure Hero")))
-				.OnClicked(this, &SDiabloEditorToolPanel::OnConfigureHero)
+				.Text(FText::FromString(TEXT("Setup Controller")))
+				.OnClicked(this, &SDiabloEditorToolPanel::OnSetupController)
 			]
 
 			+ SVerticalBox::Slot()
@@ -120,8 +104,8 @@ void SDiabloEditorToolPanel::Construct(const FArguments& InArgs)
 			.Padding(0.f, 4.f)
 			[
 				SNew(SButton)
-				.Text(FText::FromString(TEXT("Configure Controller")))
-				.OnClicked(this, &SDiabloEditorToolPanel::OnConfigureController)
+				.Text(FText::FromString(TEXT("Setup Game Mode")))
+				.OnClicked(this, &SDiabloEditorToolPanel::OnSetupGameMode)
 			]
 
 			+ SVerticalBox::Slot()
@@ -129,8 +113,8 @@ void SDiabloEditorToolPanel::Construct(const FArguments& InArgs)
 			.Padding(0.f, 4.f)
 			[
 				SNew(SButton)
-				.Text(FText::FromString(TEXT("Configure Game Mode")))
-				.OnClicked(this, &SDiabloEditorToolPanel::OnConfigureGameMode)
+				.Text(FText::FromString(TEXT("Setup Enemy")))
+				.OnClicked(this, &SDiabloEditorToolPanel::OnSetupEnemy)
 			]
 
 			+ SVerticalBox::Slot()
@@ -138,8 +122,37 @@ void SDiabloEditorToolPanel::Construct(const FArguments& InArgs)
 			.Padding(0.f, 4.f)
 			[
 				SNew(SButton)
-				.Text(FText::FromString(TEXT("Configure Enemy")))
-				.OnClicked(this, &SDiabloEditorToolPanel::OnConfigureEnemy)
+				.Text(FText::FromString(TEXT("Setup Potion")))
+				.OnClicked(this, &SDiabloEditorToolPanel::OnSetupPotion)
+			]
+
+			// --- World ---
+
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(0.f, 12.f, 0.f, 4.f)
+			[
+				SNew(STextBlock)
+				.Text(FText::FromString(TEXT("World")))
+				.Font(FCoreStyle::GetDefaultFontStyle("Bold", 12))
+			]
+
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(0.f, 4.f)
+			[
+				SNew(SButton)
+				.Text(FText::FromString(TEXT("Generate Default Map")))
+				.OnClicked(this, &SDiabloEditorToolPanel::OnGenerateMap)
+			]
+
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(0.f, 4.f)
+			[
+				SNew(SButton)
+				.Text(FText::FromString(TEXT("Generate Input Assets")))
+				.OnClicked(this, &SDiabloEditorToolPanel::OnGenerateInput)
 			]
 		]
 	];
@@ -148,12 +161,6 @@ void SDiabloEditorToolPanel::Construct(const FArguments& InArgs)
 FReply SDiabloEditorToolPanel::OnGenerateAll()
 {
 	FDiabloAssetGenerator::GenerateAllAssets();
-	return FReply::Handled();
-}
-
-FReply SDiabloEditorToolPanel::OnGenerateBlueprints()
-{
-	FDiabloAssetGenerator::GenerateBlueprintSubclasses();
 	return FReply::Handled();
 }
 
@@ -187,32 +194,32 @@ FReply SDiabloEditorToolPanel::OnImportPotion()
 	return FReply::Handled();
 }
 
-FReply SDiabloEditorToolPanel::OnConfigureAll()
+FReply SDiabloEditorToolPanel::OnSetupHero()
 {
-	FDiabloAssetGenerator::ConfigureBlueprintDefaults();
+	FDiabloAssetGenerator::SetupHero();
 	return FReply::Handled();
 }
 
-FReply SDiabloEditorToolPanel::OnConfigureHero()
+FReply SDiabloEditorToolPanel::OnSetupController()
 {
-	FDiabloAssetGenerator::ConfigureHeroDefaults();
+	FDiabloAssetGenerator::SetupController();
 	return FReply::Handled();
 }
 
-FReply SDiabloEditorToolPanel::OnConfigureController()
+FReply SDiabloEditorToolPanel::OnSetupGameMode()
 {
-	FDiabloAssetGenerator::ConfigureControllerDefaults();
+	FDiabloAssetGenerator::SetupGameMode();
 	return FReply::Handled();
 }
 
-FReply SDiabloEditorToolPanel::OnConfigureGameMode()
+FReply SDiabloEditorToolPanel::OnSetupEnemy()
 {
-	FDiabloAssetGenerator::ConfigureGameModeDefaults();
+	FDiabloAssetGenerator::SetupEnemy();
 	return FReply::Handled();
 }
 
-FReply SDiabloEditorToolPanel::OnConfigureEnemy()
+FReply SDiabloEditorToolPanel::OnSetupPotion()
 {
-	FDiabloAssetGenerator::ConfigureEnemyDefaults();
+	FDiabloAssetGenerator::SetupPotion();
 	return FReply::Handled();
 }
