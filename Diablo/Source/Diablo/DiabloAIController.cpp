@@ -75,7 +75,10 @@ void ADiabloAIController::TickChase(float DeltaTime)
 		return;
 	}
 
-	MoveToActor(Target, AttackRange * 0.8f);
+	if (GetMoveStatus() != EPathFollowingStatus::Moving)
+	{
+		MoveToActor(Target, AttackRange * 0.5f);
+	}
 }
 
 void ADiabloAIController::TickAttack(float DeltaTime)
