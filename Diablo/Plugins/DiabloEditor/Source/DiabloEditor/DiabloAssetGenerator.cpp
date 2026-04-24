@@ -58,7 +58,8 @@ void FDiabloAssetGenerator::GenerateDefaultMap()
 		Sun->SetActorRotation(FRotator(-45.f, -45.f, 0.f));
 	}
 
-	FEditorFileUtils::SaveMap(NewWorld, MapPackagePath);
+	const FString FilePath = FPackageName::LongPackageNameToFilename(MapPackagePath, FPackageName::GetMapPackageExtension());
+	FEditorFileUtils::SaveMap(NewWorld, FilePath);
 
 	UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Created map: %s"), *MapPackagePath);
 }
