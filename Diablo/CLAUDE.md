@@ -135,9 +135,9 @@ Animations are keyframed in the same Blender scripts that generate meshes — ar
 
 ### FBX Reimport Workflow
 
-`ImportWarriorFBX` preserves `Warrior_Skeleton`, `ABP_Warrior`, `AM_Attack`, and `AM_Death` across reimports. The FBX importer reuses the existing skeleton (`FbxFactory->ImportUI->Skeleton`), so AnimBP and montage references stay valid. Only the skeletal mesh, physics asset, and animation sequences are deleted and recreated.
+`ImportWarriorFBX` opens a blank map first (to unload actors referencing the mesh and avoid scene proxy crashes), then deletes all Warrior assets except `Warrior_Skeleton`, `ABP_Warrior`, `AM_Attack`, and `AM_Death`. The FBX importer reuses the existing skeleton (`FbxFactory->ImportUI->Skeleton`), so AnimBP and montage references stay valid. The skeletal mesh, physics asset, and animation sequences are deleted and freshly recreated — this ensures new animations (like Death) are imported alongside existing ones.
 
-**When bone hierarchy changes** (add/remove/rename bones): manually delete `Warrior_Skeleton` in the Content Browser before reimporting. The AnimBP will need to be recreated. This should be rare.
+**When bone hierarchy changes** (add/remove/rename bones): manually delete `Warrior_Skeleton` in the Content Browser before reimporting. The AnimBP will need to be recreated. This should be rare — the bone hierarchy is defined by `add_bone` calls in `warrior_mesh.py` and is stable.
 
 ## Coding principles
 

@@ -295,12 +295,10 @@ void FDiabloAssetGenerator::ImportWarriorFBX()
 		return;
 	}
 
-	// Open a blank map to unload all actors referencing the skeletal mesh.
-	// Without this, deleting the mesh crashes via stale scene proxy LOD data.
-	UEditorLoadingAndSavingUtils::NewBlankMap(false);
-
-	// Delete existing assets except manually-authored ones (ABP_Warrior,
-	// AM_Attack, AM_Death) and the skeleton (preserving it keeps the AnimBP wired).
+	// Don't delete the skeletal mesh or skeleton — the FBX importer updates
+	// them in place via bReplaceExisting, which keeps scene proxies and the
+	// AnimBP valid. Only delete animation sequences so they get freshly
+	// recreated (the importer won't create new ones over existing files).
 	IFileManager& FM = IFileManager::Get();
 	const FString ContentDir = FPackageName::LongPackageNameToFilename(DestPath, TEXT(""));
 	TArray<FString> AssetFiles;
@@ -310,10 +308,8 @@ void FDiabloAssetGenerator::ImportWarriorFBX()
 	{
 		const FString BaseName = FPaths::GetBaseFilename(FileName);
 
-		if (BaseName == TEXT("ABP_Warrior")
-			|| BaseName == TEXT("AM_Attack")
-			|| BaseName == TEXT("AM_Death")
-			|| BaseName == TEXT("Warrior_Skeleton"))
+		// Keep everything except animation sequences
+		if (!BaseName.StartsWith(TEXT("Warrior_Anim_")))
 		{
 			continue;
 		}
@@ -378,6 +374,58 @@ void FDiabloAssetGenerator::ImportWarriorFBX()
 	{
 		UE_LOG(LogTemp, Display, TEXT("[DiabloTools]   -> %s (%s)"), *Obj->GetName(), *Obj->GetClass()->GetName());
 	}
+
+	// Import additional animations from separate per-animation FBX files.
+	// The main FBX contains all animations via NLA strips, which works on
+	// first import. On reimport the UE importer skips new NLA strips, so
+	// each animation also has a standalone FBX as a reliable fallback.
+	if (!ExistingSkeleton)
+	{
+		ExistingSkeleton = LoadObject<USkeleton>(nullptr, TEXT("/Game/Characters/Warrior/Warrior_Skeleton.Warrior_Skeleton"));
+	}
+
+	auto ImportSingleAnim = [&](const FString& AnimFBXPath, const FString& AnimName)
+	{
+		if (!FPaths::FileExists(AnimFBXPath))
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[DiabloTools] %s not found, skipping"), *AnimFBXPath);
+			return;
+		}
+
+		// Skip if the main import already created this animation
+		const FString AnimObjPath = DestPath / AnimName + TEXT(".") + AnimName;
+		if (LoadObject<UAnimSequence>(nullptr, *AnimObjPath))
+		{
+			UE_LOG(LogTemp, Display, TEXT("[DiabloTools] %s already exists from main import, skipping"), *AnimName);
+			return;
+		}
+
+		UFbxFactory* AnimFactory = NewObject<UFbxFactory>();
+		AnimFactory->ImportUI->bImportMesh = false;
+		AnimFactory->ImportUI->bImportAnimations = true;
+		AnimFactory->ImportUI->bImportMaterials = false;
+		AnimFactory->ImportUI->bImportTextures = false;
+		AnimFactory->ImportUI->bIsObjImport = false;
+		AnimFactory->ImportUI->bAutomatedImportShouldDetectType = false;
+		AnimFactory->ImportUI->MeshTypeToImport = FBXIT_Animation;
+		AnimFactory->ImportUI->Skeleton = ExistingSkeleton;
+
+		UAssetImportTask* AnimTask = NewObject<UAssetImportTask>();
+		AnimTask->Filename = AnimFBXPath;
+		AnimTask->DestinationPath = DestPath;
+		AnimTask->DestinationName = AnimName;
+		AnimTask->bReplaceExisting = true;
+		AnimTask->bAutomated = true;
+		AnimTask->bSave = true;
+		AnimTask->Factory = AnimFactory;
+
+		AssetTools.ImportAssetTasks({ AnimTask });
+		UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Imported %s (%d objects)"),
+			*AnimName, AnimTask->GetObjects().Num());
+	};
+
+	const FString AnimDir = FPaths::ProjectDir() / TEXT("Tools/blender/out");
+	ImportSingleAnim(AnimDir / TEXT("Warrior_Death.fbx"), TEXT("Warrior_Anim_Death"));
 
 	// The importer creates animation sequences in memory but may not save them
 	// when the skeleton was freshly recreated. Scan for unsaved AnimSequences
