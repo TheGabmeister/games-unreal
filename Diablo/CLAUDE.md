@@ -38,7 +38,7 @@ IntelliSense errors like `cannot open source file "X.h"` are usually false posit
 
 **Runtime module:** [Diablo.Build.cs](Source/Diablo/Diablo.Build.cs). Public dependencies: `EnhancedInput`, `AIModule`, `NavigationSystem`, `StateTreeModule`, `GameplayStateTreeModule`, `UMG`, `Slate`. The module log category is `LogDiablo` ([Diablo.h](Source/Diablo/Diablo.h)).
 
-**Editor plugin:** [Plugins/DiabloEditor/](Plugins/DiabloEditor/) — editor-only plugin with `FDiabloAssetGenerator` (static utility struct) and a Slate toolbar panel accessible via **Tools > Diablo > Diablo Tools**. Generates BP subclasses, maps, input assets, imports FBX, and configures Blueprint CDO defaults. Registered in `.uproject` with `"TargetAllowList": ["Editor"]`.
+**Editor plugin:** [Plugins/DiabloEditor/](Plugins/DiabloEditor/) — editor-only plugin with `FDiabloAssetGenerator` (static utility struct) and a Slate toolbar panel accessible via **Tools > Diablo > Diablo Tools**. Generates BP subclasses, maps, input assets, imports FBX/audio, and configures Blueprint CDO defaults. Registered in `.uproject` with `"TargetAllowList": ["Editor"]`.
 
 **Plugins enabled** in `.uproject`: `StateTree`, `GameplayStateTree` (needed for AI in M19), `ModelingToolsEditorMode` (editor only), `DiabloEditor` (editor only).
 
@@ -48,8 +48,20 @@ IntelliSense errors like `cannot open source file "X.h"` are usually false posit
 
 - `ADiabloGameMode` (Abstract) — sets `DefaultPawnClass` and `PlayerControllerClass` to C++ bases; BP subclass `BP_DiabloGameMode` overrides to BP versions
 - `ADiabloHero : ACharacter` (Abstract) — isometric camera via `USpringArmComponent` (pitch -45°, yaw 225°, arm 1800, no collision test) + `UCameraComponent` (orthographic, OrthoWidth 2048). Capsule sized to 90 half-height, mesh offset -90 Z to align feet with capsule bottom
-- `ADiabloPlayerController` (Abstract) — Enhanced Input click-to-move: `IA_Click` → `GetHitResultUnderCursorByChannel` → `SimpleMoveToLocation`. Shows mouse cursor. UPROPERTY slots for `ClickAction` and `DefaultMappingContext` assigned via BP
+- `ADiabloPlayerController` (Abstract) — Enhanced Input click-to-move and click-to-attack. LMB on ground → `SimpleMoveToLocation`; LMB on enemy → stores `TargetEnemy`, walks into `AttackRange`, then calls `Hero->StartAttack()`. UPROPERTY slots for `ClickAction` and `DefaultMappingContext` assigned via BP
 - `UDiabloAnimInstance` (Abstract) — exposes `float Speed` from pawn velocity in `NativeUpdateAnimation`. AnimBP `ABP_Warrior` parents to this class (manual editor creation)
+
+### Combat (M2)
+
+- `ADiabloHero::StartAttack()` — plays `AttackMontage` via the DefaultSlot in the AnimBP. Sets `AttackTarget` so the notify knows who to damage. `bIsAttacking` flag prevents re-triggering mid-swing.
+- `UAnimNotify_Attack` (DisplayName "Melee Attack Trace") — fires on a montage keyframe. Reads `AttackTarget` from either `ADiabloHero` or `ADiabloEnemy` and applies `TakeDamage` directly (no sphere trace — Diablo 1 uses targeted hit, not physics). `Damage` is configurable on the notify.
+- `ADiabloEnemy : ACharacter` (Abstract) — `MaxHP`/`CurrentHP`, `TakeDamage` override with `Destroy()` on death. Has its own `StartAttack(Target)`, `AttackMontage`, `AttackTarget` for AI-driven attacks. Capsule explicitly blocks `ECC_Visibility` for cursor click detection.
+- `AM_Attack` (AnimMontage) — manually authored in editor from `Warrior_Anim_Attack`. Contains Melee Attack Trace notify at the hit frame plus optional PlaySound notifies for SwordSwing/SwordHit.
+
+### Enemy AI (M3)
+
+- `ADiabloAIController : AAIController` — tick-based state machine with `EAIState` enum (Idle / Chase / Attack / Dead). `FindTarget()` returns the player pawn. Aggro at `AggroRange` (800), attacks at `AttackRange` (200), leashes at `LeashRange` (1500). Uses `MoveToActor` for pathfinding (only issued when `GetMoveStatus() != Moving` to prevent stutter).
+- `ADiabloEnemy` sets `AIControllerClass = ADiabloAIController` and `AutoPossessAI = PlacedInWorldOrSpawned` in constructor.
 
 ### Input
 
@@ -62,15 +74,20 @@ IntelliSense errors like `cannot open source file "X.h"` are usually false posit
 
 ### Asset Generator (DiabloEditor Plugin)
 
-`FDiabloAssetGenerator` static methods, callable from the Slate panel or "Generate All Assets" button:
+`FDiabloAssetGenerator` static methods, callable from the Slate panel:
 
 | Method | Behavior on re-run |
 |---|---|
-| `GenerateBlueprintSubclasses` | Creates `BP_DiabloGameMode`, `BP_DiabloHero`, `BP_DiabloPlayerController` — **skips if exists** |
-| `GenerateDefaultMap` | Creates `Lvl_Diablo` with PlayerStart, DirectionalLight, floor plane, NavMeshBoundsVolume — **always recreates** |
+| `GenerateBlueprintSubclasses` | Creates `BP_DiabloGameMode`, `BP_DiabloHero`, `BP_DiabloPlayerController`, `BP_DiabloEnemy` — **skips if exists** |
+| `GenerateDefaultMap` | Creates `Lvl_Diablo` with PlayerStart, DirectionalLight, floor plane, NavMeshBoundsVolume, test enemy — **always recreates** |
 | `GenerateInputAssets` | Creates/updates IA_Click/Move/Look and IMC_Diablo — **updates in place** |
-| `ImportWarriorFBX` | Deletes all Warrior assets except `ABP_Warrior`, then reimports `Tools/blender/out/Warrior.fbx` as skeletal mesh + animations — **always recreates** |
-| `ConfigureBlueprintDefaults` | Sets skeletal mesh, anim class, input slots, game mode classes on BP CDOs — **always updates** |
+| `ImportWarriorFBX` | Deletes Warrior assets except `ABP_Warrior`, `AM_Attack`, and `Warrior_Skeleton`, then reimports `Tools/blender/out/Warrior.fbx`. Reuses existing skeleton so AnimBP/montage references survive — **recreates mesh + animations only** |
+| `ImportAttackSFX` | Imports `Tools/audio/out/SwordSwing.wav` and `SwordHit.wav` under `/Game/Audio/SFX/` — **replaces existing** |
+| `ConfigureBlueprintDefaults` | Calls all four Configure methods below |
+| `ConfigureHeroDefaults` | Sets skeletal mesh, anim class, attack montage on `BP_DiabloHero` |
+| `ConfigureControllerDefaults` | Sets ClickAction, DefaultMappingContext on `BP_DiabloPlayerController` |
+| `ConfigureGameModeDefaults` | Sets DefaultPawnClass, PlayerControllerClass on `BP_DiabloGameMode` |
+| `ConfigureEnemyDefaults` | Sets skeletal mesh, anim class, attack montage on `BP_DiabloEnemy` |
 
 **Do not attempt programmatic AnimBP generation.** State machine graph construction via K2 nodes is too fragile (wrong pin names, function reference ordering, MinimalAPI exports). AnimBPs are the one asset type authored manually in the editor.
 
@@ -102,9 +119,15 @@ Animations are keyframed in the same Blender scripts that generate meshes — ar
 - **BP subclasses** under `Content/Blueprints/` — every `UCLASS(Abstract)` C++ class needs a BP child to be placed
 - **Levels** under `Content/Maps/` — generated by editor tool or hand-authored
 - **Input assets** under `Content/Input/` — generated by editor tool
-- **AnimBlueprints** — manually authored in editor; parent to C++ `UDiabloAnimInstance` subclass
-- **AnimMontages** — needed starting M2; montage section names must match C++-side `FName` UPROPERTYs
+- **AnimBlueprints** — manually authored in editor; parent to C++ `UDiabloAnimInstance` subclass. `ABP_Warrior` has a Locomotion state machine (Idle/Walk based on `Speed`) with a DefaultSlot node for montage overlay.
+- **AnimMontages** — `AM_Attack` created manually from `Warrior_Anim_Attack` with Melee Attack Trace and PlaySound notifies. The asset generator sets this on both hero and enemy BPs via `ConfigureHeroDefaults`/`ConfigureEnemyDefaults`.
 - **StateTree assets** — needed starting M19; reference C++ task/condition structs
+
+### FBX Reimport Workflow
+
+`ImportWarriorFBX` preserves `Warrior_Skeleton`, `ABP_Warrior`, and `AM_Attack` across reimports. The FBX importer reuses the existing skeleton (`FbxFactory->ImportUI->Skeleton`), so AnimBP and montage references stay valid. Only the skeletal mesh, physics asset, and animation sequences are deleted and recreated.
+
+**When bone hierarchy changes** (add/remove/rename bones): manually delete `Warrior_Skeleton` in the Content Browser before reimporting. The AnimBP will need to be recreated. This should be rare.
 
 ## Coding principles
 
@@ -119,6 +142,8 @@ When in doubt, lean KISS over DRY.
 ## Design Reference
 
 The full Diablo (1997) gameplay reference, milestone roadmap, and verification criteria are in [SPEC.md](SPEC.md). Consult it before making design decisions.
+
+**Combat model:** Diablo 1 uses targeted hit (not physics traces). Click enemy → walk into range → play attack montage → apply damage directly to target. To-hit% roll comes in M6 with stats.
 
 ## Auto-Memory
 

@@ -27,6 +27,7 @@
 #include "Components/BrushComponent.h"
 #include "Animation/AnimBlueprint.h"
 #include "Animation/AnimSequence.h"
+#include "Animation/Skeleton.h"
 #include "AssetImportTask.h"
 #include "AssetToolsModule.h"
 #include "IAssetTools.h"
@@ -278,8 +279,8 @@ void FDiabloAssetGenerator::ImportWarriorFBX()
 		return;
 	}
 
-	// Delete all existing assets except ABP_Warrior so the skeleton reference
-	// pose is recreated fresh and animations re-link automatically.
+	// Delete existing assets except manually-authored ones (ABP_Warrior,
+	// AM_Attack) and the skeleton (preserving it keeps the AnimBP wired).
 	IFileManager& FM = IFileManager::Get();
 	const FString ContentDir = FPackageName::LongPackageNameToFilename(DestPath, TEXT(""));
 	TArray<FString> AssetFiles;
@@ -287,7 +288,9 @@ void FDiabloAssetGenerator::ImportWarriorFBX()
 
 	for (const FString& FileName : AssetFiles)
 	{
-		if (FileName.Contains(TEXT("ABP_Warrior")))
+		if (FileName.Contains(TEXT("ABP_Warrior"))
+			|| FileName.Contains(TEXT("AM_Attack"))
+			|| FileName.Contains(TEXT("Warrior_Skeleton")))
 		{
 			continue;
 		}
@@ -316,6 +319,10 @@ void FDiabloAssetGenerator::ImportWarriorFBX()
 	CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS);
 	FAssetRegistryModule::GetRegistry().ScanPathsSynchronous({DestPath}, true);
 
+	// If the skeleton already exists, tell the importer to reuse it so
+	// ABP_Warrior and AM_Attack references stay valid.
+	USkeleton* ExistingSkeleton = LoadObject<USkeleton>(nullptr, TEXT("/Game/Characters/Warrior/Warrior_Skeleton.Warrior_Skeleton"));
+
 	UFbxFactory* FbxFactory = NewObject<UFbxFactory>();
 	FbxFactory->ImportUI->bImportMesh = true;
 	FbxFactory->ImportUI->bImportAnimations = true;
@@ -325,6 +332,11 @@ void FDiabloAssetGenerator::ImportWarriorFBX()
 	FbxFactory->ImportUI->bAutomatedImportShouldDetectType = false;
 	FbxFactory->ImportUI->MeshTypeToImport = FBXIT_SkeletalMesh;
 	FbxFactory->ImportUI->bImportAsSkeletal = true;
+	if (ExistingSkeleton)
+	{
+		FbxFactory->ImportUI->Skeleton = ExistingSkeleton;
+		UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Reusing existing Warrior_Skeleton"));
+	}
 
 	UAssetImportTask* Task = NewObject<UAssetImportTask>();
 	Task->Filename = FBXPath;
