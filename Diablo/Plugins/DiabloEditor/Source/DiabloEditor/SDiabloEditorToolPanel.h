@@ -18,5 +18,9 @@ private:
 	FReply OnGenerateInput();
 	FReply OnImportWarrior();
 	FReply OnImportAttackSFX();
-	FReply OnConfigureDefaults();
+	FReply OnConfigureAll();
+	FReply OnConfigureHero();
+	FReply OnConfigureController();
+	FReply OnConfigureGameMode();
+	FReply OnConfigureEnemy();
 };

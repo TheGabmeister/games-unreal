@@ -1,6 +1,9 @@
 #include "DiabloEnemy.h"
+#include "DiabloAIController.h"
 #include "Diablo.h"
 #include "Components/CapsuleComponent.h"
+#include "GameFramework/CharacterMovementComponent.h"
+#include "Animation/AnimMontage.h"
 
 ADiabloEnemy::ADiabloEnemy()
 {
@@ -13,6 +16,12 @@ ADiabloEnemy::ADiabloEnemy()
 	bUseControllerRotationPitch = false;
 	bUseControllerRotationYaw = false;
 	bUseControllerRotationRoll = false;
+
+	GetCharacterMovement()->bOrientRotationToMovement = true;
+	GetCharacterMovement()->RotationRate = FRotator(0.f, 540.f, 0.f);
+
+	AIControllerClass = ADiabloAIController::StaticClass();
+	AutoPossessAI = EAutoPossessAI::PlacedInWorldOrSpawned;
 }
 
 float ADiabloEnemy::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent,
@@ -31,4 +40,28 @@ float ADiabloEnemy::TakeDamage(float DamageAmount, FDamageEvent const& DamageEve
 	}
 
 	return ActualDamage;
+}
+
+void ADiabloEnemy::StartAttack(AActor* Target)
+{
+	if (bIsAttacking || !AttackMontage)
+	{
+		return;
+	}
+
+	bIsAttacking = true;
+	AttackTarget = Target;
+	PlayAnimMontage(AttackMontage);
+
+	if (UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance())
+	{
+		FOnMontageEnded EndDelegate;
+		EndDelegate.BindUObject(this, &ADiabloEnemy::OnAttackMontageEnded);
+		AnimInstance->Montage_SetEndDelegate(EndDelegate, AttackMontage);
+	}
+}
+
+void ADiabloEnemy::OnAttackMontageEnded(UAnimMontage* Montage, bool bInterrupted)
+{
+	bIsAttacking = false;
 }

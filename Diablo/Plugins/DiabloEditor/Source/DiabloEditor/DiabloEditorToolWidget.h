@@ -30,4 +30,16 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Diablo Tools")
 	void ConfigureBlueprintDefaults();
+
+	UFUNCTION(BlueprintCallable, Category = "Diablo Tools")
+	void ConfigureHeroDefaults();
+
+	UFUNCTION(BlueprintCallable, Category = "Diablo Tools")
+	void ConfigureControllerDefaults();
+
+	UFUNCTION(BlueprintCallable, Category = "Diablo Tools")
+	void ConfigureGameModeDefaults();
+
+	UFUNCTION(BlueprintCallable, Category = "Diablo Tools")
+	void ConfigureEnemyDefaults();
 };

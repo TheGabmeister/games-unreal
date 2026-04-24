@@ -405,124 +405,179 @@ void FDiabloAssetGenerator::ImportAttackSFX()
 }
 
 // ---------------------------------------------------------------------------
-// Configure Blueprint CDO defaults
+// Configure Blueprint CDO defaults (individual + combined)
 // ---------------------------------------------------------------------------
 
 void FDiabloAssetGenerator::ConfigureBlueprintDefaults()
 {
-	// --- BP_DiabloHero: set skeletal mesh + anim blueprint ---
+	ConfigureHeroDefaults();
+	ConfigureControllerDefaults();
+	ConfigureGameModeDefaults();
+	ConfigureEnemyDefaults();
+}
+
+void FDiabloAssetGenerator::ConfigureHeroDefaults()
+{
 	UBlueprint* HeroBP = LoadObject<UBlueprint>(nullptr, TEXT("/Game/Blueprints/BP_DiabloHero.BP_DiabloHero"));
 	USkeletalMesh* SkMesh = LoadObject<USkeletalMesh>(nullptr, TEXT("/Game/Characters/Warrior/Warrior.Warrior"));
 	UAnimBlueprint* AnimBP = LoadObject<UAnimBlueprint>(nullptr, TEXT("/Game/Characters/Warrior/ABP_Warrior.ABP_Warrior"));
+	UAnimMontage* AttackMontage = LoadObject<UAnimMontage>(nullptr, TEXT("/Game/Characters/Warrior/AM_Attack.AM_Attack"));
 
-	if (HeroBP && HeroBP->GeneratedClass)
+	if (!HeroBP || !HeroBP->GeneratedClass)
 	{
-		AActor* CDO = Cast<AActor>(HeroBP->GeneratedClass->GetDefaultObject());
-		if (CDO)
-		{
-			if (USkeletalMeshComponent* MeshComp = CDO->FindComponentByClass<USkeletalMeshComponent>())
-			{
-				if (SkMesh)
-				{
-					MeshComp->SetSkeletalMesh(SkMesh);
-					UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_DiabloHero: set skeletal mesh"));
-				}
-				if (AnimBP && AnimBP->GeneratedClass)
-				{
-					MeshComp->SetAnimInstanceClass(AnimBP->GeneratedClass);
-					UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_DiabloHero: set anim class"));
-				}
-			}
-		}
-
-		FKismetEditorUtilities::CompileBlueprint(HeroBP);
-		SaveAsset(HeroBP, HeroBP->GetOutermost(), TEXT("/Game/Blueprints/BP_DiabloHero"));
+		return;
 	}
 
-	// --- BP_DiabloPlayerController: set input action + mapping context ---
+	AActor* CDO = Cast<AActor>(HeroBP->GeneratedClass->GetDefaultObject());
+	if (CDO)
+	{
+		if (USkeletalMeshComponent* MeshComp = CDO->FindComponentByClass<USkeletalMeshComponent>())
+		{
+			if (SkMesh)
+			{
+				MeshComp->SetSkeletalMesh(SkMesh);
+				UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_DiabloHero: set skeletal mesh"));
+			}
+			if (AnimBP && AnimBP->GeneratedClass)
+			{
+				MeshComp->SetAnimInstanceClass(AnimBP->GeneratedClass);
+				UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_DiabloHero: set anim class"));
+			}
+		}
+	}
+
+	if (AttackMontage)
+	{
+		if (FProperty* Prop = HeroBP->GeneratedClass->FindPropertyByName(TEXT("AttackMontage")))
+		{
+			if (FObjectProperty* ObjProp = CastField<FObjectProperty>(Prop))
+			{
+				ObjProp->SetObjectPropertyValue(ObjProp->ContainerPtrToValuePtr<void>(HeroBP->GeneratedClass->GetDefaultObject()), AttackMontage);
+				UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_DiabloHero: set AttackMontage"));
+			}
+		}
+	}
+
+	FKismetEditorUtilities::CompileBlueprint(HeroBP);
+	SaveAsset(HeroBP, HeroBP->GetOutermost(), TEXT("/Game/Blueprints/BP_DiabloHero"));
+}
+
+void FDiabloAssetGenerator::ConfigureControllerDefaults()
+{
 	UBlueprint* ControllerBP = LoadObject<UBlueprint>(nullptr, TEXT("/Game/Blueprints/BP_DiabloPlayerController.BP_DiabloPlayerController"));
 	UInputAction* ClickAction = LoadObject<UInputAction>(nullptr, TEXT("/Game/Input/Actions/IA_Click.IA_Click"));
 	UInputMappingContext* IMC = LoadObject<UInputMappingContext>(nullptr, TEXT("/Game/Input/IMC_Diablo.IMC_Diablo"));
 
-	if (ControllerBP && ControllerBP->GeneratedClass)
+	if (!ControllerBP || !ControllerBP->GeneratedClass)
 	{
-		UObject* CDO = ControllerBP->GeneratedClass->GetDefaultObject();
-		if (CDO)
+		return;
+	}
+
+	UObject* CDO = ControllerBP->GeneratedClass->GetDefaultObject();
+	if (CDO)
+	{
+		if (FProperty* ClickProp = ControllerBP->GeneratedClass->FindPropertyByName(TEXT("ClickAction")))
 		{
-			if (FProperty* ClickProp = ControllerBP->GeneratedClass->FindPropertyByName(TEXT("ClickAction")))
+			if (FObjectProperty* ObjProp = CastField<FObjectProperty>(ClickProp))
 			{
-				FObjectProperty* ObjProp = CastField<FObjectProperty>(ClickProp);
-				if (ObjProp && ClickAction)
+				if (ClickAction)
 				{
 					ObjProp->SetObjectPropertyValue(ObjProp->ContainerPtrToValuePtr<void>(CDO), ClickAction);
 					UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_DiabloPlayerController: set ClickAction"));
 				}
 			}
-			if (FProperty* IMCProp = ControllerBP->GeneratedClass->FindPropertyByName(TEXT("DefaultMappingContext")))
+		}
+		if (FProperty* IMCProp = ControllerBP->GeneratedClass->FindPropertyByName(TEXT("DefaultMappingContext")))
+		{
+			if (FObjectProperty* ObjProp = CastField<FObjectProperty>(IMCProp))
 			{
-				FObjectProperty* ObjProp = CastField<FObjectProperty>(IMCProp);
-				if (ObjProp && IMC)
+				if (IMC)
 				{
 					ObjProp->SetObjectPropertyValue(ObjProp->ContainerPtrToValuePtr<void>(CDO), IMC);
 					UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_DiabloPlayerController: set DefaultMappingContext"));
 				}
 			}
 		}
-
-		FKismetEditorUtilities::CompileBlueprint(ControllerBP);
-		SaveAsset(ControllerBP, ControllerBP->GetOutermost(), TEXT("/Game/Blueprints/BP_DiabloPlayerController"));
 	}
 
-	// --- BP_DiabloGameMode: set default pawn + controller classes ---
+	FKismetEditorUtilities::CompileBlueprint(ControllerBP);
+	SaveAsset(ControllerBP, ControllerBP->GetOutermost(), TEXT("/Game/Blueprints/BP_DiabloPlayerController"));
+}
+
+void FDiabloAssetGenerator::ConfigureGameModeDefaults()
+{
 	UBlueprint* GameModeBP = LoadObject<UBlueprint>(nullptr, TEXT("/Game/Blueprints/BP_DiabloGameMode.BP_DiabloGameMode"));
+	UBlueprint* HeroBP = LoadObject<UBlueprint>(nullptr, TEXT("/Game/Blueprints/BP_DiabloHero.BP_DiabloHero"));
+	UBlueprint* ControllerBP = LoadObject<UBlueprint>(nullptr, TEXT("/Game/Blueprints/BP_DiabloPlayerController.BP_DiabloPlayerController"));
 
-	if (GameModeBP && GameModeBP->GeneratedClass && HeroBP && ControllerBP)
+	if (!GameModeBP || !GameModeBP->GeneratedClass || !HeroBP || !ControllerBP)
 	{
-		AGameModeBase* CDO = Cast<AGameModeBase>(GameModeBP->GeneratedClass->GetDefaultObject());
-		if (CDO)
-		{
-			if (HeroBP->GeneratedClass)
-			{
-				CDO->DefaultPawnClass = HeroBP->GeneratedClass;
-				UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_DiabloGameMode: set DefaultPawnClass -> BP_DiabloHero"));
-			}
-			if (ControllerBP->GeneratedClass)
-			{
-				CDO->PlayerControllerClass = ControllerBP->GeneratedClass;
-				UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_DiabloGameMode: set PlayerControllerClass -> BP_DiabloPlayerController"));
-			}
-		}
-
-		FKismetEditorUtilities::CompileBlueprint(GameModeBP);
-		SaveAsset(GameModeBP, GameModeBP->GetOutermost(), TEXT("/Game/Blueprints/BP_DiabloGameMode"));
+		return;
 	}
 
-	// --- BP_DiabloEnemy: set skeletal mesh + anim blueprint (reuse Warrior) ---
+	AGameModeBase* CDO = Cast<AGameModeBase>(GameModeBP->GeneratedClass->GetDefaultObject());
+	if (CDO)
+	{
+		if (HeroBP->GeneratedClass)
+		{
+			CDO->DefaultPawnClass = HeroBP->GeneratedClass;
+			UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_DiabloGameMode: set DefaultPawnClass -> BP_DiabloHero"));
+		}
+		if (ControllerBP->GeneratedClass)
+		{
+			CDO->PlayerControllerClass = ControllerBP->GeneratedClass;
+			UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_DiabloGameMode: set PlayerControllerClass -> BP_DiabloPlayerController"));
+		}
+	}
+
+	FKismetEditorUtilities::CompileBlueprint(GameModeBP);
+	SaveAsset(GameModeBP, GameModeBP->GetOutermost(), TEXT("/Game/Blueprints/BP_DiabloGameMode"));
+}
+
+void FDiabloAssetGenerator::ConfigureEnemyDefaults()
+{
 	UBlueprint* EnemyBP = LoadObject<UBlueprint>(nullptr, TEXT("/Game/Blueprints/BP_DiabloEnemy.BP_DiabloEnemy"));
+	USkeletalMesh* SkMesh = LoadObject<USkeletalMesh>(nullptr, TEXT("/Game/Characters/Warrior/Warrior.Warrior"));
+	UAnimBlueprint* AnimBP = LoadObject<UAnimBlueprint>(nullptr, TEXT("/Game/Characters/Warrior/ABP_Warrior.ABP_Warrior"));
+	UAnimMontage* AttackMontage = LoadObject<UAnimMontage>(nullptr, TEXT("/Game/Characters/Warrior/AM_Attack.AM_Attack"));
 
-	if (EnemyBP && EnemyBP->GeneratedClass)
+	if (!EnemyBP || !EnemyBP->GeneratedClass)
 	{
-		AActor* CDO = Cast<AActor>(EnemyBP->GeneratedClass->GetDefaultObject());
-		if (CDO)
+		return;
+	}
+
+	AActor* CDO = Cast<AActor>(EnemyBP->GeneratedClass->GetDefaultObject());
+	if (CDO)
+	{
+		if (USkeletalMeshComponent* MeshComp = CDO->FindComponentByClass<USkeletalMeshComponent>())
 		{
-			if (USkeletalMeshComponent* MeshComp = CDO->FindComponentByClass<USkeletalMeshComponent>())
+			if (SkMesh)
 			{
-				if (SkMesh)
-				{
-					MeshComp->SetSkeletalMesh(SkMesh);
-					UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_DiabloEnemy: set skeletal mesh"));
-				}
-				if (AnimBP && AnimBP->GeneratedClass)
-				{
-					MeshComp->SetAnimInstanceClass(AnimBP->GeneratedClass);
-					UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_DiabloEnemy: set anim class"));
-				}
+				MeshComp->SetSkeletalMesh(SkMesh);
+				UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_DiabloEnemy: set skeletal mesh"));
+			}
+			if (AnimBP && AnimBP->GeneratedClass)
+			{
+				MeshComp->SetAnimInstanceClass(AnimBP->GeneratedClass);
+				UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_DiabloEnemy: set anim class"));
 			}
 		}
-
-		FKismetEditorUtilities::CompileBlueprint(EnemyBP);
-		SaveAsset(EnemyBP, EnemyBP->GetOutermost(), TEXT("/Game/Blueprints/BP_DiabloEnemy"));
 	}
+
+	if (AttackMontage)
+	{
+		if (FProperty* Prop = EnemyBP->GeneratedClass->FindPropertyByName(TEXT("AttackMontage")))
+		{
+			if (FObjectProperty* ObjProp = CastField<FObjectProperty>(Prop))
+			{
+				ObjProp->SetObjectPropertyValue(ObjProp->ContainerPtrToValuePtr<void>(CDO), AttackMontage);
+				UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_DiabloEnemy: set AttackMontage"));
+			}
+		}
+	}
+
+	FKismetEditorUtilities::CompileBlueprint(EnemyBP);
+	SaveAsset(EnemyBP, EnemyBP->GetOutermost(), TEXT("/Game/Blueprints/BP_DiabloEnemy"));
 }
 
 // ---------------------------------------------------------------------------

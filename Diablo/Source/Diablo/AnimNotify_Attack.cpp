@@ -10,15 +10,32 @@ void UAnimNotify_Attack::Notify(USkeletalMeshComponent* MeshComp, UAnimSequenceB
 	Super::Notify(MeshComp, Animation, EventReference);
 
 	AActor* Owner = MeshComp ? MeshComp->GetOwner() : nullptr;
-	ADiabloHero* Hero = Cast<ADiabloHero>(Owner);
-	if (!Hero || !Hero->AttackTarget || Hero->AttackTarget->IsDead())
+	if (!Owner)
 	{
 		return;
 	}
 
-	AController* Instigator = Hero->GetController();
+	AActor* Target = nullptr;
+	AController* Instigator = nullptr;
+
+	if (ADiabloHero* Hero = Cast<ADiabloHero>(Owner))
+	{
+		Target = Hero->AttackTarget;
+		Instigator = Hero->GetController();
+	}
+	else if (ADiabloEnemy* Enemy = Cast<ADiabloEnemy>(Owner))
+	{
+		Target = Enemy->AttackTarget;
+		Instigator = Enemy->GetController();
+	}
+
+	if (!Target)
+	{
+		return;
+	}
+
 	FDamageEvent DamageEvent;
-	Hero->AttackTarget->TakeDamage(Damage, DamageEvent, Instigator, Hero);
+	Target->TakeDamage(Damage, DamageEvent, Instigator, Owner);
 }
 
 FString UAnimNotify_Attack::GetNotifyName_Implementation() const

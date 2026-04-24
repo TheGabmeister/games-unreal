@@ -77,13 +77,60 @@ void SDiabloEditorToolPanel::Construct(const FArguments& InArgs)
 				.OnClicked(this, &SDiabloEditorToolPanel::OnImportAttackSFX)
 			]
 
+			// --- Configure Defaults ---
+
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(0.f, 12.f, 0.f, 4.f)
+			[
+				SNew(STextBlock)
+				.Text(FText::FromString(TEXT("Configure Blueprint Defaults")))
+				.Font(FCoreStyle::GetDefaultFontStyle("Bold", 12))
+			]
+
 			+ SVerticalBox::Slot()
 			.AutoHeight()
 			.Padding(0.f, 4.f)
 			[
 				SNew(SButton)
-				.Text(FText::FromString(TEXT("Configure Blueprint Defaults")))
-				.OnClicked(this, &SDiabloEditorToolPanel::OnConfigureDefaults)
+				.Text(FText::FromString(TEXT("Configure All Defaults")))
+				.OnClicked(this, &SDiabloEditorToolPanel::OnConfigureAll)
+			]
+
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(0.f, 4.f)
+			[
+				SNew(SButton)
+				.Text(FText::FromString(TEXT("Configure Hero")))
+				.OnClicked(this, &SDiabloEditorToolPanel::OnConfigureHero)
+			]
+
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(0.f, 4.f)
+			[
+				SNew(SButton)
+				.Text(FText::FromString(TEXT("Configure Controller")))
+				.OnClicked(this, &SDiabloEditorToolPanel::OnConfigureController)
+			]
+
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(0.f, 4.f)
+			[
+				SNew(SButton)
+				.Text(FText::FromString(TEXT("Configure Game Mode")))
+				.OnClicked(this, &SDiabloEditorToolPanel::OnConfigureGameMode)
+			]
+
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(0.f, 4.f)
+			[
+				SNew(SButton)
+				.Text(FText::FromString(TEXT("Configure Enemy")))
+				.OnClicked(this, &SDiabloEditorToolPanel::OnConfigureEnemy)
 			]
 		]
 	];
@@ -125,8 +172,32 @@ FReply SDiabloEditorToolPanel::OnImportAttackSFX()
 	return FReply::Handled();
 }
 
-FReply SDiabloEditorToolPanel::OnConfigureDefaults()
+FReply SDiabloEditorToolPanel::OnConfigureAll()
 {
 	FDiabloAssetGenerator::ConfigureBlueprintDefaults();
+	return FReply::Handled();
+}
+
+FReply SDiabloEditorToolPanel::OnConfigureHero()
+{
+	FDiabloAssetGenerator::ConfigureHeroDefaults();
+	return FReply::Handled();
+}
+
+FReply SDiabloEditorToolPanel::OnConfigureController()
+{
+	FDiabloAssetGenerator::ConfigureControllerDefaults();
+	return FReply::Handled();
+}
+
+FReply SDiabloEditorToolPanel::OnConfigureGameMode()
+{
+	FDiabloAssetGenerator::ConfigureGameModeDefaults();
+	return FReply::Handled();
+}
+
+FReply SDiabloEditorToolPanel::OnConfigureEnemy()
+{
+	FDiabloAssetGenerator::ConfigureEnemyDefaults();
 	return FReply::Handled();
 }

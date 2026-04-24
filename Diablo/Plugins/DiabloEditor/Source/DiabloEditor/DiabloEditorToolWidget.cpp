@@ -35,3 +35,23 @@ void UDiabloEditorToolWidget::ConfigureBlueprintDefaults()
 {
 	FDiabloAssetGenerator::ConfigureBlueprintDefaults();
 }
+
+void UDiabloEditorToolWidget::ConfigureHeroDefaults()
+{
+	FDiabloAssetGenerator::ConfigureHeroDefaults();
+}
+
+void UDiabloEditorToolWidget::ConfigureControllerDefaults()
+{
+	FDiabloAssetGenerator::ConfigureControllerDefaults();
+}
+
+void UDiabloEditorToolWidget::ConfigureGameModeDefaults()
+{
+	FDiabloAssetGenerator::ConfigureGameModeDefaults();
+}
+
+void UDiabloEditorToolWidget::ConfigureEnemyDefaults()
+{
+	FDiabloAssetGenerator::ConfigureEnemyDefaults();
+}

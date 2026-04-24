@@ -14,6 +14,10 @@ struct FDiabloAssetGenerator
 	static void ImportWarriorFBX();
 	static void ImportAttackSFX();
 	static void ConfigureBlueprintDefaults();
+	static void ConfigureHeroDefaults();
+	static void ConfigureControllerDefaults();
+	static void ConfigureGameModeDefaults();
+	static void ConfigureEnemyDefaults();
 
 private:
 	static void SpawnFloorPlane(UWorld* World);
