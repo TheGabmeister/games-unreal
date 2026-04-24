@@ -34,7 +34,6 @@
 #include "IAssetTools.h"
 #include "Factories/FbxFactory.h"
 #include "Factories/FbxImportUI.h"
-#include "RenderingThread.h"
 
 void FDiabloAssetGenerator::GenerateAllAssets()
 {
@@ -296,8 +295,12 @@ void FDiabloAssetGenerator::ImportWarriorFBX()
 		return;
 	}
 
+	// Open a blank map to unload all actors referencing the skeletal mesh.
+	// Without this, deleting the mesh crashes via stale scene proxy LOD data.
+	UEditorLoadingAndSavingUtils::NewBlankMap(false);
+
 	// Delete existing assets except manually-authored ones (ABP_Warrior,
-	// AM_Attack) and the skeleton (preserving it keeps the AnimBP wired).
+	// AM_Attack, AM_Death) and the skeleton (preserving it keeps the AnimBP wired).
 	IFileManager& FM = IFileManager::Get();
 	const FString ContentDir = FPackageName::LongPackageNameToFilename(DestPath, TEXT(""));
 	TArray<FString> AssetFiles;
@@ -305,16 +308,17 @@ void FDiabloAssetGenerator::ImportWarriorFBX()
 
 	for (const FString& FileName : AssetFiles)
 	{
-		if (FileName.Contains(TEXT("ABP_Warrior"))
-			|| FileName.Contains(TEXT("AM_Attack"))
-			|| FileName.Contains(TEXT("AM_Death"))
-			|| FileName.Contains(TEXT("Warrior_Skeleton")))
+		const FString BaseName = FPaths::GetBaseFilename(FileName);
+
+		if (BaseName == TEXT("ABP_Warrior")
+			|| BaseName == TEXT("AM_Attack")
+			|| BaseName == TEXT("AM_Death")
+			|| BaseName == TEXT("Warrior_Skeleton"))
 		{
 			continue;
 		}
 
-		FString AssetName = FPaths::GetBaseFilename(FileName);
-		FString PackagePath = DestPath / AssetName;
+		FString PackagePath = DestPath / BaseName;
 		UPackage* Pkg = FindPackage(nullptr, *PackagePath);
 		if (Pkg)
 		{
@@ -335,7 +339,6 @@ void FDiabloAssetGenerator::ImportWarriorFBX()
 	}
 
 	CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS);
-	FlushRenderingCommands();
 	FAssetRegistryModule::GetRegistry().ScanPathsSynchronous({DestPath}, true);
 
 	// If the skeleton already exists, tell the importer to reuse it so
