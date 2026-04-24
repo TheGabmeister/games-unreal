@@ -13,7 +13,7 @@ struct FDiabloAssetGenerator
 	static void GenerateInputAssets();
 	static void ImportWarriorFBX();
 	static void ImportAttackSFX();
-	static void ImportPotionFBX();
+	static void ImportPotionSprite();
 	static void ConfigureBlueprintDefaults();
 	static void ConfigureHeroDefaults();
 	static void ConfigureControllerDefaults();

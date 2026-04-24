@@ -82,7 +82,7 @@ void SDiabloEditorToolPanel::Construct(const FArguments& InArgs)
 			.Padding(0.f, 4.f)
 			[
 				SNew(SButton)
-				.Text(FText::FromString(TEXT("Import Potion FBX")))
+				.Text(FText::FromString(TEXT("Import Potion Sprite")))
 				.OnClicked(this, &SDiabloEditorToolPanel::OnImportPotion)
 			]
 
@@ -183,7 +183,7 @@ FReply SDiabloEditorToolPanel::OnImportAttackSFX()
 
 FReply SDiabloEditorToolPanel::OnImportPotion()
 {
-	FDiabloAssetGenerator::ImportPotionFBX();
+	FDiabloAssetGenerator::ImportPotionSprite();
 	return FReply::Handled();
 }
 

@@ -34,6 +34,8 @@
 #include "IAssetTools.h"
 #include "Factories/FbxFactory.h"
 #include "Factories/FbxImportUI.h"
+#include "Materials/Material.h"
+#include "Materials/MaterialExpressionTextureSample.h"
 
 void FDiabloAssetGenerator::GenerateAllAssets()
 {
@@ -41,7 +43,7 @@ void FDiabloAssetGenerator::GenerateAllAssets()
 	GenerateDefaultMap();
 	GenerateInputAssets();
 	ImportWarriorFBX();
-	ImportPotionFBX();
+	ImportPotionSprite();
 	ConfigureBlueprintDefaults();
 
 	UE_LOG(LogTemp, Display, TEXT("[DiabloTools] All assets generated."));
@@ -78,6 +80,8 @@ void FDiabloAssetGenerator::GenerateBlueprintSubclasses()
 		TEXT("/Game/Blueprints"),
 		TEXT("BP_HealingPotion")
 	);
+
+	ConfigureBlueprintDefaults();
 }
 
 void FDiabloAssetGenerator::GenerateDefaultMap()
@@ -453,44 +457,32 @@ void FDiabloAssetGenerator::ImportAttackSFX()
 }
 
 // ---------------------------------------------------------------------------
-// Import healing potion static mesh
+// Import healing potion sprite texture
 // ---------------------------------------------------------------------------
 
-void FDiabloAssetGenerator::ImportPotionFBX()
+void FDiabloAssetGenerator::ImportPotionSprite()
 {
 	const FString DestPath = TEXT("/Game/Items/Potions");
 
-	const FString FBXPath = FPaths::ProjectDir() / TEXT("Tools/blender/out/HealingPotion.fbx");
-	if (!FPaths::FileExists(FBXPath))
+	const FString PNGPath = FPaths::ProjectDir() / TEXT("Tools/svg/out/HealingPotion.png");
+	if (!FPaths::FileExists(PNGPath))
 	{
-		UE_LOG(LogTemp, Error, TEXT("[DiabloTools] HealingPotion.fbx not found at %s — run potion_mesh.py first"), *FBXPath);
+		UE_LOG(LogTemp, Error, TEXT("[DiabloTools] HealingPotion.png not found at %s — run convert.sh first"), *PNGPath);
 		return;
 	}
 
-	UFbxFactory* FbxFactory = NewObject<UFbxFactory>();
-	FbxFactory->ImportUI->bImportMesh = true;
-	FbxFactory->ImportUI->bImportAnimations = false;
-	FbxFactory->ImportUI->bImportMaterials = true;
-	FbxFactory->ImportUI->bImportTextures = false;
-	FbxFactory->ImportUI->bIsObjImport = false;
-	FbxFactory->ImportUI->bAutomatedImportShouldDetectType = false;
-	FbxFactory->ImportUI->MeshTypeToImport = FBXIT_StaticMesh;
-	FbxFactory->ImportUI->bImportAsSkeletal = false;
-
 	UAssetImportTask* Task = NewObject<UAssetImportTask>();
-	Task->Filename = FBXPath;
+	Task->Filename = PNGPath;
 	Task->DestinationPath = DestPath;
-	Task->DestinationName = TEXT("HealingPotion");
+	Task->DestinationName = TEXT("T_HealingPotion");
 	Task->bReplaceExisting = true;
 	Task->bAutomated = true;
 	Task->bSave = true;
-	Task->Factory = FbxFactory;
 
 	IAssetTools& AssetTools = FAssetToolsModule::GetModule().Get();
 	AssetTools.ImportAssetTasks({ Task });
 
-	TArray<UObject*> ImportedObjects = Task->GetObjects();
-	UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Imported %d objects from HealingPotion.fbx"), ImportedObjects.Num());
+	UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Imported HealingPotion sprite texture"));
 }
 
 // ---------------------------------------------------------------------------
@@ -500,20 +492,60 @@ void FDiabloAssetGenerator::ImportPotionFBX()
 void FDiabloAssetGenerator::ConfigureDroppedItemDefaults()
 {
 	UBlueprint* PotionBP = LoadObject<UBlueprint>(nullptr, TEXT("/Game/Blueprints/BP_HealingPotion.BP_HealingPotion"));
-	UStaticMesh* PotionMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Items/Potions/HealingPotion.HealingPotion"));
+	UStaticMesh* PlaneMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Plane.Plane"));
+	UTexture2D* PotionTex = LoadObject<UTexture2D>(nullptr, TEXT("/Game/Items/Potions/T_HealingPotion.T_HealingPotion"));
 
 	if (!PotionBP || !PotionBP->GeneratedClass)
 	{
 		return;
 	}
 
+	// Create an unlit translucent material from the sprite texture
+	UMaterial* PotionMat = nullptr;
+	const FString MatPath = TEXT("/Game/Items/Potions/M_HealingPotion");
+	const FString MatObjPath = MatPath + TEXT(".M_HealingPotion");
+	PotionMat = LoadObject<UMaterial>(nullptr, *MatObjPath);
+
+	if (!PotionMat && PotionTex)
+	{
+		UPackage* MatPkg = CreatePackage(*MatPath);
+		MatPkg->FullyLoad();
+		PotionMat = NewObject<UMaterial>(MatPkg, TEXT("M_HealingPotion"), RF_Public | RF_Standalone);
+		PotionMat->MaterialDomain = EMaterialDomain::MD_Surface;
+		PotionMat->BlendMode = EBlendMode::BLEND_Translucent;
+		PotionMat->SetShadingModel(EMaterialShadingModel::MSM_Unlit);
+		PotionMat->TwoSided = true;
+
+		// Create texture sample node
+		UMaterialExpressionTextureSample* TexSample = NewObject<UMaterialExpressionTextureSample>(PotionMat);
+		TexSample->Texture = PotionTex;
+		PotionMat->GetEditorOnlyData()->ExpressionCollection.Expressions.Add(TexSample);
+
+		// Wire RGB to emissive, alpha to opacity
+		PotionMat->GetEditorOnlyData()->EmissiveColor.Connect(0, TexSample);
+		PotionMat->GetEditorOnlyData()->Opacity.Connect(4, TexSample);
+
+		PotionMat->PreEditChange(nullptr);
+		PotionMat->PostEditChange();
+
+		SaveAsset(PotionMat, MatPkg, MatPath);
+		NotifyAssetCreated(PotionMat);
+		UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Created M_HealingPotion material"));
+	}
+
 	AActor* CDO = Cast<AActor>(PotionBP->GeneratedClass->GetDefaultObject());
-	if (CDO && PotionMesh)
+	if (CDO && PlaneMesh)
 	{
 		if (UStaticMeshComponent* MeshComp = CDO->FindComponentByClass<UStaticMeshComponent>())
 		{
-			MeshComp->SetStaticMesh(PotionMesh);
-			UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_HealingPotion: set static mesh"));
+			MeshComp->SetStaticMesh(PlaneMesh);
+			MeshComp->SetRelativeScale3D(FVector(0.3f, 0.3f, 0.3f));
+			MeshComp->SetRelativeRotation(FRotator(0.f, 0.f, 0.f));
+			if (PotionMat)
+			{
+				MeshComp->SetMaterial(0, PotionMat);
+			}
+			UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_HealingPotion: set plane mesh + sprite material"));
 		}
 	}
 
