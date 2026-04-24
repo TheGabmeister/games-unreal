@@ -22,6 +22,7 @@ public class DiabloEditor : ModuleRules
 			"BSPUtils",
 			"ToolMenus",
 			"AssetTools",
+			"RenderCore",
 			"Diablo"
 		});
 

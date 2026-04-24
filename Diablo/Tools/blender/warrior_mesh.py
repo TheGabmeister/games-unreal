@@ -297,10 +297,58 @@ strip_attack = track_attack.strips.new("Attack", 0, attack_action)
 strip_attack.frame_end = 20
 armature_obj.animation_data.action = None
 
+# --- Death animation (frames 0-30, 1 second at 30fps) ---
+death_action = bpy.data.actions.new(name="Death")
+armature_obj.animation_data.action = death_action
+
+bpy.ops.object.mode_set(mode='POSE')
+
+for bone_name in pb.keys():
+    set_bone_rotation(pb, bone_name, 0, rest)
+
+# Frame 10: knees buckle, spine starts to pitch
+set_bone_rotation(pb, "L_UpperLeg", 10, (0, math.radians(-15), 0))
+set_bone_rotation(pb, "R_UpperLeg", 10, (0, math.radians(-15), 0))
+set_bone_rotation(pb, "L_LowerLeg", 10, (0, math.radians(-30), 0))
+set_bone_rotation(pb, "R_LowerLeg", 10, (0, math.radians(-30), 0))
+set_bone_rotation(pb, "Spine", 10, (0, math.radians(15), 0))
+
+# Frame 20: collapsing forward
+set_bone_rotation(pb, "Spine", 20, (0, math.radians(60), 0))
+set_bone_rotation(pb, "Head", 20, (0, math.radians(20), 0))
+set_bone_rotation(pb, "L_UpperArm", 20, (0, math.radians(40), 0))
+set_bone_rotation(pb, "R_UpperArm", 20, (0, math.radians(40), 0))
+set_bone_rotation(pb, "L_UpperLeg", 20, (0, math.radians(-40), 0))
+set_bone_rotation(pb, "R_UpperLeg", 20, (0, math.radians(-40), 0))
+set_bone_rotation(pb, "Root", 20, (0, math.radians(30), 0))
+
+# Frame 30: on the ground, final pose (held)
+set_bone_rotation(pb, "Spine", 30, (0, math.radians(80), 0))
+set_bone_rotation(pb, "Head", 30, (0, math.radians(30), 0))
+set_bone_rotation(pb, "L_UpperArm", 30, (0, math.radians(60), 0))
+set_bone_rotation(pb, "R_UpperArm", 30, (0, math.radians(60), 0))
+set_bone_rotation(pb, "L_LowerArm", 30, (0, math.radians(-20), 0))
+set_bone_rotation(pb, "R_LowerArm", 30, (0, math.radians(-20), 0))
+set_bone_rotation(pb, "L_UpperLeg", 30, (0, math.radians(-60), 0))
+set_bone_rotation(pb, "R_UpperLeg", 30, (0, math.radians(-60), 0))
+set_bone_rotation(pb, "L_LowerLeg", 30, (0, math.radians(-40), 0))
+set_bone_rotation(pb, "R_LowerLeg", 30, (0, math.radians(-40), 0))
+set_bone_rotation(pb, "Root", 30, (0, math.radians(50), 0))
+
+bpy.ops.object.mode_set(mode='OBJECT')
+
+# Push death to NLA
+track_death = armature_obj.animation_data.nla_tracks.new()
+track_death.name = "DeathTrack"
+strip_death = track_death.strips.new("Death", 0, death_action)
+strip_death.frame_end = 30
+armature_obj.animation_data.action = None
+
 # Keep NLA tracks active so they export as separate FBX animation stacks
 track_idle.mute = False
 track_walk.mute = False
 track_attack.mute = False
+track_death.mute = False
 
 # ---------------------------------------------------------------------------
 # 5. Export FBX

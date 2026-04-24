@@ -34,6 +34,15 @@ void UAnimNotify_Attack::Notify(USkeletalMeshComponent* MeshComp, UAnimSequenceB
 		return;
 	}
 
+	if (ADiabloHero* HeroTarget = Cast<ADiabloHero>(Target))
+	{
+		if (HeroTarget->IsDead()) { return; }
+	}
+	else if (ADiabloEnemy* EnemyTarget = Cast<ADiabloEnemy>(Target))
+	{
+		if (EnemyTarget->IsDead()) { return; }
+	}
+
 	FDamageEvent DamageEvent;
 	Target->TakeDamage(Damage, DamageEvent, Instigator, Owner);
 }

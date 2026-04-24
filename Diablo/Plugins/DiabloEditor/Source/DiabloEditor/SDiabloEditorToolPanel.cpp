@@ -77,6 +77,15 @@ void SDiabloEditorToolPanel::Construct(const FArguments& InArgs)
 				.OnClicked(this, &SDiabloEditorToolPanel::OnImportAttackSFX)
 			]
 
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(0.f, 4.f)
+			[
+				SNew(SButton)
+				.Text(FText::FromString(TEXT("Import Potion FBX")))
+				.OnClicked(this, &SDiabloEditorToolPanel::OnImportPotion)
+			]
+
 			// --- Configure Defaults ---
 
 			+ SVerticalBox::Slot()
@@ -169,6 +178,12 @@ FReply SDiabloEditorToolPanel::OnImportWarrior()
 FReply SDiabloEditorToolPanel::OnImportAttackSFX()
 {
 	FDiabloAssetGenerator::ImportAttackSFX();
+	return FReply::Handled();
+}
+
+FReply SDiabloEditorToolPanel::OnImportPotion()
+{
+	FDiabloAssetGenerator::ImportPotionFBX();
 	return FReply::Handled();
 }
 

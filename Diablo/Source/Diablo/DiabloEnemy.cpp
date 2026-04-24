@@ -7,7 +7,8 @@
 
 ADiabloEnemy::ADiabloEnemy()
 {
-	CurrentHP = MaxHP;
+	Stats.HP = 100.f;
+	Stats.MaxHP = 100.f;
 
 	GetCapsuleComponent()->InitCapsuleSize(34.f, 90.f);
 	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
@@ -27,19 +28,41 @@ ADiabloEnemy::ADiabloEnemy()
 float ADiabloEnemy::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent,
 	AController* EventInstigator, AActor* DamageCauser)
 {
+	if (IsDead())
+	{
+		return 0.f;
+	}
+
 	const float ActualDamage = Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
 
-	CurrentHP = FMath::Max(0.f, CurrentHP - ActualDamage);
+	Stats.HP = FMath::Max(0.f, Stats.HP - ActualDamage);
 	UE_LOG(LogDiablo, Display, TEXT("%s took %.0f damage (HP: %.0f/%.0f)"),
-		*GetName(), ActualDamage, CurrentHP, MaxHP);
+		*GetName(), ActualDamage, Stats.HP, Stats.MaxHP);
 
-	if (CurrentHP <= 0.f)
+	if (Stats.HP <= 0.f)
 	{
 		UE_LOG(LogDiablo, Display, TEXT("%s died"), *GetName());
-		Destroy();
+
+		GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		GetCharacterMovement()->DisableMovement();
+
+		float MontageDuration = 0.f;
+		if (DeathMontage)
+		{
+			MontageDuration = PlayAnimMontage(DeathMontage);
+		}
+
+		const float DestroyDelay = FMath::Max(MontageDuration, 0.1f) + 2.f;
+		GetWorldTimerManager().SetTimer(DestroyTimerHandle, this,
+			&ADiabloEnemy::OnDestroyTimer, DestroyDelay, false);
 	}
 
 	return ActualDamage;
+}
+
+void ADiabloEnemy::OnDestroyTimer()
+{
+	Destroy();
 }
 
 void ADiabloEnemy::StartAttack(AActor* Target)

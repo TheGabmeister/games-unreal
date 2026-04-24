@@ -118,7 +118,15 @@ void ADiabloAIController::TickAttack(float DeltaTime)
 
 APawn* ADiabloAIController::FindTarget() const
 {
-	return UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
+	APawn* PlayerPawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
+	if (ADiabloHero* Hero = Cast<ADiabloHero>(PlayerPawn))
+	{
+		if (Hero->IsDead())
+		{
+			return nullptr;
+		}
+	}
+	return PlayerPawn;
 }
 
 void ADiabloAIController::SetState(EAIState NewState)

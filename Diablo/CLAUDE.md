@@ -47,21 +47,29 @@ IntelliSense errors like `cannot open source file "X.h"` are usually false posit
 ### Core Classes (M1)
 
 - `ADiabloGameMode` (Abstract) — sets `DefaultPawnClass` and `PlayerControllerClass` to C++ bases; BP subclass `BP_DiabloGameMode` overrides to BP versions
-- `ADiabloHero : ACharacter` (Abstract) — isometric camera via `USpringArmComponent` (pitch -45°, yaw 225°, arm 1800, no collision test) + `UCameraComponent` (orthographic, OrthoWidth 2048). Capsule sized to 90 half-height, mesh offset -90 Z to align feet with capsule bottom
-- `ADiabloPlayerController` (Abstract) — Enhanced Input click-to-move and click-to-attack. LMB on ground → `SimpleMoveToLocation`; LMB on enemy → stores `TargetEnemy`, walks into `AttackRange`, then calls `Hero->StartAttack()`. UPROPERTY slots for `ClickAction` and `DefaultMappingContext` assigned via BP
+- `ADiabloHero : ACharacter` (Abstract) — isometric camera via `USpringArmComponent` (pitch -45°, yaw 225°, arm 1800, no collision test) + `UCameraComponent` (orthographic, OrthoWidth 2048). Capsule sized to 90 half-height, mesh offset -90 Z to align feet with capsule bottom. Uses `FDiabloStats` (HP 70/70 Warrior defaults). `TakeDamage` override → `Die()` on HP <= 0. `Heal(Amount)` for pickups. `IsDead()` check.
+- `ADiabloPlayerController` (Abstract) — Enhanced Input click-to-move, click-to-attack, click-to-pickup. LMB on ground → `SimpleMoveToLocation`; LMB on enemy → stores `TargetEnemy`, walks into `AttackRange`, then calls `Hero->StartAttack()`; LMB on `ADroppedItem` → walks into `PickupRange`, calls `OnPickedUp`. UPROPERTY slots for `ClickAction` and `DefaultMappingContext` assigned via BP. `OnHeroDeath()` → disable input, camera fade to black, 2s timer → `RestartPlayer` at `PlayerStart` → fade in.
 - `UDiabloAnimInstance` (Abstract) — exposes `float Speed` from pawn velocity in `NativeUpdateAnimation`. AnimBP `ABP_Warrior` parents to this class (manual editor creation)
 
 ### Combat (M2)
 
 - `ADiabloHero::StartAttack()` — plays `AttackMontage` via the DefaultSlot in the AnimBP. Sets `AttackTarget` so the notify knows who to damage. `bIsAttacking` flag prevents re-triggering mid-swing.
-- `UAnimNotify_Attack` (DisplayName "Melee Attack Trace") — fires on a montage keyframe. Reads `AttackTarget` from either `ADiabloHero` or `ADiabloEnemy` and applies `TakeDamage` directly (no sphere trace — Diablo 1 uses targeted hit, not physics). `Damage` is configurable on the notify.
-- `ADiabloEnemy : ACharacter` (Abstract) — `MaxHP`/`CurrentHP`, `TakeDamage` override with `Destroy()` on death. Has its own `StartAttack(Target)`, `AttackMontage`, `AttackTarget` for AI-driven attacks. Capsule explicitly blocks `ECC_Visibility` for cursor click detection.
+- `UAnimNotify_Attack` (DisplayName "Melee Attack Trace") — fires on a montage keyframe. Reads `AttackTarget` from either `ADiabloHero` or `ADiabloEnemy` and applies `TakeDamage` directly (no sphere trace — Diablo 1 uses targeted hit, not physics). `Damage` is configurable on the notify. Guards against dead targets.
+- `ADiabloEnemy : ACharacter` (Abstract) — uses `FDiabloStats` for HP. `TakeDamage` override; on death plays `DeathMontage`, disables collision, delays `Destroy()` by montage duration + 2s. Has `StartAttack(Target)`, `AttackMontage`, `AttackTarget` for AI-driven attacks. Capsule explicitly blocks `ECC_Visibility` for cursor click detection.
 - `AM_Attack` (AnimMontage) — manually authored in editor from `Warrior_Anim_Attack`. Contains Melee Attack Trace notify at the hit frame plus optional PlaySound notifies for SwordSwing/SwordHit.
+- `AM_Death` (AnimMontage) — manually authored in editor from `Warrior_Anim_Death`. `bEnableAutoBlendOut = false` so the death pose holds. Used by both hero and enemy.
 
 ### Enemy AI (M3)
 
-- `ADiabloAIController : AAIController` — tick-based state machine with `EAIState` enum (Idle / Chase / Attack / Dead). `FindTarget()` returns the player pawn. Aggro at `AggroRange` (800), attacks at `AttackRange` (200), leashes at `LeashRange` (1500). Uses `MoveToActor` for pathfinding (only issued when `GetMoveStatus() != Moving` to prevent stutter).
+- `ADiabloAIController : AAIController` — tick-based state machine with `EAIState` enum (Idle / Chase / Attack / Dead). `FindTarget()` returns the player pawn (returns `nullptr` if hero is dead). Aggro at `AggroRange` (800), attacks at `AttackRange` (200), leashes at `LeashRange` (1500). Uses `MoveToActor` for pathfinding (only issued when `GetMoveStatus() != Moving` to prevent stutter).
 - `ADiabloEnemy` sets `AIControllerClass = ADiabloAIController` and `AutoPossessAI = PlacedInWorldOrSpawned` in constructor.
+
+### HP + Death + Respawn (M4)
+
+- `FDiabloStats` ([DiabloStats.h](Source/Diablo/DiabloStats.h)) — USTRUCT with HP/MaxHP/Mana/MaxMana/Str/Mag/Dex/Vit. Used by both `ADiabloHero` and `ADiabloEnemy`. Only HP/MaxHP active in M4; other fields populated in M6.
+- **Hero death:** `TakeDamage` → `Die()` → disable movement, play `DeathMontage` → controller `OnHeroDeath()` → `DisableInput`, camera fade to black (0.5s), 2s `FTimerHandle` → `UnPossess` + `Destroy` dead pawn → `AGameModeBase::RestartPlayer` spawns fresh hero at `PlayerStart` with full HP → `EnableInput`, fade in (0.5s).
+- **Enemy death:** `TakeDamage` → HP <= 0 → disable collision + movement, play `DeathMontage` → delayed `Destroy()` after montage + 2s corpse linger.
+- `ADroppedItem : AActor` ([DroppedItem.h](Source/Diablo/DroppedItem.h)) (Abstract) — `UStaticMeshComponent` root that blocks `ECC_Visibility` for cursor detection. `HealAmount = 50`. `OnPickedUp(Hero)` heals and destroys. BP subclass `BP_HealingPotion`.
 
 ### Input
 
@@ -78,16 +86,18 @@ IntelliSense errors like `cannot open source file "X.h"` are usually false posit
 
 | Method | Behavior on re-run |
 |---|---|
-| `GenerateBlueprintSubclasses` | Creates `BP_DiabloGameMode`, `BP_DiabloHero`, `BP_DiabloPlayerController`, `BP_DiabloEnemy` — **skips if exists** |
-| `GenerateDefaultMap` | Creates `Lvl_Diablo` with PlayerStart, DirectionalLight, floor plane, NavMeshBoundsVolume, test enemy — **always recreates** |
+| `GenerateBlueprintSubclasses` | Creates `BP_DiabloGameMode`, `BP_DiabloHero`, `BP_DiabloPlayerController`, `BP_DiabloEnemy`, `BP_HealingPotion` — **skips if exists** |
+| `GenerateDefaultMap` | Creates `Lvl_Diablo` with PlayerStart, DirectionalLight, floor plane, NavMeshBoundsVolume, test enemy, healing potion — **always recreates** |
 | `GenerateInputAssets` | Creates/updates IA_Click/Move/Look and IMC_Diablo — **updates in place** |
-| `ImportWarriorFBX` | Deletes Warrior assets except `ABP_Warrior`, `AM_Attack`, and `Warrior_Skeleton`, then reimports `Tools/blender/out/Warrior.fbx`. Reuses existing skeleton so AnimBP/montage references survive — **recreates mesh + animations only** |
+| `ImportWarriorFBX` | Deletes Warrior assets except `ABP_Warrior`, `AM_Attack`, `AM_Death`, and `Warrior_Skeleton`, then reimports `Tools/blender/out/Warrior.fbx`. Reuses existing skeleton so AnimBP/montage references survive — **recreates mesh + animations only** |
 | `ImportAttackSFX` | Imports `Tools/audio/out/SwordSwing.wav` and `SwordHit.wav` under `/Game/Audio/SFX/` — **replaces existing** |
-| `ConfigureBlueprintDefaults` | Calls all four Configure methods below |
-| `ConfigureHeroDefaults` | Sets skeletal mesh, anim class, attack montage on `BP_DiabloHero` |
+| `ImportPotionFBX` | Imports `Tools/blender/out/HealingPotion.fbx` as static mesh under `/Game/Items/Potions/` — **replaces existing** |
+| `ConfigureBlueprintDefaults` | Calls all Configure methods below |
+| `ConfigureHeroDefaults` | Sets skeletal mesh, anim class, attack montage, death montage on `BP_DiabloHero` |
 | `ConfigureControllerDefaults` | Sets ClickAction, DefaultMappingContext on `BP_DiabloPlayerController` |
 | `ConfigureGameModeDefaults` | Sets DefaultPawnClass, PlayerControllerClass on `BP_DiabloGameMode` |
-| `ConfigureEnemyDefaults` | Sets skeletal mesh, anim class, attack montage on `BP_DiabloEnemy` |
+| `ConfigureEnemyDefaults` | Sets skeletal mesh, anim class, attack montage, death montage on `BP_DiabloEnemy` |
+| `ConfigureDroppedItemDefaults` | Sets static mesh on `BP_HealingPotion` |
 
 **Do not attempt programmatic AnimBP generation.** State machine graph construction via K2 nodes is too fragile (wrong pin names, function reference ordering, MinimalAPI exports). AnimBPs are the one asset type authored manually in the editor.
 
@@ -120,12 +130,12 @@ Animations are keyframed in the same Blender scripts that generate meshes — ar
 - **Levels** under `Content/Maps/` — generated by editor tool or hand-authored
 - **Input assets** under `Content/Input/` — generated by editor tool
 - **AnimBlueprints** — manually authored in editor; parent to C++ `UDiabloAnimInstance` subclass. `ABP_Warrior` has a Locomotion state machine (Idle/Walk based on `Speed`) with a DefaultSlot node for montage overlay.
-- **AnimMontages** — `AM_Attack` created manually from `Warrior_Anim_Attack` with Melee Attack Trace and PlaySound notifies. The asset generator sets this on both hero and enemy BPs via `ConfigureHeroDefaults`/`ConfigureEnemyDefaults`.
+- **AnimMontages** — `AM_Attack` created manually from `Warrior_Anim_Attack` with Melee Attack Trace and PlaySound notifies. `AM_Death` created manually from `Warrior_Anim_Death` with `bEnableAutoBlendOut = false`. Both set on hero and enemy BPs via `ConfigureHeroDefaults`/`ConfigureEnemyDefaults`.
 - **StateTree assets** — needed starting M19; reference C++ task/condition structs
 
 ### FBX Reimport Workflow
 
-`ImportWarriorFBX` preserves `Warrior_Skeleton`, `ABP_Warrior`, and `AM_Attack` across reimports. The FBX importer reuses the existing skeleton (`FbxFactory->ImportUI->Skeleton`), so AnimBP and montage references stay valid. Only the skeletal mesh, physics asset, and animation sequences are deleted and recreated.
+`ImportWarriorFBX` preserves `Warrior_Skeleton`, `ABP_Warrior`, `AM_Attack`, and `AM_Death` across reimports. The FBX importer reuses the existing skeleton (`FbxFactory->ImportUI->Skeleton`), so AnimBP and montage references stay valid. Only the skeletal mesh, physics asset, and animation sequences are deleted and recreated.
 
 **When bone hierarchy changes** (add/remove/rename bones): manually delete `Warrior_Skeleton` in the Content Browser before reimporting. The AnimBP will need to be recreated. This should be rare.
 

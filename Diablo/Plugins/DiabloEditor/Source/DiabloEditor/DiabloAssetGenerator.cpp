@@ -3,6 +3,7 @@
 #include "DiabloHero.h"
 #include "DiabloPlayerController.h"
 #include "DiabloEnemy.h"
+#include "DroppedItem.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "FileHelpers.h"
 #include "InputAction.h"
@@ -33,6 +34,7 @@
 #include "IAssetTools.h"
 #include "Factories/FbxFactory.h"
 #include "Factories/FbxImportUI.h"
+#include "RenderingThread.h"
 
 void FDiabloAssetGenerator::GenerateAllAssets()
 {
@@ -40,6 +42,7 @@ void FDiabloAssetGenerator::GenerateAllAssets()
 	GenerateDefaultMap();
 	GenerateInputAssets();
 	ImportWarriorFBX();
+	ImportPotionFBX();
 	ConfigureBlueprintDefaults();
 
 	UE_LOG(LogTemp, Display, TEXT("[DiabloTools] All assets generated."));
@@ -69,6 +72,12 @@ void FDiabloAssetGenerator::GenerateBlueprintSubclasses()
 		ADiabloEnemy::StaticClass(),
 		TEXT("/Game/Blueprints"),
 		TEXT("BP_DiabloEnemy")
+	);
+
+	CreateBlueprintFromClass(
+		ADroppedItem::StaticClass(),
+		TEXT("/Game/Blueprints"),
+		TEXT("BP_HealingPotion")
 	);
 }
 
@@ -103,6 +112,14 @@ void FDiabloAssetGenerator::GenerateDefaultMap()
 	{
 		NewWorld->SpawnActor<AActor>(EnemyBP->GeneratedClass, FTransform(FVector(500.f, 0.f, 100.f)), SpawnParams);
 		UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Spawned BP_DiabloEnemy in map"));
+	}
+
+	// Spawn a healing potion
+	UBlueprint* PotionBP = LoadObject<UBlueprint>(nullptr, TEXT("/Game/Blueprints/BP_HealingPotion.BP_HealingPotion"));
+	if (PotionBP && PotionBP->GeneratedClass)
+	{
+		NewWorld->SpawnActor<AActor>(PotionBP->GeneratedClass, FTransform(FVector(300.f, 200.f, 100.f)), SpawnParams);
+		UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Spawned BP_HealingPotion in map"));
 	}
 
 	const FString FilePath = FPackageName::LongPackageNameToFilename(MapPackagePath, FPackageName::GetMapPackageExtension());
@@ -290,6 +307,7 @@ void FDiabloAssetGenerator::ImportWarriorFBX()
 	{
 		if (FileName.Contains(TEXT("ABP_Warrior"))
 			|| FileName.Contains(TEXT("AM_Attack"))
+			|| FileName.Contains(TEXT("AM_Death"))
 			|| FileName.Contains(TEXT("Warrior_Skeleton")))
 		{
 			continue;
@@ -317,6 +335,7 @@ void FDiabloAssetGenerator::ImportWarriorFBX()
 	}
 
 	CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS);
+	FlushRenderingCommands();
 	FAssetRegistryModule::GetRegistry().ScanPathsSynchronous({DestPath}, true);
 
 	// If the skeleton already exists, tell the importer to reuse it so
@@ -417,6 +436,75 @@ void FDiabloAssetGenerator::ImportAttackSFX()
 }
 
 // ---------------------------------------------------------------------------
+// Import healing potion static mesh
+// ---------------------------------------------------------------------------
+
+void FDiabloAssetGenerator::ImportPotionFBX()
+{
+	const FString DestPath = TEXT("/Game/Items/Potions");
+
+	const FString FBXPath = FPaths::ProjectDir() / TEXT("Tools/blender/out/HealingPotion.fbx");
+	if (!FPaths::FileExists(FBXPath))
+	{
+		UE_LOG(LogTemp, Error, TEXT("[DiabloTools] HealingPotion.fbx not found at %s — run potion_mesh.py first"), *FBXPath);
+		return;
+	}
+
+	UFbxFactory* FbxFactory = NewObject<UFbxFactory>();
+	FbxFactory->ImportUI->bImportMesh = true;
+	FbxFactory->ImportUI->bImportAnimations = false;
+	FbxFactory->ImportUI->bImportMaterials = true;
+	FbxFactory->ImportUI->bImportTextures = false;
+	FbxFactory->ImportUI->bIsObjImport = false;
+	FbxFactory->ImportUI->bAutomatedImportShouldDetectType = false;
+	FbxFactory->ImportUI->MeshTypeToImport = FBXIT_StaticMesh;
+	FbxFactory->ImportUI->bImportAsSkeletal = false;
+
+	UAssetImportTask* Task = NewObject<UAssetImportTask>();
+	Task->Filename = FBXPath;
+	Task->DestinationPath = DestPath;
+	Task->DestinationName = TEXT("HealingPotion");
+	Task->bReplaceExisting = true;
+	Task->bAutomated = true;
+	Task->bSave = true;
+	Task->Factory = FbxFactory;
+
+	IAssetTools& AssetTools = FAssetToolsModule::GetModule().Get();
+	AssetTools.ImportAssetTasks({ Task });
+
+	TArray<UObject*> ImportedObjects = Task->GetObjects();
+	UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Imported %d objects from HealingPotion.fbx"), ImportedObjects.Num());
+}
+
+// ---------------------------------------------------------------------------
+// Configure dropped item (healing potion) defaults
+// ---------------------------------------------------------------------------
+
+void FDiabloAssetGenerator::ConfigureDroppedItemDefaults()
+{
+	UBlueprint* PotionBP = LoadObject<UBlueprint>(nullptr, TEXT("/Game/Blueprints/BP_HealingPotion.BP_HealingPotion"));
+	UStaticMesh* PotionMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/Items/Potions/HealingPotion.HealingPotion"));
+
+	if (!PotionBP || !PotionBP->GeneratedClass)
+	{
+		return;
+	}
+
+	AActor* CDO = Cast<AActor>(PotionBP->GeneratedClass->GetDefaultObject());
+	if (CDO && PotionMesh)
+	{
+		if (UStaticMeshComponent* MeshComp = CDO->FindComponentByClass<UStaticMeshComponent>())
+		{
+			MeshComp->SetStaticMesh(PotionMesh);
+			UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_HealingPotion: set static mesh"));
+		}
+	}
+
+	FKismetEditorUtilities::CompileBlueprint(PotionBP);
+	SaveAsset(PotionBP, PotionBP->GetOutermost(), TEXT("/Game/Blueprints/BP_HealingPotion"));
+}
+
+// ---------------------------------------------------------------------------
 // Configure Blueprint CDO defaults (individual + combined)
 // ---------------------------------------------------------------------------
 
@@ -426,6 +514,7 @@ void FDiabloAssetGenerator::ConfigureBlueprintDefaults()
 	ConfigureControllerDefaults();
 	ConfigureGameModeDefaults();
 	ConfigureEnemyDefaults();
+	ConfigureDroppedItemDefaults();
 }
 
 void FDiabloAssetGenerator::ConfigureHeroDefaults()
@@ -434,6 +523,7 @@ void FDiabloAssetGenerator::ConfigureHeroDefaults()
 	USkeletalMesh* SkMesh = LoadObject<USkeletalMesh>(nullptr, TEXT("/Game/Characters/Warrior/Warrior.Warrior"));
 	UAnimBlueprint* AnimBP = LoadObject<UAnimBlueprint>(nullptr, TEXT("/Game/Characters/Warrior/ABP_Warrior.ABP_Warrior"));
 	UAnimMontage* AttackMontage = LoadObject<UAnimMontage>(nullptr, TEXT("/Game/Characters/Warrior/AM_Attack.AM_Attack"));
+	UAnimMontage* DeathMontage = LoadObject<UAnimMontage>(nullptr, TEXT("/Game/Characters/Warrior/AM_Death.AM_Death"));
 
 	if (!HeroBP || !HeroBP->GeneratedClass)
 	{
@@ -458,14 +548,28 @@ void FDiabloAssetGenerator::ConfigureHeroDefaults()
 		}
 	}
 
+	UObject* HeroCDO = HeroBP->GeneratedClass->GetDefaultObject();
+
 	if (AttackMontage)
 	{
 		if (FProperty* Prop = HeroBP->GeneratedClass->FindPropertyByName(TEXT("AttackMontage")))
 		{
 			if (FObjectProperty* ObjProp = CastField<FObjectProperty>(Prop))
 			{
-				ObjProp->SetObjectPropertyValue(ObjProp->ContainerPtrToValuePtr<void>(HeroBP->GeneratedClass->GetDefaultObject()), AttackMontage);
+				ObjProp->SetObjectPropertyValue(ObjProp->ContainerPtrToValuePtr<void>(HeroCDO), AttackMontage);
 				UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_DiabloHero: set AttackMontage"));
+			}
+		}
+	}
+
+	if (DeathMontage)
+	{
+		if (FProperty* Prop = HeroBP->GeneratedClass->FindPropertyByName(TEXT("DeathMontage")))
+		{
+			if (FObjectProperty* ObjProp = CastField<FObjectProperty>(Prop))
+			{
+				ObjProp->SetObjectPropertyValue(ObjProp->ContainerPtrToValuePtr<void>(HeroCDO), DeathMontage);
+				UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_DiabloHero: set DeathMontage"));
 			}
 		}
 	}
@@ -552,6 +656,7 @@ void FDiabloAssetGenerator::ConfigureEnemyDefaults()
 	USkeletalMesh* SkMesh = LoadObject<USkeletalMesh>(nullptr, TEXT("/Game/Characters/Warrior/Warrior.Warrior"));
 	UAnimBlueprint* AnimBP = LoadObject<UAnimBlueprint>(nullptr, TEXT("/Game/Characters/Warrior/ABP_Warrior.ABP_Warrior"));
 	UAnimMontage* AttackMontage = LoadObject<UAnimMontage>(nullptr, TEXT("/Game/Characters/Warrior/AM_Attack.AM_Attack"));
+	UAnimMontage* DeathMontage = LoadObject<UAnimMontage>(nullptr, TEXT("/Game/Characters/Warrior/AM_Death.AM_Death"));
 
 	if (!EnemyBP || !EnemyBP->GeneratedClass)
 	{
@@ -576,14 +681,28 @@ void FDiabloAssetGenerator::ConfigureEnemyDefaults()
 		}
 	}
 
+	UObject* EnemyCDO = EnemyBP->GeneratedClass->GetDefaultObject();
+
 	if (AttackMontage)
 	{
 		if (FProperty* Prop = EnemyBP->GeneratedClass->FindPropertyByName(TEXT("AttackMontage")))
 		{
 			if (FObjectProperty* ObjProp = CastField<FObjectProperty>(Prop))
 			{
-				ObjProp->SetObjectPropertyValue(ObjProp->ContainerPtrToValuePtr<void>(CDO), AttackMontage);
+				ObjProp->SetObjectPropertyValue(ObjProp->ContainerPtrToValuePtr<void>(EnemyCDO), AttackMontage);
 				UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_DiabloEnemy: set AttackMontage"));
+			}
+		}
+	}
+
+	if (DeathMontage)
+	{
+		if (FProperty* Prop = EnemyBP->GeneratedClass->FindPropertyByName(TEXT("DeathMontage")))
+		{
+			if (FObjectProperty* ObjProp = CastField<FObjectProperty>(Prop))
+			{
+				ObjProp->SetObjectPropertyValue(ObjProp->ContainerPtrToValuePtr<void>(EnemyCDO), DeathMontage);
+				UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_DiabloEnemy: set DeathMontage"));
 			}
 		}
 	}

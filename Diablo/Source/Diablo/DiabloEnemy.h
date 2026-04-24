@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
+#include "DiabloStats.h"
 #include "DiabloEnemy.generated.h"
 
 class UAnimMontage;
@@ -19,23 +20,26 @@ public:
 
 	void StartAttack(AActor* Target);
 	bool IsAttacking() const { return bIsAttacking; }
-	bool IsDead() const { return CurrentHP <= 0.f; }
+	bool IsDead() const { return !Stats.IsAlive(); }
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Stats")
-	float MaxHP = 100.f;
-
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Stats")
-	float CurrentHP;
+	FDiabloStats Stats;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Combat")
 	TObjectPtr<UAnimMontage> AttackMontage;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Combat")
+	TObjectPtr<UAnimMontage> DeathMontage;
 
 	UPROPERTY()
 	TObjectPtr<AActor> AttackTarget;
 
 private:
 	bool bIsAttacking = false;
+	FTimerHandle DestroyTimerHandle;
 
 	UFUNCTION()
 	void OnAttackMontageEnded(UAnimMontage* Montage, bool bInterrupted);
+
+	void OnDestroyTimer();
 };

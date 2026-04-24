@@ -7,6 +7,7 @@
 class UInputAction;
 class UInputMappingContext;
 class ADiabloEnemy;
+class ADroppedItem;
 
 UCLASS(Abstract)
 class DIABLO_API ADiabloPlayerController : public APlayerController
@@ -15,6 +16,8 @@ class DIABLO_API ADiabloPlayerController : public APlayerController
 
 public:
 	ADiabloPlayerController();
+
+	void OnHeroDeath();
 
 protected:
 	virtual void BeginPlay() override;
@@ -30,9 +33,18 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Combat")
 	float AttackRange = 200.f;
 
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Interaction")
+	float PickupRange = 150.f;
+
 private:
 	void OnClickStarted();
+	void OnRespawnTimerExpired();
 
 	UPROPERTY()
 	TObjectPtr<ADiabloEnemy> TargetEnemy;
+
+	UPROPERTY()
+	TObjectPtr<ADroppedItem> TargetItem;
+
+	FTimerHandle RespawnTimerHandle;
 };
