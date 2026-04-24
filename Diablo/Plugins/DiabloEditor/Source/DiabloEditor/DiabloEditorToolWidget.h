@@ -45,4 +45,7 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Diablo Tools")
 	void SetupPotion();
+
+	UFUNCTION(BlueprintCallable, Category = "Diablo Tools")
+	void SetupHUD();
 };

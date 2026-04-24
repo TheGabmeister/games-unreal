@@ -15,6 +15,7 @@ public class DiabloEditor : ModuleRules
 			"Blutility",
 			"Kismet",
 			"UMG",
+			"UMGEditor",
 			"Slate",
 			"SlateCore",
 			"EnhancedInput",

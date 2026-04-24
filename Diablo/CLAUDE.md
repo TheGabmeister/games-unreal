@@ -36,7 +36,7 @@ IntelliSense errors like `cannot open source file "X.h"` are usually false posit
 
 ## Module Layout
 
-**Runtime module:** [Diablo.Build.cs](Source/Diablo/Diablo.Build.cs). Public dependencies: `EnhancedInput`, `AIModule`, `NavigationSystem`, `StateTreeModule`, `GameplayStateTreeModule`, `UMG`, `Slate`. The module log category is `LogDiablo` ([Diablo.h](Source/Diablo/Diablo.h)).
+**Runtime module:** [Diablo.Build.cs](Source/Diablo/Diablo.Build.cs). Public dependencies: `EnhancedInput`, `AIModule`, `NavigationSystem`, `StateTreeModule`, `GameplayStateTreeModule`, `UMG`, `Slate`, `SlateCore`. The module log category is `LogDiablo` ([Diablo.h](Source/Diablo/Diablo.h)).
 
 **Editor plugin:** [Plugins/DiabloEditor/](Plugins/DiabloEditor/) — editor-only plugin with `FDiabloAssetGenerator` (static utility struct) and a Slate toolbar panel accessible via **Tools > Diablo > Diablo Tools**. Generates BP subclasses, maps, input assets, imports FBX/audio, and configures Blueprint CDO defaults. Registered in `.uproject` with `"TargetAllowList": ["Editor"]`.
 
@@ -69,7 +69,15 @@ IntelliSense errors like `cannot open source file "X.h"` are usually false posit
 - `FDiabloStats` ([DiabloStats.h](Source/Diablo/DiabloStats.h)) — USTRUCT with HP/MaxHP/Mana/MaxMana/Str/Mag/Dex/Vit. Used by both `ADiabloHero` and `ADiabloEnemy`. Only HP/MaxHP active in M4; other fields populated in M6.
 - **Hero death:** `TakeDamage` → `Die()` → disable movement, play `DeathMontage` → controller `OnHeroDeath()` → `DisableInput`, camera fade to black (0.5s), 2s `FTimerHandle` → `UnPossess` + `Destroy` dead pawn → `AGameModeBase::RestartPlayer` spawns fresh hero at `PlayerStart` with full HP → `EnableInput`, fade in (0.5s).
 - **Enemy death:** `TakeDamage` → HP <= 0 → disable collision + movement, play `DeathMontage` → delayed `Destroy()` after montage + 2s corpse linger.
-- `ADroppedItem : AActor` ([DroppedItem.h](Source/Diablo/DroppedItem.h)) (Abstract) — `UStaticMeshComponent` root that blocks `ECC_Visibility` for cursor detection. `HealAmount = 50`. `OnPickedUp(Hero)` heals and destroys. BP subclass `BP_HealingPotion`.
+- `ADroppedItem : AActor` ([DroppedItem.h](Source/Diablo/DroppedItem.h)) (Abstract) — `UStaticMeshComponent` root (plane mesh with sprite material, rotated to face isometric camera) that blocks `ECC_Visibility` for cursor detection. `HealAmount = 50`. `OnPickedUp(Hero)` heals and destroys. BP subclass `BP_HealingPotion` uses `T_HealingPotion` sprite from SVG pipeline.
+
+### HUD (M5)
+
+- `UDiabloHUDWidget : UUserWidget` ([DiabloHUDWidget.h](Source/Diablo/DiabloHUDWidget.h)) (Abstract) — builds the entire widget tree in C++ via `BuildWidgetTree()` (no UMG designer needed). Red life globe (bottom-left, `UProgressBar` BottomToTop fill), blue mana globe (bottom-right), gold XP bar (bottom-center, stretches between globes). `NativeTick` reads `CachedHero->Stats` to update fill percentages. XP bar placeholder at 0% until M6.
+- `ADiabloPlayerController` owns the HUD: `HUDWidgetClass` UPROPERTY (set via `SetupHUD` editor tool → `BP_DiabloHUD`). `CreateHUD()` in `BeginPlay` → `CreateWidget` + `AddToViewport`. `OnHeroDeath()` collapses widget. `OnPossess()` re-binds to new hero and shows widget after respawn.
+- `BP_DiabloHUD` — Widget Blueprint parented to `UDiabloHUDWidget`, created by `SetupHUD`. No event-graph nodes — exists purely as an asset reference for `HUDWidgetClass`.
+
+**Do not generate Widget Blueprints programmatically via the UMG designer graph** — same fragility as AnimBPs. Build widget trees in C++ (UCanvasPanel + UProgressBar + USizeBox), use the BP only as a thin subclass.
 
 ### Input
 
@@ -82,22 +90,34 @@ IntelliSense errors like `cannot open source file "X.h"` are usually false posit
 
 ### Asset Generator (DiabloEditor Plugin)
 
-`FDiabloAssetGenerator` static methods, callable from the Slate panel:
+`FDiabloAssetGenerator` static methods, callable from the Slate panel (**Tools > Diablo > Diablo Tools**):
 
-| Method | Behavior on re-run |
+**Import** (bring external assets into UE):
+
+| Method | Behavior |
 |---|---|
-| `GenerateBlueprintSubclasses` | Creates `BP_DiabloGameMode`, `BP_DiabloHero`, `BP_DiabloPlayerController`, `BP_DiabloEnemy`, `BP_HealingPotion` — **skips if exists** |
+| `ImportWarriorFBX` | Imports mesh + animations from `Tools/blender/out/Warrior.fbx` via `bReplaceExisting` (in-place update). New animations that don't exist yet are imported from separate per-animation FBX files (`Warrior_Death.fbx`, etc.) |
+| `ImportAttackSFX` | Imports `Tools/audio/out/SwordSwing.wav` and `SwordHit.wav` under `/Game/Audio/SFX/` |
+| `ImportPotionSprite` | Imports `Tools/svg/out/HealingPotion.png` as texture under `/Game/Items/Potions/` |
+
+**Setup** (create BP if needed + configure CDO defaults — one button per blueprint):
+
+| Method | Creates | Configures |
+|---|---|---|
+| `SetupHero` | `BP_DiabloHero` | Skeletal mesh, anim class, attack montage, death montage |
+| `SetupController` | `BP_DiabloPlayerController` | ClickAction, DefaultMappingContext |
+| `SetupGameMode` | `BP_DiabloGameMode` | DefaultPawnClass, PlayerControllerClass |
+| `SetupEnemy` | `BP_DiabloEnemy` | Skeletal mesh, anim class, attack montage, death montage |
+| `SetupPotion` | `BP_HealingPotion` | Plane mesh with sprite material (upright, facing isometric camera) |
+| `SetupHUD` | `BP_DiabloHUD` (WidgetBlueprint) | Creates WBP parented to `UDiabloHUDWidget`, sets `HUDWidgetClass` on `BP_DiabloPlayerController` |
+| `SetupAllBlueprints` | All of the above | All of the above |
+
+**World:**
+
+| Method | Behavior |
+|---|---|
 | `GenerateDefaultMap` | Creates `Lvl_Diablo` with PlayerStart, DirectionalLight, floor plane, NavMeshBoundsVolume, test enemy, healing potion — **always recreates** |
 | `GenerateInputAssets` | Creates/updates IA_Click/Move/Look and IMC_Diablo — **updates in place** |
-| `ImportWarriorFBX` | Deletes Warrior assets except `ABP_Warrior`, `AM_Attack`, `AM_Death`, and `Warrior_Skeleton`, then reimports `Tools/blender/out/Warrior.fbx`. Reuses existing skeleton so AnimBP/montage references survive — **recreates mesh + animations only** |
-| `ImportAttackSFX` | Imports `Tools/audio/out/SwordSwing.wav` and `SwordHit.wav` under `/Game/Audio/SFX/` — **replaces existing** |
-| `ImportPotionFBX` | Imports `Tools/blender/out/HealingPotion.fbx` as static mesh under `/Game/Items/Potions/` — **replaces existing** |
-| `ConfigureBlueprintDefaults` | Calls all Configure methods below |
-| `ConfigureHeroDefaults` | Sets skeletal mesh, anim class, attack montage, death montage on `BP_DiabloHero` |
-| `ConfigureControllerDefaults` | Sets ClickAction, DefaultMappingContext on `BP_DiabloPlayerController` |
-| `ConfigureGameModeDefaults` | Sets DefaultPawnClass, PlayerControllerClass on `BP_DiabloGameMode` |
-| `ConfigureEnemyDefaults` | Sets skeletal mesh, anim class, attack montage, death montage on `BP_DiabloEnemy` |
-| `ConfigureDroppedItemDefaults` | Sets static mesh on `BP_HealingPotion` |
 
 **Do not attempt programmatic AnimBP generation.** State machine graph construction via K2 nodes is too fragile (wrong pin names, function reference ordering, MinimalAPI exports). AnimBPs are the one asset type authored manually in the editor.
 
@@ -120,24 +140,30 @@ All assets are generated programmatically — no manual art creation. Scripts li
 - Animation bone rotations use local Y axis `(0, angle, 0)` for forward/back swing (not X, because the skeleton was rotated before parenting)
 - `global_scale=1.0` (not 100 — UE's importer handles meter→cm conversion via `apply_unit_scale=True`)
 - `axis_forward="-Z"`, `axis_up="Y"`
-- Animations: use NLA strips (unmuted) with `bake_anim_use_nla_strips=True`, `bake_anim_use_all_actions=False` — each NLA strip exports as a separate FBX animation stack. NLA strip names determine UE asset names (`Idle` → `Warrior_Anim_Idle`)
+- The main mesh FBX (`warrior_mesh.py`) contains all animations as NLA strips with `bake_anim_use_nla_strips=True`, `bake_anim_use_all_actions=False`. NLA strip names determine UE asset names (`Idle` → `Warrior_Anim_Idle`)
+- Each animation also has a **standalone FBX** (e.g., `warrior_anim_idle.py` → `Warrior_Idle.fbx`) for reliable import of new animations on reimport. The armature is defined in `warrior_armature.py` (shared module)
 - Character meshes are built at real-world scale in Blender (1.8m tall = 180cm in UE)
 
-Animations are keyframed in the same Blender scripts that generate meshes — armature + bone keyframes baked into the FBX.
+Animations are keyframed in Blender Python scripts — the main mesh script and per-animation standalone scripts both share `warrior_armature.py` for bone hierarchy.
 
 **Editor-only assets** that require the DiabloEditor plugin or editor interaction:
 - **BP subclasses** under `Content/Blueprints/` — every `UCLASS(Abstract)` C++ class needs a BP child to be placed
 - **Levels** under `Content/Maps/` — generated by editor tool or hand-authored
 - **Input assets** under `Content/Input/` — generated by editor tool
 - **AnimBlueprints** — manually authored in editor; parent to C++ `UDiabloAnimInstance` subclass. `ABP_Warrior` has a Locomotion state machine (Idle/Walk based on `Speed`) with a DefaultSlot node for montage overlay.
-- **AnimMontages** — `AM_Attack` created manually from `Warrior_Anim_Attack` with Melee Attack Trace and PlaySound notifies. `AM_Death` created manually from `Warrior_Anim_Death` with `bEnableAutoBlendOut = false`. Both set on hero and enemy BPs via `ConfigureHeroDefaults`/`ConfigureEnemyDefaults`.
+- **AnimMontages** — `AM_Attack` created manually from `Warrior_Anim_Attack` with Melee Attack Trace and PlaySound notifies. `AM_Death` created manually from `Warrior_Anim_Death` with `bEnableAutoBlendOut = false`. Both set on hero and enemy BPs via `SetupHero`/`SetupEnemy`.
+- **Widget Blueprints** — `BP_DiabloHUD` under `Content/Blueprints/`; parents to C++ `UDiabloHUDWidget`. Widget tree built entirely in C++ — BP is a thin asset-reference shell.
 - **StateTree assets** — needed starting M19; reference C++ task/condition structs
 
 ### FBX Reimport Workflow
 
-`ImportWarriorFBX` opens a blank map first (to unload actors referencing the mesh and avoid scene proxy crashes), then deletes all Warrior assets except `Warrior_Skeleton`, `ABP_Warrior`, `AM_Attack`, and `AM_Death`. The FBX importer reuses the existing skeleton (`FbxFactory->ImportUI->Skeleton`), so AnimBP and montage references stay valid. The skeletal mesh, physics asset, and animation sequences are deleted and freshly recreated — this ensures new animations (like Death) are imported alongside existing ones.
+`ImportWarriorFBX` never deletes existing assets — `bReplaceExisting` updates the mesh, skeleton, and animation sequences in place, preserving all references (AnimBP, montages, scene proxies). After the main import, any animation that doesn't exist yet is imported from its standalone FBX (e.g., `Warrior_Death.fbx` → `Warrior_Anim_Death`).
 
-**When bone hierarchy changes** (add/remove/rename bones): manually delete `Warrior_Skeleton` in the Content Browser before reimporting. The AnimBP will need to be recreated. This should be rare — the bone hierarchy is defined by `add_bone` calls in `warrior_mesh.py` and is stable.
+**Adding a new animation:** Create a standalone Blender script using `warrior_armature.py`, export to `Tools/blender/out/`, add an `ImportSingleAnim` call in `ImportWarriorFBX`, and also add the NLA strip to `warrior_mesh.py` for first-time imports.
+
+**Never delete animation sequences or the skeletal mesh during reimport** — this breaks AnimBP references. The UE importer's `bReplaceExisting` handles in-place updates correctly.
+
+**When bone hierarchy changes** (add/remove/rename bones): manually delete `Warrior_Skeleton` in the Content Browser before reimporting. The AnimBP will need to be recreated. This should be rare — the bone hierarchy is defined in `warrior_armature.py` and is stable.
 
 ## Coding principles
 

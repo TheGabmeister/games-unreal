@@ -126,6 +126,15 @@ void SDiabloEditorToolPanel::Construct(const FArguments& InArgs)
 				.OnClicked(this, &SDiabloEditorToolPanel::OnSetupPotion)
 			]
 
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(0.f, 4.f)
+			[
+				SNew(SButton)
+				.Text(FText::FromString(TEXT("Setup HUD")))
+				.OnClicked(this, &SDiabloEditorToolPanel::OnSetupHUD)
+			]
+
 			// --- World ---
 
 			+ SVerticalBox::Slot()
@@ -221,5 +230,11 @@ FReply SDiabloEditorToolPanel::OnSetupEnemy()
 FReply SDiabloEditorToolPanel::OnSetupPotion()
 {
 	FDiabloAssetGenerator::SetupPotion();
+	return FReply::Handled();
+}
+
+FReply SDiabloEditorToolPanel::OnSetupHUD()
+{
+	FDiabloAssetGenerator::SetupHUD();
 	return FReply::Handled();
 }

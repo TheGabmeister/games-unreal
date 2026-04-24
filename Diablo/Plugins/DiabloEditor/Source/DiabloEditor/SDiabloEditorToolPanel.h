@@ -23,4 +23,5 @@ private:
 	FReply OnSetupGameMode();
 	FReply OnSetupEnemy();
 	FReply OnSetupPotion();
+	FReply OnSetupHUD();
 };

@@ -60,3 +60,8 @@ void UDiabloEditorToolWidget::SetupPotion()
 {
 	FDiabloAssetGenerator::SetupPotion();
 }
+
+void UDiabloEditorToolWidget::SetupHUD()
+{
+	FDiabloAssetGenerator::SetupHUD();
+}

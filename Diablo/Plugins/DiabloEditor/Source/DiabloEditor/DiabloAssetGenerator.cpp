@@ -36,6 +36,8 @@
 #include "Factories/FbxImportUI.h"
 #include "Materials/Material.h"
 #include "Materials/MaterialExpressionTextureSample.h"
+#include "WidgetBlueprint.h"
+#include "DiabloHUDWidget.h"
 
 void FDiabloAssetGenerator::GenerateAllAssets()
 {
@@ -55,6 +57,7 @@ void FDiabloAssetGenerator::SetupAllBlueprints()
 	SetupController();
 	SetupEnemy();
 	SetupPotion();
+	SetupHUD();
 }
 
 void FDiabloAssetGenerator::GenerateDefaultMap()
@@ -733,6 +736,64 @@ void FDiabloAssetGenerator::SetupEnemy()
 
 	FKismetEditorUtilities::CompileBlueprint(EnemyBP);
 	SaveAsset(EnemyBP, EnemyBP->GetOutermost(), TEXT("/Game/Blueprints/BP_DiabloEnemy"));
+}
+
+// ---------------------------------------------------------------------------
+// HUD Widget Blueprint
+// ---------------------------------------------------------------------------
+
+void FDiabloAssetGenerator::SetupHUD()
+{
+	const FString BPPath = TEXT("/Game/Blueprints/BP_DiabloHUD");
+	const FString BPObjPath = BPPath + TEXT(".BP_DiabloHUD");
+
+	UWidgetBlueprint* HUDBP = LoadObject<UWidgetBlueprint>(nullptr, *BPObjPath);
+	if (!HUDBP)
+	{
+		UPackage* Package = CreatePackage(*BPPath);
+		Package->FullyLoad();
+
+		HUDBP = CastChecked<UWidgetBlueprint>(FKismetEditorUtilities::CreateBlueprint(
+			UDiabloHUDWidget::StaticClass(),
+			Package,
+			TEXT("BP_DiabloHUD"),
+			BPTYPE_Normal,
+			UWidgetBlueprint::StaticClass(),
+			UBlueprintGeneratedClass::StaticClass()
+		));
+
+		if (!HUDBP)
+		{
+			UE_LOG(LogTemp, Error, TEXT("[DiabloTools] Failed to create BP_DiabloHUD"));
+			return;
+		}
+
+		FKismetEditorUtilities::CompileBlueprint(HUDBP);
+		SaveAsset(HUDBP, Package, BPPath);
+		NotifyAssetCreated(HUDBP);
+		UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Created BP_DiabloHUD"));
+	}
+
+	// Set HUDWidgetClass on BP_DiabloPlayerController
+	UBlueprint* ControllerBP = LoadObject<UBlueprint>(nullptr,
+		TEXT("/Game/Blueprints/BP_DiabloPlayerController.BP_DiabloPlayerController"));
+
+	if (ControllerBP && ControllerBP->GeneratedClass && HUDBP && HUDBP->GeneratedClass)
+	{
+		UObject* CDO = ControllerBP->GeneratedClass->GetDefaultObject();
+		if (FProperty* Prop = ControllerBP->GeneratedClass->FindPropertyByName(TEXT("HUDWidgetClass")))
+		{
+			if (FClassProperty* ClassProp = CastField<FClassProperty>(Prop))
+			{
+				ClassProp->SetPropertyValue(ClassProp->ContainerPtrToValuePtr<void>(CDO), HUDBP->GeneratedClass);
+				UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_DiabloPlayerController: set HUDWidgetClass -> BP_DiabloHUD"));
+			}
+		}
+
+		FKismetEditorUtilities::CompileBlueprint(ControllerBP);
+		SaveAsset(ControllerBP, ControllerBP->GetOutermost(),
+			TEXT("/Game/Blueprints/BP_DiabloPlayerController"));
+	}
 }
 
 // ---------------------------------------------------------------------------

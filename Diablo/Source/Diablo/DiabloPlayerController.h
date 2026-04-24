@@ -8,6 +8,7 @@ class UInputAction;
 class UInputMappingContext;
 class ADiabloEnemy;
 class ADroppedItem;
+class UDiabloHUDWidget;
 
 UCLASS(Abstract)
 class DIABLO_API ADiabloPlayerController : public APlayerController
@@ -21,6 +22,7 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void OnPossess(APawn* InPawn) override;
 	virtual void SetupInputComponent() override;
 	virtual void Tick(float DeltaTime) override;
 
@@ -30,6 +32,9 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input")
 	TObjectPtr<UInputAction> ClickAction;
 
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "HUD")
+	TSubclassOf<UDiabloHUDWidget> HUDWidgetClass;
+
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Combat")
 	float AttackRange = 200.f;
 
@@ -37,6 +42,7 @@ protected:
 	float PickupRange = 150.f;
 
 private:
+	void CreateHUD();
 	void OnClickStarted();
 	void OnRespawnTimerExpired();
 
@@ -45,6 +51,9 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<ADroppedItem> TargetItem;
+
+	UPROPERTY()
+	TObjectPtr<UDiabloHUDWidget> HUDWidget;
 
 	FTimerHandle RespawnTimerHandle;
 };

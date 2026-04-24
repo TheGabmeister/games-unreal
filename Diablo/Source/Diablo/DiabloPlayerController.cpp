@@ -1,5 +1,6 @@
 #include "DiabloPlayerController.h"
 #include "DiabloHero.h"
+#include "DiabloHUDWidget.h"
 #include "DiabloEnemy.h"
 #include "DroppedItem.h"
 #include "Diablo.h"
@@ -23,6 +24,41 @@ void ADiabloPlayerController::BeginPlay()
 		ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer()))
 	{
 		Subsystem->AddMappingContext(DefaultMappingContext, 0);
+	}
+
+	CreateHUD();
+}
+
+void ADiabloPlayerController::OnPossess(APawn* InPawn)
+{
+	Super::OnPossess(InPawn);
+
+	if (HUDWidget)
+	{
+		if (ADiabloHero* Hero = Cast<ADiabloHero>(InPawn))
+		{
+			HUDWidget->InitForHero(Hero);
+			HUDWidget->SetVisibility(ESlateVisibility::HitTestInvisible);
+		}
+	}
+}
+
+void ADiabloPlayerController::CreateHUD()
+{
+	if (!HUDWidgetClass)
+	{
+		return;
+	}
+
+	HUDWidget = CreateWidget<UDiabloHUDWidget>(this, HUDWidgetClass);
+	if (HUDWidget)
+	{
+		HUDWidget->AddToViewport();
+
+		if (ADiabloHero* Hero = Cast<ADiabloHero>(GetPawn()))
+		{
+			HUDWidget->InitForHero(Hero);
+		}
 	}
 }
 
@@ -85,6 +121,11 @@ void ADiabloPlayerController::OnHeroDeath()
 {
 	TargetEnemy = nullptr;
 	TargetItem = nullptr;
+
+	if (HUDWidget)
+	{
+		HUDWidget->SetVisibility(ESlateVisibility::Collapsed);
+	}
 
 	DisableInput(this);
 
