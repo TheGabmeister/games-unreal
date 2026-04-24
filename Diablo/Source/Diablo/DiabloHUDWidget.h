@@ -21,9 +21,9 @@ public:
 protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
+	virtual TSharedRef<SWidget> RebuildWidget() override;
 
 private:
-	void BuildWidgetTree();
 
 	UPROPERTY()
 	TObjectPtr<ADiabloHero> CachedHero;

@@ -37,6 +37,7 @@
 #include "Materials/Material.h"
 #include "Materials/MaterialExpressionTextureSample.h"
 #include "WidgetBlueprint.h"
+#include "WidgetBlueprintFactory.h"
 #include "DiabloHUDWidget.h"
 
 void FDiabloAssetGenerator::GenerateAllAssets()
@@ -753,13 +754,16 @@ void FDiabloAssetGenerator::SetupHUD()
 		UPackage* Package = CreatePackage(*BPPath);
 		Package->FullyLoad();
 
-		HUDBP = CastChecked<UWidgetBlueprint>(FKismetEditorUtilities::CreateBlueprint(
-			UDiabloHUDWidget::StaticClass(),
+		UWidgetBlueprintFactory* Factory = NewObject<UWidgetBlueprintFactory>();
+		Factory->ParentClass = UDiabloHUDWidget::StaticClass();
+
+		HUDBP = Cast<UWidgetBlueprint>(Factory->FactoryCreateNew(
+			UWidgetBlueprint::StaticClass(),
 			Package,
 			TEXT("BP_DiabloHUD"),
-			BPTYPE_Normal,
-			UWidgetBlueprint::StaticClass(),
-			UBlueprintGeneratedClass::StaticClass()
+			RF_Public | RF_Standalone,
+			nullptr,
+			GWarn
 		));
 
 		if (!HUDBP)
@@ -780,17 +784,26 @@ void FDiabloAssetGenerator::SetupHUD()
 
 	if (ControllerBP && ControllerBP->GeneratedClass && HUDBP && HUDBP->GeneratedClass)
 	{
+		FKismetEditorUtilities::CompileBlueprint(ControllerBP);
+
 		UObject* CDO = ControllerBP->GeneratedClass->GetDefaultObject();
 		if (FProperty* Prop = ControllerBP->GeneratedClass->FindPropertyByName(TEXT("HUDWidgetClass")))
 		{
-			if (FClassProperty* ClassProp = CastField<FClassProperty>(Prop))
+			if (FObjectProperty* ObjProp = CastField<FObjectProperty>(Prop))
 			{
-				ClassProp->SetPropertyValue(ClassProp->ContainerPtrToValuePtr<void>(CDO), HUDBP->GeneratedClass);
+				ObjProp->SetObjectPropertyValue(ObjProp->ContainerPtrToValuePtr<void>(CDO), HUDBP->GeneratedClass);
 				UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_DiabloPlayerController: set HUDWidgetClass -> BP_DiabloHUD"));
 			}
+			else
+			{
+				UE_LOG(LogTemp, Error, TEXT("[DiabloTools] HUDWidgetClass property is not FObjectProperty — type: %s"), *Prop->GetClass()->GetName());
+			}
+		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("[DiabloTools] Could not find HUDWidgetClass property on %s"), *ControllerBP->GeneratedClass->GetName());
 		}
 
-		FKismetEditorUtilities::CompileBlueprint(ControllerBP);
 		SaveAsset(ControllerBP, ControllerBP->GetOutermost(),
 			TEXT("/Game/Blueprints/BP_DiabloPlayerController"));
 	}

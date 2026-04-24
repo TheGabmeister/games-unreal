@@ -47,6 +47,7 @@ void ADiabloPlayerController::CreateHUD()
 {
 	if (!HUDWidgetClass)
 	{
+		UE_LOG(LogDiablo, Warning, TEXT("HUDWidgetClass is null — run Setup HUD in DiabloTools"));
 		return;
 	}
 
