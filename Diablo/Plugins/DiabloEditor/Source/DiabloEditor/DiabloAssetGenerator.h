@@ -12,6 +12,7 @@ struct FDiabloAssetGenerator
 	static void GenerateDefaultMap();
 	static void GenerateInputAssets();
 	static void ImportWarriorFBX();
+	static void ImportAttackSFX();
 	static void ConfigureBlueprintDefaults();
 
 private:

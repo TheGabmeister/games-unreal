@@ -17,5 +17,6 @@ private:
 	FReply OnGenerateMap();
 	FReply OnGenerateInput();
 	FReply OnImportWarrior();
+	FReply OnImportAttackSFX();
 	FReply OnConfigureDefaults();
 };

@@ -253,9 +253,54 @@ strip_walk = track_walk.strips.new("Walk", 0, walk_action)
 strip_walk.frame_end = 30
 armature_obj.animation_data.action = None
 
+# --- Attack animation (frames 0-20, ~0.67 second at 30fps) ---
+attack_action = bpy.data.actions.new(name="Attack")
+armature_obj.animation_data.action = attack_action
+
+bpy.ops.object.mode_set(mode='POSE')
+
+for bone_name in pb.keys():
+    set_bone_rotation(pb, bone_name, 0, rest)
+    set_bone_rotation(pb, bone_name, 20, rest)
+
+wind_up = math.radians(-45)
+swing_fwd = math.radians(60)
+follow_through = math.radians(40)
+forearm_extend = math.radians(-20)
+spine_fwd = math.radians(8)
+
+# Right arm overhead slash
+set_bone_rotation(pb, "R_UpperArm", 5, (0, wind_up, 0))
+set_bone_rotation(pb, "R_UpperArm", 10, (0, swing_fwd, 0))
+set_bone_rotation(pb, "R_UpperArm", 15, (0, follow_through, 0))
+
+set_bone_rotation(pb, "R_LowerArm", 5, (0, math.radians(-10), 0))
+set_bone_rotation(pb, "R_LowerArm", 10, (0, forearm_extend, 0))
+set_bone_rotation(pb, "R_LowerArm", 15, (0, math.radians(-10), 0))
+
+# Spine leans into the swing
+set_bone_rotation(pb, "Spine", 5, (0, math.radians(-3), 0))
+set_bone_rotation(pb, "Spine", 10, (0, spine_fwd, 0))
+set_bone_rotation(pb, "Spine", 15, (0, math.radians(4), 0))
+
+# Left arm counters slightly
+set_bone_rotation(pb, "L_UpperArm", 5, (0, math.radians(10), 0))
+set_bone_rotation(pb, "L_UpperArm", 10, (0, math.radians(-15), 0))
+set_bone_rotation(pb, "L_UpperArm", 15, (0, math.radians(-5), 0))
+
+bpy.ops.object.mode_set(mode='OBJECT')
+
+# Push attack to NLA
+track_attack = armature_obj.animation_data.nla_tracks.new()
+track_attack.name = "AttackTrack"
+strip_attack = track_attack.strips.new("Attack", 0, attack_action)
+strip_attack.frame_end = 20
+armature_obj.animation_data.action = None
+
 # Keep NLA tracks active so they export as separate FBX animation stacks
 track_idle.mute = False
 track_walk.mute = False
+track_attack.mute = False
 
 # ---------------------------------------------------------------------------
 # 5. Export FBX

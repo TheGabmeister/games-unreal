@@ -26,5 +26,8 @@ public:
 	void ImportWarriorFBX();
 
 	UFUNCTION(BlueprintCallable, Category = "Diablo Tools")
+	void ImportAttackSFX();
+
+	UFUNCTION(BlueprintCallable, Category = "Diablo Tools")
 	void ConfigureBlueprintDefaults();
 };

@@ -15,7 +15,8 @@
       "Bash(grep -v \"^\\\\.\\\\.$\")",
       "Bash(\"C:/Program Files/Blender Foundation/Blender 5.1/blender.exe\" --background --python \"c:/dev/games-unreal/Diablo/Tools/blender/warrior_mesh.py\")",
       "Bash(grep -E \"\\\\.\\(h|cpp\\)$\")",
-      "Bash(\"/c/Program Files/Blender Foundation/Blender 5.1/blender.exe\" --background --python \"c:/dev/games-unreal/Diablo/Tools/blender/warrior_mesh.py\")"
+      "Bash(\"/c/Program Files/Blender Foundation/Blender 5.1/blender.exe\" --background --python \"c:/dev/games-unreal/Diablo/Tools/blender/warrior_mesh.py\")",
+      "Bash(python \"c:/dev/games-unreal/Diablo/Tools/audio/attack_sfx.py\")"
     ],
     "additionalDirectories": [
       "c:\\dev\\games-unreal\\Diablo\\Source\\DiabloEditor"

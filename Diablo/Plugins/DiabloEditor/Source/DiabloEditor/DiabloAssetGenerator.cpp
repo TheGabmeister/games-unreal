@@ -2,6 +2,7 @@
 #include "DiabloGameMode.h"
 #include "DiabloHero.h"
 #include "DiabloPlayerController.h"
+#include "DiabloEnemy.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "FileHelpers.h"
 #include "InputAction.h"
@@ -61,6 +62,12 @@ void FDiabloAssetGenerator::GenerateBlueprintSubclasses()
 		ADiabloPlayerController::StaticClass(),
 		TEXT("/Game/Blueprints"),
 		TEXT("BP_DiabloPlayerController")
+	);
+
+	CreateBlueprintFromClass(
+		ADiabloEnemy::StaticClass(),
+		TEXT("/Game/Blueprints"),
+		TEXT("BP_DiabloEnemy")
 	);
 }
 
@@ -357,6 +364,39 @@ void FDiabloAssetGenerator::ImportWarriorFBX()
 }
 
 // ---------------------------------------------------------------------------
+// Import attack sound effects
+// ---------------------------------------------------------------------------
+
+void FDiabloAssetGenerator::ImportAttackSFX()
+{
+	const FString DestPath = TEXT("/Game/Audio/SFX");
+	const TArray<FString> WavNames = { TEXT("SwordSwing"), TEXT("SwordHit") };
+
+	IAssetTools& AssetTools = FAssetToolsModule::GetModule().Get();
+
+	for (const FString& Name : WavNames)
+	{
+		const FString WavPath = FPaths::ProjectDir() / TEXT("Tools/audio/out") / (Name + TEXT(".wav"));
+		if (!FPaths::FileExists(WavPath))
+		{
+			UE_LOG(LogTemp, Error, TEXT("[DiabloTools] %s.wav not found at %s — run attack_sfx.py first"), *Name, *WavPath);
+			continue;
+		}
+
+		UAssetImportTask* Task = NewObject<UAssetImportTask>();
+		Task->Filename = WavPath;
+		Task->DestinationPath = DestPath;
+		Task->DestinationName = Name;
+		Task->bReplaceExisting = true;
+		Task->bAutomated = true;
+		Task->bSave = true;
+
+		AssetTools.ImportAssetTasks({ Task });
+		UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Imported %s"), *Name);
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Configure Blueprint CDO defaults
 // ---------------------------------------------------------------------------
 
@@ -447,6 +487,33 @@ void FDiabloAssetGenerator::ConfigureBlueprintDefaults()
 
 		FKismetEditorUtilities::CompileBlueprint(GameModeBP);
 		SaveAsset(GameModeBP, GameModeBP->GetOutermost(), TEXT("/Game/Blueprints/BP_DiabloGameMode"));
+	}
+
+	// --- BP_DiabloEnemy: set skeletal mesh + anim blueprint (reuse Warrior) ---
+	UBlueprint* EnemyBP = LoadObject<UBlueprint>(nullptr, TEXT("/Game/Blueprints/BP_DiabloEnemy.BP_DiabloEnemy"));
+
+	if (EnemyBP && EnemyBP->GeneratedClass)
+	{
+		AActor* CDO = Cast<AActor>(EnemyBP->GeneratedClass->GetDefaultObject());
+		if (CDO)
+		{
+			if (USkeletalMeshComponent* MeshComp = CDO->FindComponentByClass<USkeletalMeshComponent>())
+			{
+				if (SkMesh)
+				{
+					MeshComp->SetSkeletalMesh(SkMesh);
+					UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_DiabloEnemy: set skeletal mesh"));
+				}
+				if (AnimBP && AnimBP->GeneratedClass)
+				{
+					MeshComp->SetAnimInstanceClass(AnimBP->GeneratedClass);
+					UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_DiabloEnemy: set anim class"));
+				}
+			}
+		}
+
+		FKismetEditorUtilities::CompileBlueprint(EnemyBP);
+		SaveAsset(EnemyBP, EnemyBP->GetOutermost(), TEXT("/Game/Blueprints/BP_DiabloEnemy"));
 	}
 }
 

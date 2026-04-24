@@ -26,6 +26,11 @@ void UDiabloEditorToolWidget::ImportWarriorFBX()
 	FDiabloAssetGenerator::ImportWarriorFBX();
 }
 
+void UDiabloEditorToolWidget::ImportAttackSFX()
+{
+	FDiabloAssetGenerator::ImportAttackSFX();
+}
+
 void UDiabloEditorToolWidget::ConfigureBlueprintDefaults()
 {
 	FDiabloAssetGenerator::ConfigureBlueprintDefaults();

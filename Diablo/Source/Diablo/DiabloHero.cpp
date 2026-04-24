@@ -3,6 +3,7 @@
 #include "Camera/CameraComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Components/CapsuleComponent.h"
+#include "Animation/AnimMontage.h"
 
 ADiabloHero::ADiabloHero()
 {
@@ -30,4 +31,27 @@ ADiabloHero::ADiabloHero()
 
 	GetCharacterMovement()->bOrientRotationToMovement = true;
 	GetCharacterMovement()->RotationRate = FRotator(0.f, 540.f, 0.f);
+}
+
+void ADiabloHero::StartAttack()
+{
+	if (bIsAttacking || !AttackMontage)
+	{
+		return;
+	}
+
+	bIsAttacking = true;
+	PlayAnimMontage(AttackMontage);
+
+	if (UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance())
+	{
+		FOnMontageEnded EndDelegate;
+		EndDelegate.BindUObject(this, &ADiabloHero::OnAttackMontageEnded);
+		AnimInstance->Montage_SetEndDelegate(EndDelegate, AttackMontage);
+	}
+}
+
+void ADiabloHero::OnAttackMontageEnded(UAnimMontage* Montage, bool bInterrupted)
+{
+	bIsAttacking = false;
 }

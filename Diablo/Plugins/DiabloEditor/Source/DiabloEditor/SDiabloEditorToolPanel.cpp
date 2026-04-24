@@ -73,6 +73,15 @@ void SDiabloEditorToolPanel::Construct(const FArguments& InArgs)
 			.Padding(0.f, 4.f)
 			[
 				SNew(SButton)
+				.Text(FText::FromString(TEXT("Import Attack SFX")))
+				.OnClicked(this, &SDiabloEditorToolPanel::OnImportAttackSFX)
+			]
+
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(0.f, 4.f)
+			[
+				SNew(SButton)
 				.Text(FText::FromString(TEXT("Configure Blueprint Defaults")))
 				.OnClicked(this, &SDiabloEditorToolPanel::OnConfigureDefaults)
 			]
@@ -107,6 +116,12 @@ FReply SDiabloEditorToolPanel::OnGenerateInput()
 FReply SDiabloEditorToolPanel::OnImportWarrior()
 {
 	FDiabloAssetGenerator::ImportWarriorFBX();
+	return FReply::Handled();
+}
+
+FReply SDiabloEditorToolPanel::OnImportAttackSFX()
+{
+	FDiabloAssetGenerator::ImportAttackSFX();
 	return FReply::Handled();
 }
 
