@@ -48,13 +48,10 @@ void ADiabloPlayerController::OnClickStarted()
 
 	if (ADiabloEnemy* Enemy = Cast<ADiabloEnemy>(HitActor))
 	{
-		if (!Enemy->IsDead())
-		{
-			TargetEnemy = Enemy;
-			UE_LOG(LogDiablo, Display, TEXT("Targeting enemy: %s"), *Enemy->GetName());
-			UAIBlueprintHelperLibrary::SimpleMoveToActor(this, TargetEnemy);
-			return;
-		}
+		TargetEnemy = Enemy;
+		UE_LOG(LogDiablo, Display, TEXT("Targeting enemy: %s"), *Enemy->GetName());
+		UAIBlueprintHelperLibrary::SimpleMoveToActor(this, TargetEnemy);
+		return;
 	}
 
 	TargetEnemy = nullptr;
