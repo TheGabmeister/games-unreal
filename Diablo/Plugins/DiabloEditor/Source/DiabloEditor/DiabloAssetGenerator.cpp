@@ -2,13 +2,11 @@
 #include "DiabloGameMode.h"
 #include "DiabloHero.h"
 #include "DiabloPlayerController.h"
-#include "DiabloAnimInstance.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "FileHelpers.h"
 #include "InputAction.h"
 #include "InputMappingContext.h"
 #include "Kismet2/KismetEditorUtilities.h"
-#include "Kismet2/BlueprintEditorUtils.h"
 #include "Misc/PackageName.h"
 #include "UObject/SavePackage.h"
 #include "Engine/World.h"
@@ -27,33 +25,11 @@
 #include "Model.h"
 #include "Components/BrushComponent.h"
 #include "Animation/AnimBlueprint.h"
-#include "Animation/AnimBlueprintGeneratedClass.h"
-#include "Animation/AnimSequence.h"
-#include "Animation/Skeleton.h"
-#include "AnimGraphNode_StateMachine.h"
-#include "AnimGraphNode_SequencePlayer.h"
-#include "AnimGraphNode_Root.h"
-#include "AnimGraphNode_StateResult.h"
-#include "AnimGraphNode_TransitionResult.h"
-#include "AnimStateNode.h"
-#include "AnimStateEntryNode.h"
-#include "AnimStateTransitionNode.h"
-#include "AnimationGraph.h"
-#include "AnimationGraphSchema.h"
-#include "AnimationStateMachineGraph.h"
-#include "AnimationStateMachineSchema.h"
-#include "AnimationStateGraph.h"
-#include "AnimationTransitionGraph.h"
 #include "AssetImportTask.h"
 #include "AssetToolsModule.h"
 #include "IAssetTools.h"
 #include "Factories/FbxFactory.h"
 #include "Factories/FbxImportUI.h"
-#include "K2Node_CallFunction.h"
-#include "K2Node_VariableGet.h"
-#include "Kismet/KismetMathLibrary.h"
-#include "EdGraphSchema_K2.h"
-#include "ObjectTools.h"
 
 void FDiabloAssetGenerator::GenerateAllAssets()
 {
@@ -61,7 +37,6 @@ void FDiabloAssetGenerator::GenerateAllAssets()
 	GenerateDefaultMap();
 	GenerateInputAssets();
 	ImportWarriorFBX();
-	GenerateAnimBlueprint();
 	ConfigureBlueprintDefaults();
 
 	UE_LOG(LogTemp, Display, TEXT("[DiabloTools] All assets generated."));
@@ -318,306 +293,6 @@ void FDiabloAssetGenerator::ImportWarriorFBX()
 }
 
 // ---------------------------------------------------------------------------
-// AnimBlueprint generation with full state machine
-// ---------------------------------------------------------------------------
-
-UAnimStateNode* FDiabloAssetGenerator::SpawnStateNode(
-	UAnimationStateMachineGraph* Graph, const FString& Name,
-	UAnimSequence* Anim, const FVector2f& Pos)
-{
-	FEdGraphSchemaAction_NewStateNode Action;
-	Action.NodeTemplate = NewObject<UAnimStateNode>(Graph);
-	UAnimStateNode* State = Cast<UAnimStateNode>(
-		Action.PerformAction(Graph, nullptr, Pos, false));
-
-	if (!State) return nullptr;
-
-	State->Rename(*Name);
-
-	if (Anim && State->BoundGraph)
-	{
-		FGraphNodeCreator<UAnimGraphNode_SequencePlayer> SeqCreator(*State->BoundGraph);
-		UAnimGraphNode_SequencePlayer* SeqNode = SeqCreator.CreateNode();
-		SeqNode->SetAnimationAsset(Anim);
-		SeqNode->NodePosX = -300;
-		SeqNode->NodePosY = 0;
-		SeqCreator.Finalize();
-
-		UEdGraphPin* PosePin = State->GetPoseSinkPinInsideState();
-		if (PosePin)
-		{
-			for (UEdGraphPin* Pin : SeqNode->Pins)
-			{
-				if (Pin->Direction == EGPD_Output && Pin->PinType.PinCategory == UEdGraphSchema_K2::PC_Struct)
-				{
-					Pin->MakeLinkTo(PosePin);
-					break;
-				}
-			}
-		}
-	}
-
-	return State;
-}
-
-void FDiabloAssetGenerator::CreateTransitionRule(
-	UAnimationStateMachineGraph* Graph,
-	UAnimStateNode* From, UAnimStateNode* To,
-	bool bGreaterThan, float Threshold, const FVector2f& Pos)
-{
-	FEdGraphSchemaAction_NewStateNode Action;
-	Action.NodeTemplate = NewObject<UAnimStateTransitionNode>(Graph);
-	UAnimStateTransitionNode* Trans = Cast<UAnimStateTransitionNode>(
-		Action.PerformAction(Graph, nullptr, Pos, false));
-
-	if (!Trans) return;
-
-	Trans->CreateConnections(From, To);
-
-	UAnimationTransitionGraph* TransGraph = Cast<UAnimationTransitionGraph>(Trans->BoundGraph);
-	if (!TransGraph) return;
-
-	UAnimGraphNode_TransitionResult* ResultNode = TransGraph->MyResultNode;
-	if (!ResultNode) return;
-
-	UEdGraphPin* CanEnterPin = ResultNode->FindPin(TEXT("bCanEnterTransition"));
-	if (!CanEnterPin) return;
-
-	// Create Speed variable getter
-	FGraphNodeCreator<UK2Node_VariableGet> VarCreator(*TransGraph);
-	UK2Node_VariableGet* SpeedGet = VarCreator.CreateNode();
-	SpeedGet->VariableReference.SetSelfMember(FName(TEXT("Speed")));
-	SpeedGet->NodePosX = -400;
-	SpeedGet->NodePosY = 0;
-	VarCreator.Finalize();
-
-	// Create Greater_DoubleDouble (or LessEqual) comparison
-	const FName FuncName = bGreaterThan
-		? GET_FUNCTION_NAME_CHECKED(UKismetMathLibrary, Greater_DoubleDouble)
-		: GET_FUNCTION_NAME_CHECKED(UKismetMathLibrary, LessEqual_DoubleDouble);
-
-	FGraphNodeCreator<UK2Node_CallFunction> CompCreator(*TransGraph);
-	UK2Node_CallFunction* Compare = CompCreator.CreateNode();
-	Compare->FunctionReference.SetExternalMember(FuncName, UKismetMathLibrary::StaticClass());
-	Compare->NodePosX = -200;
-	Compare->NodePosY = 0;
-	CompCreator.Finalize();
-
-	// Wire Speed output -> comparison A pin
-	UEdGraphPin* SpeedOutPin = SpeedGet->FindPin(TEXT("Speed"), EGPD_Output);
-	UEdGraphPin* APin = Compare->FindPin(TEXT("A"));
-	if (SpeedOutPin && APin)
-	{
-		SpeedOutPin->MakeLinkTo(APin);
-	}
-
-	// Set threshold on B pin
-	UEdGraphPin* BPin = Compare->FindPin(TEXT("B"));
-	if (BPin)
-	{
-		BPin->DefaultValue = FString::SanitizeFloat(Threshold);
-	}
-
-	// Wire comparison result -> bCanEnterTransition
-	UEdGraphPin* ReturnPin = Compare->FindPin(UEdGraphSchema_K2::PN_ReturnValue);
-	if (ReturnPin)
-	{
-		ReturnPin->MakeLinkTo(CanEnterPin);
-	}
-}
-
-void FDiabloAssetGenerator::GenerateAnimBlueprint()
-{
-	const FString ABPPath = TEXT("/Game/Characters/Warrior/ABP_Warrior");
-
-	DeleteExistingAsset(ABPPath);
-
-	// Find the imported skeleton
-	USkeleton* Skeleton = LoadObject<USkeleton>(nullptr, TEXT("/Game/Characters/Warrior/Warrior_Skeleton.Warrior_Skeleton"));
-	if (!Skeleton)
-	{
-		Skeleton = LoadObject<USkeleton>(nullptr, TEXT("/Game/Characters/Warrior/Warrior_Armature_Skeleton.Warrior_Armature_Skeleton"));
-	}
-	if (!Skeleton)
-	{
-		UE_LOG(LogTemp, Error, TEXT("[DiabloTools] Cannot find Warrior skeleton — import FBX first"));
-		return;
-	}
-
-	USkeletalMesh* SkMesh = LoadObject<USkeletalMesh>(nullptr, TEXT("/Game/Characters/Warrior/Warrior.Warrior"));
-	if (!SkMesh)
-	{
-		UE_LOG(LogTemp, Error, TEXT("[DiabloTools] Cannot find Warrior skeletal mesh"));
-		return;
-	}
-
-	// Find animation sequences — names depend on FBX NLA strip/track naming
-	const TCHAR* IdleCandidates[] = {
-		TEXT("/Game/Characters/Warrior/Idle.Idle"),
-		TEXT("/Game/Characters/Warrior/IdleTrack.IdleTrack"),
-		TEXT("/Game/Characters/Warrior/Warrior_Anim_Idle.Warrior_Anim_Idle"),
-		TEXT("/Game/Characters/Warrior/Warrior_Idle.Warrior_Idle"),
-		TEXT("/Game/Characters/Warrior/Warrior_Armature_IdleTrack.Warrior_Armature_IdleTrack"),
-	};
-	const TCHAR* WalkCandidates[] = {
-		TEXT("/Game/Characters/Warrior/Walk.Walk"),
-		TEXT("/Game/Characters/Warrior/WalkTrack.WalkTrack"),
-		TEXT("/Game/Characters/Warrior/Warrior_Anim_Walk.Warrior_Anim_Walk"),
-		TEXT("/Game/Characters/Warrior/Warrior_Walk.Warrior_Walk"),
-		TEXT("/Game/Characters/Warrior/Warrior_Armature_WalkTrack.Warrior_Armature_WalkTrack"),
-	};
-
-	UAnimSequence* IdleAnim = nullptr;
-	for (const TCHAR* Path : IdleCandidates)
-	{
-		IdleAnim = LoadObject<UAnimSequence>(nullptr, Path);
-		if (IdleAnim) break;
-	}
-
-	UAnimSequence* WalkAnim = nullptr;
-	for (const TCHAR* Path : WalkCandidates)
-	{
-		WalkAnim = LoadObject<UAnimSequence>(nullptr, Path);
-		if (WalkAnim) break;
-	}
-
-	if (!IdleAnim || !WalkAnim)
-	{
-		UE_LOG(LogTemp, Error, TEXT("[DiabloTools] Cannot find Idle/Walk animation sequences (Idle=%s Walk=%s)"),
-			IdleAnim ? TEXT("found") : TEXT("MISSING"),
-			WalkAnim ? TEXT("found") : TEXT("MISSING"));
-		return;
-	}
-
-	// Create the AnimBlueprint
-	UPackage* Package = CreatePackage(*ABPPath);
-	Package->FullyLoad();
-
-	UAnimBlueprint* AnimBP = CastChecked<UAnimBlueprint>(
-		FKismetEditorUtilities::CreateBlueprint(
-			UDiabloAnimInstance::StaticClass(),
-			Package,
-			FName(TEXT("ABP_Warrior")),
-			BPTYPE_Normal,
-			UAnimBlueprint::StaticClass(),
-			UBlueprintGeneratedClass::StaticClass()
-		));
-
-	AnimBP->TargetSkeleton = Skeleton;
-	if (UAnimBlueprintGeneratedClass* GenClass = Cast<UAnimBlueprintGeneratedClass>(AnimBP->GeneratedClass))
-	{
-		GenClass->TargetSkeleton = Skeleton;
-	}
-	AnimBP->SetPreviewMesh(SkMesh);
-
-	// Find the main AnimGraph
-	UAnimationGraph* AnimGraph = nullptr;
-	for (UEdGraph* Graph : AnimBP->FunctionGraphs)
-	{
-		if (UAnimationGraph* AG = Cast<UAnimationGraph>(Graph))
-		{
-			AnimGraph = AG;
-			break;
-		}
-	}
-
-	if (!AnimGraph)
-	{
-		UE_LOG(LogTemp, Error, TEXT("[DiabloTools] No AnimGraph found in new AnimBlueprint"));
-		return;
-	}
-
-	// Create state machine node in the AnimGraph
-	FEdGraphSchemaAction_NewStateNode SMAction;
-	SMAction.NodeTemplate = NewObject<UAnimGraphNode_StateMachine>(AnimGraph);
-	UAnimGraphNode_StateMachine* SMNode = Cast<UAnimGraphNode_StateMachine>(
-		SMAction.PerformAction(AnimGraph, nullptr, FVector2f(200.f, 0.f), false));
-
-	if (!SMNode)
-	{
-		UE_LOG(LogTemp, Error, TEXT("[DiabloTools] Failed to create state machine node"));
-		return;
-	}
-
-	UAnimationStateMachineGraph* SMGraph = SMNode->EditorStateMachineGraph;
-	if (!SMGraph)
-	{
-		UE_LOG(LogTemp, Error, TEXT("[DiabloTools] State machine has no graph"));
-		return;
-	}
-
-	// Connect state machine output to AnimGraph result
-	UEdGraphPin* SMOutputPin = SMNode->FindPin(TEXT("Pose"));
-	if (!SMOutputPin)
-	{
-		for (UEdGraphPin* Pin : SMNode->Pins)
-		{
-			if (Pin->Direction == EGPD_Output)
-			{
-				SMOutputPin = Pin;
-				break;
-			}
-		}
-	}
-
-	for (UEdGraphNode* Node : AnimGraph->Nodes)
-	{
-		if (Node->IsA<UAnimGraphNode_Root>())
-		{
-			for (UEdGraphPin* Pin : Node->Pins)
-			{
-				if (Pin->Direction == EGPD_Input && SMOutputPin)
-				{
-					SMOutputPin->MakeLinkTo(Pin);
-					break;
-				}
-			}
-			break;
-		}
-	}
-
-	// Create states
-	UAnimStateNode* IdleState = SpawnStateNode(SMGraph, TEXT("Idle"), IdleAnim, FVector2f(300.f, -50.f));
-	UAnimStateNode* WalkState = SpawnStateNode(SMGraph, TEXT("Walk"), WalkAnim, FVector2f(600.f, -50.f));
-
-	if (!IdleState || !WalkState)
-	{
-		UE_LOG(LogTemp, Error, TEXT("[DiabloTools] Failed to create state nodes"));
-		return;
-	}
-
-	// Connect entry to Idle
-	if (SMGraph->EntryNode)
-	{
-		UEdGraphPin* EntryOut = SMGraph->EntryNode->GetOutputPin();
-		if (EntryOut && IdleState->Pins.Num() > 0)
-		{
-			for (UEdGraphPin* Pin : IdleState->Pins)
-			{
-				if (Pin->Direction == EGPD_Input)
-				{
-					EntryOut->MakeLinkTo(Pin);
-					break;
-				}
-			}
-		}
-	}
-
-	// Create transitions: Idle -> Walk (Speed > 5) and Walk -> Idle (Speed <= 5)
-	CreateTransitionRule(SMGraph, IdleState, WalkState, true, 5.0f, FVector2f(450.f, -100.f));
-	CreateTransitionRule(SMGraph, WalkState, IdleState, false, 5.0f, FVector2f(450.f, 0.f));
-
-	// Compile and save
-	FKismetEditorUtilities::CompileBlueprint(AnimBP);
-
-	if (SaveAsset(AnimBP, Package, ABPPath))
-	{
-		NotifyAssetCreated(AnimBP);
-		UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Created ABP_Warrior with Idle<->Walk state machine"));
-	}
-}
-
-// ---------------------------------------------------------------------------
 // Configure Blueprint CDO defaults
 // ---------------------------------------------------------------------------
 
@@ -714,44 +389,6 @@ void FDiabloAssetGenerator::ConfigureBlueprintDefaults()
 // ---------------------------------------------------------------------------
 // Utility functions
 // ---------------------------------------------------------------------------
-
-void FDiabloAssetGenerator::DeleteExistingAsset(const FString& PackagePath)
-{
-	if (!FPackageName::DoesPackageExist(PackagePath)) return;
-
-	const FString FilePath = FPackageName::LongPackageNameToFilename(
-		PackagePath, FPackageName::GetAssetPackageExtension());
-
-	// Unload the package from memory if loaded
-	if (UPackage* Loaded = FindPackage(nullptr, *PackagePath))
-	{
-		TArray<UObject*> ObjectsInPackage;
-		ForEachObjectWithPackage(Loaded, [&](UObject* Obj)
-		{
-			ObjectsInPackage.Add(Obj);
-			return true;
-		});
-
-		for (UObject* Obj : ObjectsInPackage)
-		{
-			if (!Obj->IsRooted())
-			{
-				Obj->ClearFlags(RF_Public | RF_Standalone);
-				Obj->MarkAsGarbage();
-			}
-		}
-
-		Loaded->ClearFlags(RF_Public | RF_Standalone);
-		Loaded->MarkAsGarbage();
-	}
-
-	// Delete the file on disk
-	if (IFileManager::Get().FileExists(*FilePath))
-	{
-		IFileManager::Get().Delete(*FilePath, false, true, true);
-		UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Deleted existing asset: %s"), *PackagePath);
-	}
-}
 
 bool FDiabloAssetGenerator::CreateBlueprintFromClass(UClass* ParentClass, const FString& AssetPath, const FString& AssetName)
 {

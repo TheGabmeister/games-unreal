@@ -61,29 +61,11 @@ void SDiabloEditorToolPanel::Construct(const FArguments& InArgs)
 
 			+ SVerticalBox::Slot()
 			.AutoHeight()
-			.Padding(0.f, 12.f)
-			[
-				SNew(STextBlock)
-				.Text(FText::FromString(TEXT("Warrior Pipeline")))
-				.Font(FCoreStyle::GetDefaultFontStyle("Bold", 12))
-			]
-
-			+ SVerticalBox::Slot()
-			.AutoHeight()
 			.Padding(0.f, 4.f)
 			[
 				SNew(SButton)
 				.Text(FText::FromString(TEXT("Import Warrior FBX")))
 				.OnClicked(this, &SDiabloEditorToolPanel::OnImportWarrior)
-			]
-
-			+ SVerticalBox::Slot()
-			.AutoHeight()
-			.Padding(0.f, 4.f)
-			[
-				SNew(SButton)
-				.Text(FText::FromString(TEXT("Generate Anim Blueprint")))
-				.OnClicked(this, &SDiabloEditorToolPanel::OnGenerateAnimBP)
 			]
 
 			+ SVerticalBox::Slot()
@@ -125,12 +107,6 @@ FReply SDiabloEditorToolPanel::OnGenerateInput()
 FReply SDiabloEditorToolPanel::OnImportWarrior()
 {
 	FDiabloAssetGenerator::ImportWarriorFBX();
-	return FReply::Handled();
-}
-
-FReply SDiabloEditorToolPanel::OnGenerateAnimBP()
-{
-	FDiabloAssetGenerator::GenerateAnimBlueprint();
 	return FReply::Handled();
 }
 

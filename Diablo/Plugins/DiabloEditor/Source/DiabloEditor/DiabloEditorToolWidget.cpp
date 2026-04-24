@@ -26,11 +26,6 @@ void UDiabloEditorToolWidget::ImportWarriorFBX()
 	FDiabloAssetGenerator::ImportWarriorFBX();
 }
 
-void UDiabloEditorToolWidget::GenerateAnimBlueprint()
-{
-	FDiabloAssetGenerator::GenerateAnimBlueprint();
-}
-
 void UDiabloEditorToolWidget::ConfigureBlueprintDefaults()
 {
 	FDiabloAssetGenerator::ConfigureBlueprintDefaults();

@@ -17,6 +17,5 @@ private:
 	FReply OnGenerateMap();
 	FReply OnGenerateInput();
 	FReply OnImportWarrior();
-	FReply OnGenerateAnimBP();
 	FReply OnConfigureDefaults();
 };

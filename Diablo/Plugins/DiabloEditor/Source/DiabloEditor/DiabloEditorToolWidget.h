@@ -26,8 +26,5 @@ public:
 	void ImportWarriorFBX();
 
 	UFUNCTION(BlueprintCallable, Category = "Diablo Tools")
-	void GenerateAnimBlueprint();
-
-	UFUNCTION(BlueprintCallable, Category = "Diablo Tools")
 	void ConfigureBlueprintDefaults();
 };

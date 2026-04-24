@@ -21,9 +21,6 @@ public class DiabloEditor : ModuleRules
 			"NavigationSystem",
 			"BSPUtils",
 			"ToolMenus",
-			"AnimGraph",
-			"AnimGraphRuntime",
-			"BlueprintGraph",
 			"AssetTools",
 			"Diablo"
 		});
