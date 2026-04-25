@@ -1,4 +1,5 @@
 #include "DungeonStairs.h"
+#include "DiabloHero.h"
 #include "Diablo.h"
 #include "Components/StaticMeshComponent.h"
 #include "Kismet/GameplayStatics.h"
@@ -25,6 +26,11 @@ void ADungeonStairs::OnInteract()
 	{
 		UE_LOG(LogDiablo, Warning, TEXT("DungeonStairs: TargetLevelName is not set"));
 		return;
+	}
+
+	if (ADiabloHero* Hero = Cast<ADiabloHero>(UGameplayStatics::GetPlayerPawn(this, 0)))
+	{
+		Hero->SaveToGameInstance();
 	}
 
 	UE_LOG(LogDiablo, Display, TEXT("Transitioning to level: %s"), *TargetLevelName.ToString());

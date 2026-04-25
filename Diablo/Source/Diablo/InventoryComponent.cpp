@@ -323,3 +323,13 @@ bool UInventoryComponent::SpendGold(int32 Amount)
 	OnInventoryChanged.Broadcast();
 	return true;
 }
+
+void UInventoryComponent::RestoreState(const TArray<FItemInstance>& InGridItems, const TArray<int32>& InOccupancy,
+	const TMap<EEquipSlot, FItemInstance>& InEquipped, int32 InGold)
+{
+	GridItems = InGridItems;
+	OccupancyGrid = InOccupancy;
+	EquippedItems = InEquipped;
+	Gold = InGold;
+	OnInventoryChanged.Broadcast();
+}

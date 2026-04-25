@@ -38,6 +38,13 @@ public:
 
 	FOnInventoryChanged OnInventoryChanged;
 
+	const TArray<FItemInstance>& GetGridItems() const { return GridItems; }
+	const TArray<int32>& GetOccupancyGrid() const { return OccupancyGrid; }
+	const TMap<EEquipSlot, FItemInstance>& GetEquippedItems() const { return EquippedItems; }
+
+	void RestoreState(const TArray<FItemInstance>& InGridItems, const TArray<int32>& InOccupancy,
+		const TMap<EEquipSlot, FItemInstance>& InEquipped, int32 InGold);
+
 private:
 	bool CanPlaceAt(const UItemDefinition* Def, int32 GridX, int32 GridY, int32 IgnoreX = -1, int32 IgnoreY = -1) const;
 	bool FindFreeSlot(const UItemDefinition* Def, int32& OutX, int32& OutY) const;

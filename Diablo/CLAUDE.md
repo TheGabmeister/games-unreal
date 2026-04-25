@@ -141,7 +141,13 @@ IntelliSense errors like `cannot open source file "X.h"` are usually false posit
 - `ADiabloPlayerController` has `TargetStairs` — click stairs → walk into range → `OnInteract()` triggers level transition. Checked in `Tick` before items/enemies.
 - `Lvl_Diablo` (town) has `Stairs_Down` pointing to `Lvl_Cathedral_L1`. Cathedral has `Stairs_Up` pointing back to `Lvl_Diablo`.
 - `GenerateCathedralMap` creates `Lvl_Cathedral_L1` with dim lighting, cube-wall corridors, 3 enemies, a healing potion, NavMesh, and return stairs.
-- **State loss:** hero stats, inventory, and spells are lost on `OpenLevel` — this is the intentional "state loss" problem that M13 solves with `UDiabloGameInstance`.
+### Persistent State (M13)
+
+- `UDiabloGameInstance : UGameInstance` ([DiabloGameInstance.h](Source/Diablo/DiabloGameInstance.h)) — persists across `OpenLevel` transitions. Holds `bHasSavedState` flag, `SavedStats`, `SavedCharLevel`, `SavedCurrentXP`, `SavedUnspentStatPoints`, full inventory state (grid items, occupancy, equipped items, gold), `SavedKnownSpells`, `SavedActiveSpell`.
+- `ADiabloHero::SaveToGameInstance()` — copies all hero + inventory state into the `UDiabloGameInstance`. Called by `ADungeonStairs::OnInteract()` just before `OpenLevel`.
+- `ADiabloHero::BeginPlay()` → `LoadFromGameInstance()` — if `bHasSavedState` is true, restores stats, inventory, and spells from the GameInstance. Called automatically when the hero spawns in a new level.
+- `UInventoryComponent::RestoreState()` — bulk-replaces grid items, occupancy, equipped items, and gold.
+- `GameInstanceClass` set in `DefaultEngine.ini` → `/Script/Diablo.DiabloGameInstance`.
 
 ### Input
 

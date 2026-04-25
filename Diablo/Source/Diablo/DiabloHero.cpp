@@ -1,5 +1,6 @@
 #include "DiabloHero.h"
 #include "DiabloPlayerController.h"
+#include "DiabloGameInstance.h"
 #include "InventoryComponent.h"
 #include "SpellDefinition.h"
 #include "SpellProjectile.h"
@@ -52,6 +53,63 @@ ADiabloHero::ADiabloHero()
 	GetCharacterMovement()->RotationRate = FRotator(0.f, 540.f, 0.f);
 
 	Inventory = CreateDefaultSubobject<UInventoryComponent>(TEXT("Inventory"));
+}
+
+void ADiabloHero::BeginPlay()
+{
+	Super::BeginPlay();
+	LoadFromGameInstance();
+}
+
+void ADiabloHero::SaveToGameInstance()
+{
+	UDiabloGameInstance* GI = Cast<UDiabloGameInstance>(GetGameInstance());
+	if (!GI) return;
+
+	GI->bHasSavedState = true;
+	GI->SavedStats = Stats;
+	GI->SavedCharLevel = CharLevel;
+	GI->SavedCurrentXP = CurrentXP;
+	GI->SavedUnspentStatPoints = UnspentStatPoints;
+
+	if (Inventory)
+	{
+		GI->SavedGridItems = Inventory->GetGridItems();
+		GI->SavedOccupancyGrid = Inventory->GetOccupancyGrid();
+		GI->SavedEquippedItems = Inventory->GetEquippedItems();
+		GI->SavedGold = Inventory->GetGold();
+	}
+
+	GI->SavedKnownSpells = KnownSpells;
+	GI->SavedActiveSpell = ActiveSpell;
+
+	UE_LOG(LogDiablo, Display, TEXT("Hero state saved to GameInstance"));
+}
+
+void ADiabloHero::LoadFromGameInstance()
+{
+	UDiabloGameInstance* GI = Cast<UDiabloGameInstance>(GetGameInstance());
+	if (!GI || !GI->bHasSavedState) return;
+
+	Stats = GI->SavedStats;
+	CharLevel = GI->SavedCharLevel;
+	CurrentXP = GI->SavedCurrentXP;
+	UnspentStatPoints = GI->SavedUnspentStatPoints;
+
+	if (Inventory)
+	{
+		Inventory->RestoreState(GI->SavedGridItems, GI->SavedOccupancyGrid,
+			GI->SavedEquippedItems, GI->SavedGold);
+	}
+
+	KnownSpells = GI->SavedKnownSpells;
+	ActiveSpell = GI->SavedActiveSpell;
+
+	RecomputeDerivedStats();
+	OnStatsChanged.Broadcast();
+
+	UE_LOG(LogDiablo, Display, TEXT("Hero state loaded from GameInstance (Level %d, HP %.0f/%.0f)"),
+		CharLevel, Stats.HP, Stats.MaxHP);
 }
 
 float ADiabloHero::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent,

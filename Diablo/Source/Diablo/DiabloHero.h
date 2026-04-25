@@ -87,6 +87,9 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat")
 	float ArmorFromEquipment = 0.f;
 
+	void SaveToGameInstance();
+	void LoadFromGameInstance();
+
 	int64 GetXPForLevel(int32 Level) const;
 	int64 GetXPForNextLevel() const;
 	float GetXPPercent() const;
@@ -96,6 +99,7 @@ private:
 	bool bIsAttacking = false;
 	float SpellCooldownRemaining = 0.f;
 
+	virtual void BeginPlay() override;
 	void Die();
 	void LevelUp();
 
