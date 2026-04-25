@@ -1,6 +1,7 @@
 #include "DiabloPlayerController.h"
 #include "DiabloHero.h"
 #include "DiabloHUDWidget.h"
+#include "DiabloCharacterPanel.h"
 #include "DiabloEnemy.h"
 #include "DroppedItem.h"
 #include "Diablo.h"
@@ -33,12 +34,16 @@ void ADiabloPlayerController::OnPossess(APawn* InPawn)
 {
 	Super::OnPossess(InPawn);
 
-	if (HUDWidget)
+	if (ADiabloHero* Hero = Cast<ADiabloHero>(InPawn))
 	{
-		if (ADiabloHero* Hero = Cast<ADiabloHero>(InPawn))
+		if (HUDWidget)
 		{
 			HUDWidget->InitForHero(Hero);
 			HUDWidget->SetVisibility(ESlateVisibility::HitTestInvisible);
+		}
+		if (CharPanel)
+		{
+			CharPanel->InitForHero(Hero);
 		}
 	}
 }
@@ -61,6 +66,21 @@ void ADiabloPlayerController::CreateHUD()
 			HUDWidget->InitForHero(Hero);
 		}
 	}
+
+	if (CharPanelClass)
+	{
+		CharPanel = CreateWidget<UDiabloCharacterPanel>(this, CharPanelClass);
+		if (CharPanel)
+		{
+			CharPanel->AddToViewport();
+			CharPanel->SetVisibility(ESlateVisibility::Collapsed);
+
+			if (ADiabloHero* Hero = Cast<ADiabloHero>(GetPawn()))
+			{
+				CharPanel->InitForHero(Hero);
+			}
+		}
+	}
 }
 
 void ADiabloPlayerController::SetupInputComponent()
@@ -70,6 +90,32 @@ void ADiabloPlayerController::SetupInputComponent()
 	if (UEnhancedInputComponent* EIC = Cast<UEnhancedInputComponent>(InputComponent))
 	{
 		EIC->BindAction(ClickAction, ETriggerEvent::Started, this, &ADiabloPlayerController::OnClickStarted);
+		if (CharPanelAction)
+		{
+			EIC->BindAction(CharPanelAction, ETriggerEvent::Started, this, &ADiabloPlayerController::OnToggleCharPanel);
+		}
+	}
+}
+
+void ADiabloPlayerController::OnToggleCharPanel()
+{
+	if (!CharPanel)
+	{
+		return;
+	}
+
+	if (CharPanel->GetVisibility() == ESlateVisibility::Collapsed)
+	{
+		CharPanel->SetVisibility(ESlateVisibility::Visible);
+		bShowMouseCursor = true;
+		FInputModeGameAndUI Mode;
+		Mode.SetWidgetToFocus(CharPanel->TakeWidget());
+		SetInputMode(Mode);
+	}
+	else
+	{
+		CharPanel->SetVisibility(ESlateVisibility::Collapsed);
+		SetInputMode(FInputModeGameOnly());
 	}
 }
 

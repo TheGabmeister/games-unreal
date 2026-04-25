@@ -9,8 +9,8 @@
 
 ADiabloEnemy::ADiabloEnemy()
 {
-	Stats.HP = 100.f;
-	Stats.MaxHP = 100.f;
+	Stats.HP = 30.f;
+	Stats.MaxHP = 30.f;
 
 	GetCapsuleComponent()->InitCapsuleSize(34.f, 90.f);
 	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);

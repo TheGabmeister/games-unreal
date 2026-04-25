@@ -40,6 +40,7 @@
 #include "WidgetBlueprint.h"
 #include "WidgetBlueprintFactory.h"
 #include "DiabloHUDWidget.h"
+#include "DiabloCharacterPanel.h"
 
 void FDiabloAssetGenerator::GenerateAllAssets()
 {
@@ -189,9 +190,10 @@ void FDiabloAssetGenerator::GenerateInputAssets()
 	};
 
 	TArray<FInputActionDef> Actions = {
-		{ TEXT("IA_Click"), EInputActionValueType::Boolean, EKeys::LeftMouseButton },
-		{ TEXT("IA_Move"),  EInputActionValueType::Axis2D,  EKeys::Invalid },
-		{ TEXT("IA_Look"),  EInputActionValueType::Axis2D,  EKeys::Invalid },
+		{ TEXT("IA_Click"),     EInputActionValueType::Boolean, EKeys::LeftMouseButton },
+		{ TEXT("IA_Move"),      EInputActionValueType::Axis2D,  EKeys::Invalid },
+		{ TEXT("IA_Look"),      EInputActionValueType::Axis2D,  EKeys::Invalid },
+		{ TEXT("IA_CharPanel"), EInputActionValueType::Boolean, EKeys::C },
 	};
 
 	const FString InputBasePath = TEXT("/Game/Input/Actions");
@@ -650,6 +652,7 @@ void FDiabloAssetGenerator::SetupController()
 
 	UBlueprint* ControllerBP = LoadObject<UBlueprint>(nullptr, TEXT("/Game/Blueprints/BP_DiabloPlayerController.BP_DiabloPlayerController"));
 	UInputAction* ClickAction = LoadObject<UInputAction>(nullptr, TEXT("/Game/Input/Actions/IA_Click.IA_Click"));
+	UInputAction* CharPanelAction = LoadObject<UInputAction>(nullptr, TEXT("/Game/Input/Actions/IA_CharPanel.IA_CharPanel"));
 	UInputMappingContext* IMC = LoadObject<UInputMappingContext>(nullptr, TEXT("/Game/Input/IMC_Diablo.IMC_Diablo"));
 
 	if (!ControllerBP || !ControllerBP->GeneratedClass)
@@ -668,6 +671,17 @@ void FDiabloAssetGenerator::SetupController()
 				{
 					ObjProp->SetObjectPropertyValue(ObjProp->ContainerPtrToValuePtr<void>(CDO), ClickAction);
 					UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_DiabloPlayerController: set ClickAction"));
+				}
+			}
+		}
+		if (FProperty* CPProp = ControllerBP->GeneratedClass->FindPropertyByName(TEXT("CharPanelAction")))
+		{
+			if (FObjectProperty* ObjProp = CastField<FObjectProperty>(CPProp))
+			{
+				if (CharPanelAction)
+				{
+					ObjProp->SetObjectPropertyValue(ObjProp->ContainerPtrToValuePtr<void>(CDO), CharPanelAction);
+					UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_DiabloPlayerController: set CharPanelAction"));
 				}
 			}
 		}
@@ -822,30 +836,69 @@ void FDiabloAssetGenerator::SetupHUD()
 		UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Created BP_DiabloHUD"));
 	}
 
-	// Set HUDWidgetClass on BP_DiabloPlayerController
+	// --- Create BP_DiabloCharPanel ---
+	const FString CPPath = TEXT("/Game/Blueprints/BP_DiabloCharPanel");
+	const FString CPObjPath = CPPath + TEXT(".BP_DiabloCharPanel");
+
+	UWidgetBlueprint* CharPanelBP = LoadObject<UWidgetBlueprint>(nullptr, *CPObjPath);
+	if (!CharPanelBP)
+	{
+		UPackage* CPPackage = CreatePackage(*CPPath);
+		CPPackage->FullyLoad();
+
+		UWidgetBlueprintFactory* CPFactory = NewObject<UWidgetBlueprintFactory>();
+		CPFactory->ParentClass = UDiabloCharacterPanel::StaticClass();
+
+		CharPanelBP = Cast<UWidgetBlueprint>(CPFactory->FactoryCreateNew(
+			UWidgetBlueprint::StaticClass(),
+			CPPackage,
+			TEXT("BP_DiabloCharPanel"),
+			RF_Public | RF_Standalone,
+			nullptr,
+			GWarn
+		));
+
+		if (CharPanelBP)
+		{
+			FKismetEditorUtilities::CompileBlueprint(CharPanelBP);
+			SaveAsset(CharPanelBP, CPPackage, CPPath);
+			NotifyAssetCreated(CharPanelBP);
+			UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Created BP_DiabloCharPanel"));
+		}
+	}
+
+	// --- Set HUDWidgetClass and CharPanelClass on BP_DiabloPlayerController ---
 	UBlueprint* ControllerBP = LoadObject<UBlueprint>(nullptr,
 		TEXT("/Game/Blueprints/BP_DiabloPlayerController.BP_DiabloPlayerController"));
 
-	if (ControllerBP && ControllerBP->GeneratedClass && HUDBP && HUDBP->GeneratedClass)
+	if (ControllerBP && ControllerBP->GeneratedClass)
 	{
 		FKismetEditorUtilities::CompileBlueprint(ControllerBP);
 
 		UObject* CDO = ControllerBP->GeneratedClass->GetDefaultObject();
-		if (FProperty* Prop = ControllerBP->GeneratedClass->FindPropertyByName(TEXT("HUDWidgetClass")))
+
+		if (HUDBP && HUDBP->GeneratedClass)
 		{
-			if (FObjectProperty* ObjProp = CastField<FObjectProperty>(Prop))
+			if (FProperty* Prop = ControllerBP->GeneratedClass->FindPropertyByName(TEXT("HUDWidgetClass")))
 			{
-				ObjProp->SetObjectPropertyValue(ObjProp->ContainerPtrToValuePtr<void>(CDO), HUDBP->GeneratedClass);
-				UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_DiabloPlayerController: set HUDWidgetClass -> BP_DiabloHUD"));
-			}
-			else
-			{
-				UE_LOG(LogTemp, Error, TEXT("[DiabloTools] HUDWidgetClass property is not FObjectProperty — type: %s"), *Prop->GetClass()->GetName());
+				if (FObjectProperty* ObjProp = CastField<FObjectProperty>(Prop))
+				{
+					ObjProp->SetObjectPropertyValue(ObjProp->ContainerPtrToValuePtr<void>(CDO), HUDBP->GeneratedClass);
+					UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_DiabloPlayerController: set HUDWidgetClass -> BP_DiabloHUD"));
+				}
 			}
 		}
-		else
+
+		if (CharPanelBP && CharPanelBP->GeneratedClass)
 		{
-			UE_LOG(LogTemp, Error, TEXT("[DiabloTools] Could not find HUDWidgetClass property on %s"), *ControllerBP->GeneratedClass->GetName());
+			if (FProperty* Prop = ControllerBP->GeneratedClass->FindPropertyByName(TEXT("CharPanelClass")))
+			{
+				if (FObjectProperty* ObjProp = CastField<FObjectProperty>(Prop))
+				{
+					ObjProp->SetObjectPropertyValue(ObjProp->ContainerPtrToValuePtr<void>(CDO), CharPanelBP->GeneratedClass);
+					UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_DiabloPlayerController: set CharPanelClass -> BP_DiabloCharPanel"));
+				}
+			}
 		}
 
 		SaveAsset(ControllerBP, ControllerBP->GetOutermost(),

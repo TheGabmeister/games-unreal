@@ -29,6 +29,7 @@ public:
 	bool IsDead() const { return !Stats.IsAlive(); }
 	void Heal(float Amount);
 	void AwardXP(int64 Amount);
+	bool SpendStatPoint(FName StatName);
 
 	FOnStatsChanged OnStatsChanged;
 

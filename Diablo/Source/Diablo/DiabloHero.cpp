@@ -54,7 +54,11 @@ float ADiabloHero::TakeDamage(float DamageAmount, FDamageEvent const& DamageEven
 		return 0.f;
 	}
 
-	const float ActualDamage = Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
+	Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
+
+	// AC from Dex reduces incoming damage (D1: AC = Dex/5)
+	const float AC = Stats.Dex / 5.f;
+	const float ActualDamage = FMath::Max(1.f, DamageAmount - AC);
 
 	Stats.HP = FMath::Max(0.f, Stats.HP - ActualDamage);
 	UE_LOG(LogDiablo, Display, TEXT("%s took %.0f damage (HP: %.0f/%.0f)"),
@@ -209,6 +213,45 @@ void ADiabloHero::LevelUp()
 	{
 		UGameplayStatics::PlaySound2D(this, LevelUpSound);
 	}
+}
+
+bool ADiabloHero::SpendStatPoint(FName StatName)
+{
+	if (UnspentStatPoints <= 0)
+	{
+		return false;
+	}
+
+	// Warrior class caps (D1 reference)
+	struct FStatCap { FName Name; float* Value; float Cap; };
+	FStatCap Caps[] = {
+		{ FName("Str"), &Stats.Str, 250.f },
+		{ FName("Mag"), &Stats.Mag, 50.f },
+		{ FName("Dex"), &Stats.Dex, 60.f },
+		{ FName("Vit"), &Stats.Vit, 100.f },
+	};
+
+	for (FStatCap& SC : Caps)
+	{
+		if (SC.Name == StatName)
+		{
+			if (*SC.Value >= SC.Cap)
+			{
+				return false;
+			}
+
+			*SC.Value += 1.f;
+			UnspentStatPoints--;
+			RecomputeDerivedStats();
+			OnStatsChanged.Broadcast();
+
+			UE_LOG(LogDiablo, Display, TEXT("Spent stat point: %s = %.0f (remaining: %d)"),
+				*StatName.ToString(), *SC.Value, UnspentStatPoints);
+			return true;
+		}
+	}
+
+	return false;
 }
 
 void ADiabloHero::RecomputeDerivedStats()
