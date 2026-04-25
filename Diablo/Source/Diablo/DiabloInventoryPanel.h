@@ -28,6 +28,8 @@ protected:
 		UDragDropOperation*& OutOperation) override;
 	virtual bool NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent& InDragDropEvent,
 		UDragDropOperation* InOperation) override;
+	virtual FReply NativeOnMouseMove(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
+	virtual void NativeOnMouseLeave(const FPointerEvent& InMouseEvent) override;
 
 private:
 	void OnInventoryChanged();
@@ -49,6 +51,9 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<UTextBlock> TitleText;
+
+	UPROPERTY()
+	TObjectPtr<UTextBlock> HoverText;
 
 	UPROPERTY()
 	TArray<TObjectPtr<UBorder>> GridCellWidgets;

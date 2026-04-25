@@ -162,6 +162,15 @@ void SDiabloEditorToolPanel::Construct(const FArguments& InArgs)
 				.OnClicked(this, &SDiabloEditorToolPanel::OnSetupInventory)
 			]
 
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(0.f, 4.f)
+			[
+				SNew(SButton)
+				.Text(FText::FromString(TEXT("Setup Drop Material")))
+				.OnClicked(this, &SDiabloEditorToolPanel::OnSetupDropMaterial)
+			]
+
 			// --- World ---
 
 			+ SVerticalBox::Slot()
@@ -281,5 +290,11 @@ FReply SDiabloEditorToolPanel::OnSetupHUD()
 FReply SDiabloEditorToolPanel::OnSetupInventory()
 {
 	FDiabloAssetGenerator::SetupInventory();
+	return FReply::Handled();
+}
+
+FReply SDiabloEditorToolPanel::OnSetupDropMaterial()
+{
+	FDiabloAssetGenerator::SetupDropMaterial();
 	return FReply::Handled();
 }

@@ -1,6 +1,8 @@
 #include "DiabloEnemy.h"
 #include "DiabloHero.h"
 #include "DiabloAIController.h"
+#include "DroppedItem.h"
+#include "ItemDefinition.h"
 #include "Diablo.h"
 #include "Components/CapsuleComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -57,6 +59,7 @@ float ADiabloEnemy::TakeDamage(float DamageAmount, FDamageEvent const& DamageEve
 
 		GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		GetCharacterMovement()->DisableMovement();
+		SpawnDrops();
 
 		float MontageDuration = 0.f;
 		if (DeathMontage)
@@ -99,4 +102,39 @@ void ADiabloEnemy::StartAttack(AActor* Target)
 void ADiabloEnemy::OnAttackMontageEnded(UAnimMontage* Montage, bool bInterrupted)
 {
 	bIsAttacking = false;
+}
+
+void ADiabloEnemy::SpawnDrops()
+{
+	if (DropTable.Num() == 0) return;
+
+	for (const FDropTableEntry& Entry : DropTable)
+	{
+		if (!Entry.ItemDef) continue;
+		if (FMath::FRand() > Entry.DropChance) continue;
+
+		FVector SpawnLoc = GetActorLocation();
+		SpawnLoc.Z += 10.f;
+		// Random offset so multiple drops don't stack
+		SpawnLoc.X += FMath::RandRange(-50.f, 50.f);
+		SpawnLoc.Y += FMath::RandRange(-50.f, 50.f);
+
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+		ADroppedItem* Drop = GetWorld()->SpawnActor<ADroppedItem>(
+			ADroppedItem::StaticClass(), SpawnLoc, FRotator::ZeroRotator, Params);
+
+		if (Drop)
+		{
+			FItemInstance Item;
+			Item.Definition = Entry.ItemDef;
+			Item.CurrentDurability = Entry.ItemDef->MaxDurability;
+			Item.StackCount = 1;
+			Drop->InitFromItem(Item);
+
+			UE_LOG(LogDiablo, Display, TEXT("%s dropped %s"),
+				*GetName(), *Entry.ItemDef->DisplayName.ToString());
+		}
+	}
 }

@@ -59,8 +59,7 @@ float ADiabloHero::TakeDamage(float DamageAmount, FDamageEvent const& DamageEven
 
 	Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
 
-	// AC from Dex reduces incoming damage (D1: AC = Dex/5)
-	const float AC = Stats.Dex / 5.f;
+	const float AC = Stats.Dex / 5.f + ArmorFromEquipment;
 	const float ActualDamage = FMath::Max(1.f, DamageAmount - AC);
 
 	Stats.HP = FMath::Max(0.f, Stats.HP - ActualDamage);
@@ -259,10 +258,51 @@ bool ADiabloHero::SpendStatPoint(FName StatName)
 
 void ADiabloHero::RecomputeDerivedStats()
 {
-	// Warrior HP formula: base 70 + 2×Vit per level above 1
-	// Warrior Mana formula: base 10 + 1×Mag per level above 1
-	Stats.MaxHP = 70.f + (Stats.Vit - 25.f) * 2.f + static_cast<float>(CharLevel - 1) * 2.f;
-	Stats.MaxMana = 10.f + (Stats.Mag - 10.f) * 1.f + static_cast<float>(CharLevel - 1) * 1.f;
+	float BonusStr = 0.f, BonusMag = 0.f, BonusDex = 0.f, BonusVit = 0.f;
+	EquipMinDamage = 0.f;
+	EquipMaxDamage = 0.f;
+	ArmorFromEquipment = 0.f;
+
+	if (Inventory)
+	{
+		for (int32 SlotIdx = static_cast<int32>(EEquipSlot::Head);
+			 SlotIdx <= static_cast<int32>(EEquipSlot::Amulet); ++SlotIdx)
+		{
+			const EEquipSlot Slot = static_cast<EEquipSlot>(SlotIdx);
+			if (!Inventory->HasEquipped(Slot)) continue;
+			const FItemInstance& Equipped = Inventory->GetEquipped(Slot);
+			const UItemDefinition* Def = Equipped.Definition;
+			if (!Def) continue;
+
+			BonusStr += Def->BonusStr;
+			BonusMag += Def->BonusMag;
+			BonusDex += Def->BonusDex;
+			BonusVit += Def->BonusVit;
+
+			switch (Def->Category)
+			{
+			case EItemCategory::Weapon:
+				EquipMinDamage += Def->MinDamage;
+				EquipMaxDamage += Def->MaxDamage;
+				break;
+			case EItemCategory::Armor:
+			case EItemCategory::Shield:
+			case EItemCategory::Helm:
+				ArmorFromEquipment += Def->ArmorClass;
+				break;
+			default:
+				break;
+			}
+		}
+	}
+
+	const float TotalStr = Stats.Str + BonusStr;
+	const float TotalMag = Stats.Mag + BonusMag;
+	const float TotalDex = Stats.Dex + BonusDex;
+	const float TotalVit = Stats.Vit + BonusVit;
+
+	Stats.MaxHP = 70.f + (TotalVit - 25.f) * 2.f + static_cast<float>(CharLevel - 1) * 2.f;
+	Stats.MaxMana = 10.f + (TotalMag - 10.f) * 1.f + static_cast<float>(CharLevel - 1) * 1.f;
 
 	Stats.HP = FMath::Min(Stats.HP, Stats.MaxHP);
 	Stats.Mana = FMath::Min(Stats.Mana, Stats.MaxMana);

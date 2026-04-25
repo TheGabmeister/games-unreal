@@ -6,6 +6,22 @@
 #include "DiabloEnemy.generated.h"
 
 class UAnimMontage;
+class UItemDefinition;
+
+USTRUCT(BlueprintType)
+struct FDropTableEntry
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
+	TObjectPtr<UItemDefinition> ItemDef;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float DropChance = 0.5f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, meta = (ClampMin = "1"))
+	int32 Weight = 1;
+};
 
 UCLASS(Abstract)
 class DIABLO_API ADiabloEnemy : public ACharacter
@@ -40,10 +56,14 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Combat")
 	TObjectPtr<UAnimMontage> DeathMontage;
 
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Loot")
+	TArray<FDropTableEntry> DropTable;
+
 	UPROPERTY()
 	TObjectPtr<AActor> AttackTarget;
 
 private:
+	void SpawnDrops();
 	bool bIsAttacking = false;
 	FTimerHandle DestroyTimerHandle;
 

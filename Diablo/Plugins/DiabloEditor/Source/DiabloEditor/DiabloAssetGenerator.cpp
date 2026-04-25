@@ -37,6 +37,7 @@
 #include "Sound/SoundWave.h"
 #include "Materials/Material.h"
 #include "Materials/MaterialExpressionTextureSample.h"
+#include "Materials/MaterialExpressionTextureSampleParameter2D.h"
 #include "WidgetBlueprint.h"
 #include "WidgetBlueprintFactory.h"
 #include "DiabloHUDWidget.h"
@@ -65,6 +66,7 @@ void FDiabloAssetGenerator::SetupAllBlueprints()
 	SetupPotion();
 	SetupHUD();
 	SetupInventory();
+	SetupDropMaterial();
 }
 
 void FDiabloAssetGenerator::GenerateDefaultMap()
@@ -865,6 +867,48 @@ void FDiabloAssetGenerator::SetupEnemy()
 		}
 	}
 
+	// Configure drop table
+	ADiabloEnemy* EnemyDefaults = Cast<ADiabloEnemy>(EnemyCDO);
+	if (EnemyDefaults)
+	{
+		EnemyDefaults->DropTable.Empty();
+
+		UItemDefinition* PotionDef = LoadObject<UItemDefinition>(nullptr,
+			TEXT("/Game/Items/Definitions/ID_Healing_Potion.ID_Healing_Potion"));
+		UItemDefinition* SwordDef = LoadObject<UItemDefinition>(nullptr,
+			TEXT("/Game/Items/Definitions/ID_Short_Sword.ID_Short_Sword"));
+		UItemDefinition* RingDef = LoadObject<UItemDefinition>(nullptr,
+			TEXT("/Game/Items/Definitions/ID_Ring_of_Strength.ID_Ring_of_Strength"));
+
+		if (PotionDef)
+		{
+			FDropTableEntry E;
+			E.ItemDef = PotionDef;
+			E.DropChance = 0.5f;
+			E.Weight = 3;
+			EnemyDefaults->DropTable.Add(E);
+		}
+		if (SwordDef)
+		{
+			FDropTableEntry E;
+			E.ItemDef = SwordDef;
+			E.DropChance = 0.25f;
+			E.Weight = 1;
+			EnemyDefaults->DropTable.Add(E);
+		}
+		if (RingDef)
+		{
+			FDropTableEntry E;
+			E.ItemDef = RingDef;
+			E.DropChance = 0.15f;
+			E.Weight = 1;
+			EnemyDefaults->DropTable.Add(E);
+		}
+
+		UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_DiabloEnemy: set DropTable (%d entries)"),
+			EnemyDefaults->DropTable.Num());
+	}
+
 	FKismetEditorUtilities::CompileBlueprint(EnemyBP);
 	SaveAsset(EnemyBP, EnemyBP->GetOutermost(), TEXT("/Game/Blueprints/BP_DiabloEnemy"));
 }
@@ -1019,6 +1063,46 @@ void FDiabloAssetGenerator::SetupHUD()
 		SaveAsset(ControllerBP, ControllerBP->GetOutermost(),
 			TEXT("/Game/Blueprints/BP_DiabloPlayerController"));
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Drop material (unlit translucent with texture parameter)
+// ---------------------------------------------------------------------------
+
+void FDiabloAssetGenerator::SetupDropMaterial()
+{
+	const FString MatPath = TEXT("/Game/Items/M_ItemDrop");
+	const FString MatObjPath = MatPath + TEXT(".M_ItemDrop");
+
+	if (LoadObject<UMaterial>(nullptr, *MatObjPath))
+	{
+		UE_LOG(LogTemp, Display, TEXT("[DiabloTools] M_ItemDrop already exists"));
+		return;
+	}
+
+	UPackage* MatPkg = CreatePackage(*MatPath);
+	MatPkg->FullyLoad();
+	UMaterial* Mat = NewObject<UMaterial>(MatPkg, TEXT("M_ItemDrop"), RF_Public | RF_Standalone);
+	Mat->MaterialDomain = EMaterialDomain::MD_Surface;
+	Mat->BlendMode = EBlendMode::BLEND_Translucent;
+	Mat->SetShadingModel(EMaterialShadingModel::MSM_Unlit);
+	Mat->TwoSided = true;
+
+	UMaterialExpressionTextureSampleParameter2D* TexParam =
+		NewObject<UMaterialExpressionTextureSampleParameter2D>(Mat);
+	TexParam->ParameterName = TEXT("Texture");
+	TexParam->SamplerType = SAMPLERTYPE_Color;
+	Mat->GetEditorOnlyData()->ExpressionCollection.Expressions.Add(TexParam);
+
+	Mat->GetEditorOnlyData()->EmissiveColor.Connect(0, TexParam);
+	Mat->GetEditorOnlyData()->Opacity.Connect(4, TexParam);
+
+	Mat->PreEditChange(nullptr);
+	Mat->PostEditChange();
+
+	SaveAsset(Mat, MatPkg, MatPath);
+	NotifyAssetCreated(Mat);
+	UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Created M_ItemDrop material with texture parameter"));
 }
 
 // ---------------------------------------------------------------------------

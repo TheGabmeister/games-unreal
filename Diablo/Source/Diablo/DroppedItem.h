@@ -8,7 +8,7 @@
 class UStaticMeshComponent;
 class ADiabloHero;
 
-UCLASS(Abstract)
+UCLASS()
 class DIABLO_API ADroppedItem : public AActor
 {
 	GENERATED_BODY()
@@ -17,6 +17,7 @@ public:
 	ADroppedItem();
 
 	void OnPickedUp(ADiabloHero* Hero);
+	void InitFromItem(const FItemInstance& InItem);
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Item")
 	float HealAmount = 50.f;

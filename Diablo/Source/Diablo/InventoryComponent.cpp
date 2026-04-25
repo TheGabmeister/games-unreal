@@ -247,6 +247,12 @@ bool UInventoryComponent::Equip(int32 GridX, int32 GridY)
 		TryAddItem(PreviouslyEquipped);
 	}
 
+	if (ADiabloHero* Hero = Cast<ADiabloHero>(GetOwner()))
+	{
+		Hero->RecomputeDerivedStats();
+		Hero->OnStatsChanged.Broadcast();
+	}
+
 	OnInventoryChanged.Broadcast();
 	UE_LOG(LogDiablo, Display, TEXT("Equipped %s in slot %d"),
 		*ToEquip.Definition->DisplayName.ToString(), static_cast<int32>(Slot));
@@ -268,6 +274,12 @@ bool UInventoryComponent::Unequip(EEquipSlot Slot)
 	}
 
 	EquippedItems.Remove(Slot);
+
+	if (ADiabloHero* Hero = Cast<ADiabloHero>(GetOwner()))
+	{
+		Hero->RecomputeDerivedStats();
+		Hero->OnStatsChanged.Broadcast();
+	}
 
 	OnInventoryChanged.Broadcast();
 	UE_LOG(LogDiablo, Display, TEXT("Unequipped %s from slot %d"),

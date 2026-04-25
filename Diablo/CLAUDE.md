@@ -69,7 +69,7 @@ IntelliSense errors like `cannot open source file "X.h"` are usually false posit
 - `FDiabloStats` ([DiabloStats.h](Source/Diablo/DiabloStats.h)) — USTRUCT with HP/MaxHP/Mana/MaxMana/Str/Mag/Dex/Vit. Used by both `ADiabloHero` and `ADiabloEnemy`. All fields active as of M6.
 - **Hero death:** `TakeDamage` → `Die()` → disable movement, play `DeathMontage` → controller `OnHeroDeath()` → `DisableInput`, 2s `FTimerHandle` → `UnPossess` + `Destroy` dead pawn → `AGameModeBase::RestartPlayer` spawns fresh hero at `PlayerStart` with full HP → `EnableInput`.
 - **Enemy death:** `TakeDamage` → HP <= 0 → disable collision + movement, play `DeathMontage` → delayed `Destroy()` after montage + 2s corpse linger.
-- `ADroppedItem : AActor` ([DroppedItem.h](Source/Diablo/DroppedItem.h)) (Abstract) — `UStaticMeshComponent` root (plane mesh with sprite material, rotated to face isometric camera) that blocks `ECC_Visibility` for cursor detection. `HealAmount = 50`. `OnPickedUp(Hero)` heals and destroys. BP subclass `BP_HealingPotion` uses `T_HealingPotion` sprite from SVG pipeline.
+- `ADroppedItem : AActor` ([DroppedItem.h](Source/Diablo/DroppedItem.h)) — `UStaticMeshComponent` root (plane mesh with sprite material, rotated to face isometric camera) that blocks `ECC_Visibility` for cursor detection. `HealAmount = 50`. `OnPickedUp(Hero)` adds `ItemData` to inventory if valid, else falls back to heal-and-destroy. `InitFromItem(FItemInstance)` configures mesh + dynamic material for runtime-spawned drops. BP subclass `BP_HealingPotion` uses `T_HealingPotion` sprite from SVG pipeline.
 
 ### HUD (M5)
 
@@ -98,13 +98,30 @@ IntelliSense errors like `cannot open source file "X.h"` are usually false posit
 - `FItemInstance` ([ItemInstance.h](Source/Diablo/ItemInstance.h)) — `UItemDefinition*` + `TArray<FItemAffix>` (empty for now, M17) + current durability + stack count.
 - `EEquipSlot` — Head, Chest, LeftHand, RightHand, LeftRing, RightRing, Amulet (7 slots).
 - `EItemCategory` — Misc, Weapon, Armor, Shield, Helm, Ring, Amulet, Potion, Scroll, Gold.
-- `UInventoryComponent : UActorComponent` ([InventoryComponent.h](Source/Diablo/InventoryComponent.h)) — 10×4 grid, 7 equipment slots (`TMap<EEquipSlot, FItemInstance>`), gold. Occupancy grid tracks multi-cell items. API: `TryAddItem`, `TryAddItemAt`, `MoveItem`, `RemoveItemAt`, `Equip`, `Unequip`, `AddGold`, `SpendGold`. Broadcasts `FOnInventoryChanged` delegate.
+- `UInventoryComponent : UActorComponent` ([InventoryComponent.h](Source/Diablo/InventoryComponent.h)) — 10×4 grid, 7 equipment slots (`TMap<EEquipSlot, FItemInstance>`), gold. Occupancy grid tracks multi-cell items. API: `TryAddItem`, `TryAddItemAt`, `MoveItem`, `RemoveItemAt`, `Equip`, `Unequip`, `UseItem`, `AddGold`, `SpendGold`. `UseItem` consumes potions (heal + decrement stack) or falls back to `Equip` for equippable items. Broadcasts `FOnInventoryChanged` delegate.
 - `ADiabloHero` has `UInventoryComponent* Inventory` (created in constructor via `CreateDefaultSubobject`).
 - `ADroppedItem` has `FItemInstance ItemData` — if valid, `OnPickedUp` adds to inventory via `TryAddItem`; if invalid, falls back to legacy `HealAmount` heal-and-destroy.
-- `UDiabloInventoryPanel : UUserWidget` ([DiabloInventoryPanel.h](Source/Diablo/DiabloInventoryPanel.h)) (Abstract) — C++ widget tree (equipment slots row, 10×4 grid, gold display). Toggle via **I key** (`IA_Inventory`). Drag-drop via panel-level `NativeOnMouseButtonDown`/`NativeOnDragDetected`/`NativeOnDrop` with `UInventoryDragDrop` operation. Right-click equips (grid) or unequips (equipment slot). Event-driven via `FOnInventoryChanged`.
+- `UDiabloInventoryPanel : UUserWidget` ([DiabloInventoryPanel.h](Source/Diablo/DiabloInventoryPanel.h)) (Abstract) — C++ widget tree (hover item name, equipment slots row, 10×4 grid, gold display). Toggle via **I key** (`IA_Inventory`). Drag-drop via panel-level `NativeOnMouseButtonDown`/`NativeOnDragDetected`/`NativeOnDrop` with `UInventoryDragDrop` operation. Right-click uses items (potions consume, equippables equip) or unequips (equipment slot). `NativeOnMouseMove` updates gold hover text with item name. Hit-testing uses `GetTickSpaceGeometry().AbsoluteToLocal()` (not `GetPaintSpaceGeometry` — coordinate space mismatch). Event-driven via `FOnInventoryChanged`.
 - `ADiabloPlayerController` owns the inventory panel: `InventoryPanelClass` UPROPERTY (set via `SetupHUD` → `BP_DiabloInventoryPanel`), `InventoryAction` (set via `SetupController` → `IA_Inventory`). Toggle in `OnToggleInventory()`.
 - Icon sprites generated via SVG pipeline (`Tools/svg/`) → Inkscape CLI conversion → imported via `ImportItemIcons`.
 - `SetupInventory` creates starter `UItemDefinition` data assets (Short Sword, Buckler, Skull Cap, Rags, Ring of Strength, Healing Potion) with icon texture references.
+
+### Loot Drops (M8)
+
+- `FDropTableEntry` struct ([DiabloEnemy.h](Source/Diablo/DiabloEnemy.h)) — `UItemDefinition*` + `DropChance` (0–1 roll) + `Weight` (for future weighted selection).
+- `ADiabloEnemy` has `TArray<FDropTableEntry> DropTable`. On death, `SpawnDrops()` iterates entries, rolls `DropChance`, and spawns `ADroppedItem` at the enemy's location with a random XY offset.
+- `ADroppedItem::InitFromItem(FItemInstance)` — sets `ItemData` and configures the mesh component (plane mesh with `M_ItemDrop` dynamic material instance using the item's icon texture).
+- `M_ItemDrop` — unlit translucent material with a `TextureSampleParameter2D` named "Texture", created by `SetupDropMaterial`. Used at runtime via `UMaterialInstanceDynamic::SetTextureParameterValue`.
+- `ADroppedItem` is no longer `Abstract` — can be spawned directly at runtime for loot drops. `BP_HealingPotion` still exists as a hand-placed subclass.
+- `SetupEnemy` configures `BP_DiabloEnemy` drop table: Healing Potion (50%), Short Sword (25%), Ring of Strength (15%).
+
+### Equipment Stats (M9)
+
+- `Equip` / `Unequip` in `UInventoryComponent` call `ADiabloHero::RecomputeDerivedStats()` + broadcast `OnStatsChanged` so the HUD updates immediately.
+- `RecomputeDerivedStats()` iterates all equipped `FItemInstance`s, sums `BonusStr/Mag/Dex/Vit` (applied to MaxHP/MaxMana formulae), and populates `EquipMinDamage`/`EquipMaxDamage`/`ArmorFromEquipment` via `switch` on `EItemCategory` (Weapon → damage range, Armor/Shield/Helm → AC, Ring/Amulet → flat bonuses only).
+- **Hero attack damage:** `UAnimNotify_Attack` checks `EquipMaxDamage > 0` — if a weapon is equipped, rolls `FRandRange(EquipMinDamage, EquipMaxDamage) + Str/5`; unarmed falls back to the notify's flat `Damage + Str/5`.
+- **Hero AC:** `TakeDamage` uses `Dex/5 + ArmorFromEquipment` to reduce incoming damage (min 1).
+- No polymorphic dispatch — item categories are an enum, stat contributions are fields on `UItemDefinition`.
 
 ### Input
 
@@ -136,10 +153,11 @@ IntelliSense errors like `cannot open source file "X.h"` are usually false posit
 | `SetupHero` | `BP_DiabloHero` | Skeletal mesh, anim class, attack montage, death montage, LevelUpSound |
 | `SetupController` | `BP_DiabloPlayerController` | ClickAction, CharPanelAction, InventoryAction, DefaultMappingContext |
 | `SetupGameMode` | `BP_DiabloGameMode` | DefaultPawnClass, PlayerControllerClass |
-| `SetupEnemy` | `BP_DiabloEnemy` | Skeletal mesh, anim class, attack montage, death montage |
+| `SetupEnemy` | `BP_DiabloEnemy` | Skeletal mesh, anim class, attack montage, death montage, drop table |
 | `SetupPotion` | `BP_HealingPotion` | Plane mesh with sprite material (upright, facing isometric camera) |
 | `SetupHUD` | `BP_DiabloHUD` + `BP_DiabloCharPanel` + `BP_DiabloInventoryPanel` (WidgetBlueprints) | Creates WBPs parented to C++ widget classes, sets `HUDWidgetClass`, `CharPanelClass`, `InventoryPanelClass` on `BP_DiabloPlayerController` |
 | `SetupInventory` | Starter `UItemDefinition` data assets | Creates ID_Short_Sword, ID_Buckler, ID_Skull_Cap, ID_Rags, ID_Ring_of_Strength, ID_Healing_Potion under `/Game/Items/Definitions/` |
+| `SetupDropMaterial` | `M_ItemDrop` material | Unlit translucent material with `TextureSampleParameter2D` for runtime dropped item sprites |
 | `SetupAllBlueprints` | All of the above | All of the above |
 
 **World:**

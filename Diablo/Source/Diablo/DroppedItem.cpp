@@ -3,6 +3,8 @@
 #include "InventoryComponent.h"
 #include "Diablo.h"
 #include "Components/StaticMeshComponent.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "Engine/StaticMesh.h"
 
 ADroppedItem::ADroppedItem()
 {
@@ -10,6 +12,26 @@ ADroppedItem::ADroppedItem()
 	RootComponent = MeshComponent;
 
 	MeshComponent->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
+}
+
+void ADroppedItem::InitFromItem(const FItemInstance& InItem)
+{
+	ItemData = InItem;
+
+	UStaticMesh* PlaneMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Plane.Plane"));
+	if (!PlaneMesh || !MeshComponent) return;
+
+	MeshComponent->SetStaticMesh(PlaneMesh);
+	MeshComponent->SetRelativeScale3D(FVector(0.5f, 0.5f, 0.5f));
+	MeshComponent->SetRelativeRotation(FRotator(90.f, 45.f, 0.f));
+
+	UMaterial* DropMat = LoadObject<UMaterial>(nullptr, TEXT("/Game/Items/M_ItemDrop.M_ItemDrop"));
+	if (DropMat && ItemData.Definition && ItemData.Definition->Icon)
+	{
+		UMaterialInstanceDynamic* DynMat = UMaterialInstanceDynamic::Create(DropMat, this);
+		DynMat->SetTextureParameterValue(TEXT("Texture"), ItemData.Definition->Icon);
+		MeshComponent->SetMaterial(0, DynMat);
+	}
 }
 
 void ADroppedItem::OnPickedUp(ADiabloHero* Hero)

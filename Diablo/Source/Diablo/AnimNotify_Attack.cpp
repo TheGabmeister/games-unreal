@@ -62,10 +62,18 @@ void UAnimNotify_Attack::Notify(USkeletalMeshComponent* MeshComp, UAnimSequenceB
 				return;
 			}
 
-			// D1 Warrior damage: Str-based, simplified as base + Str/5
-			const float FinalDamage = Damage + Hero->Stats.Str / 5.f;
-			UE_LOG(LogDiablo, Display, TEXT("HIT (roll %.0f <= toHit %.0f%%) damage %.0f"),
-				Roll, ToHit, FinalDamage);
+			float BaseDamage;
+			if (Hero->EquipMaxDamage > 0.f)
+			{
+				BaseDamage = FMath::FRandRange(Hero->EquipMinDamage, Hero->EquipMaxDamage);
+			}
+			else
+			{
+				BaseDamage = Damage;
+			}
+			const float FinalDamage = BaseDamage + Hero->Stats.Str / 5.f;
+			UE_LOG(LogDiablo, Display, TEXT("HIT (roll %.0f <= toHit %.0f%%) damage %.0f (base %.0f + Str/5)"),
+				Roll, ToHit, FinalDamage, BaseDamage);
 
 			FDamageEvent DamageEvent;
 			Target->TakeDamage(FinalDamage, DamageEvent, Instigator, Owner);

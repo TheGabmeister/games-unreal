@@ -67,6 +67,15 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Inventory")
 	TObjectPtr<UInventoryComponent> Inventory;
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat")
+	float EquipMinDamage = 0.f;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat")
+	float EquipMaxDamage = 0.f;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat")
+	float ArmorFromEquipment = 0.f;
+
 	int64 GetXPForLevel(int32 Level) const;
 	int64 GetXPForNextLevel() const;
 	float GetXPPercent() const;

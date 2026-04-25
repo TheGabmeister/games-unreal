@@ -222,6 +222,46 @@ bool UDiabloInventoryPanel::NativeOnDrop(const FGeometry& InGeometry, const FDra
 	return false;
 }
 
+FReply UDiabloInventoryPanel::NativeOnMouseMove(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
+{
+	if (!CachedInventory || !HoverText) return FReply::Unhandled();
+
+	const FVector2D ScreenPos = InMouseEvent.GetScreenSpacePosition();
+	FString ItemName;
+
+	int32 GridX, GridY;
+	if (HitTestGrid(InGeometry, ScreenPos, GridX, GridY))
+	{
+		if (const FItemInstance* Item = CachedInventory->GetItemAt(GridX, GridY))
+		{
+			ItemName = Item->Definition->DisplayName.ToString();
+		}
+	}
+
+	EEquipSlot HitSlot;
+	if (ItemName.IsEmpty() && HitTestEquip(InGeometry, ScreenPos, HitSlot))
+	{
+		const FItemInstance& Equipped = CachedInventory->GetEquipped(HitSlot);
+		if (Equipped.IsValid())
+		{
+			ItemName = Equipped.Definition->DisplayName.ToString();
+		}
+	}
+
+	HoverText->SetText(FText::FromString(ItemName));
+
+	return FReply::Unhandled();
+}
+
+void UDiabloInventoryPanel::NativeOnMouseLeave(const FPointerEvent& InMouseEvent)
+{
+	Super::NativeOnMouseLeave(InMouseEvent);
+	if (HoverText)
+	{
+		HoverText->SetText(FText::GetEmpty());
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Refresh
 // ---------------------------------------------------------------------------
@@ -359,7 +399,13 @@ TSharedRef<SWidget> UDiabloInventoryPanel::RebuildWidget()
 		// Title
 		TitleText = MakeInvLabel(WidgetTree, TEXT("InvTitle"), TEXT("Inventory"), 14);
 		TitleText->SetJustification(ETextJustify::Center);
-		VBox->AddChildToVerticalBox(TitleText)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
+		VBox->AddChildToVerticalBox(TitleText)->SetPadding(FMargin(0.f, 0.f, 0.f, 2.f));
+
+		// Hover item name
+		HoverText = MakeInvLabel(WidgetTree, TEXT("HoverText"), TEXT(""), 11);
+		HoverText->SetJustification(ETextJustify::Center);
+		HoverText->SetColorAndOpacity(FSlateColor(FLinearColor(1.f, 0.85f, 0.3f, 1.f)));
+		VBox->AddChildToVerticalBox(HoverText)->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
 
 		// Equipment slots row
 		{
