@@ -50,6 +50,7 @@
 #include "Fireball.h"
 #include "LightningBolt.h"
 #include "DiabloSpellbookPanel.h"
+#include "DiabloMainMenu.h"
 #include "DungeonStairs.h"
 #include "NavigationSystem.h"
 
@@ -387,6 +388,7 @@ void FDiabloAssetGenerator::GenerateInputAssets()
 		{ TEXT("IA_Inventory"), EInputActionValueType::Boolean, EKeys::I },
 		{ TEXT("IA_Cast"),      EInputActionValueType::Boolean, EKeys::RightMouseButton },
 		{ TEXT("IA_Spellbook"), EInputActionValueType::Boolean, EKeys::S },
+		{ TEXT("IA_Menu"),      EInputActionValueType::Boolean, EKeys::Escape },
 	};
 
 	const FString InputBasePath = TEXT("/Game/Input/Actions");
@@ -937,6 +939,7 @@ void FDiabloAssetGenerator::SetupController()
 	UInputAction* InventoryAction = LoadObject<UInputAction>(nullptr, TEXT("/Game/Input/Actions/IA_Inventory.IA_Inventory"));
 	UInputAction* CastAction = LoadObject<UInputAction>(nullptr, TEXT("/Game/Input/Actions/IA_Cast.IA_Cast"));
 	UInputAction* SpellbookAction = LoadObject<UInputAction>(nullptr, TEXT("/Game/Input/Actions/IA_Spellbook.IA_Spellbook"));
+	UInputAction* MenuAction = LoadObject<UInputAction>(nullptr, TEXT("/Game/Input/Actions/IA_Menu.IA_Menu"));
 	UInputMappingContext* IMC = LoadObject<UInputMappingContext>(nullptr, TEXT("/Game/Input/IMC_Diablo.IMC_Diablo"));
 
 	if (!ControllerBP || !ControllerBP->GeneratedClass)
@@ -999,6 +1002,17 @@ void FDiabloAssetGenerator::SetupController()
 				{
 					ObjProp->SetObjectPropertyValue(ObjProp->ContainerPtrToValuePtr<void>(CDO), SpellbookAction);
 					UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_DiabloPlayerController: set SpellbookAction"));
+				}
+			}
+		}
+		if (FProperty* MenuProp = ControllerBP->GeneratedClass->FindPropertyByName(TEXT("MenuAction")))
+		{
+			if (FObjectProperty* ObjProp = CastField<FObjectProperty>(MenuProp))
+			{
+				if (MenuAction)
+				{
+					ObjProp->SetObjectPropertyValue(ObjProp->ContainerPtrToValuePtr<void>(CDO), MenuAction);
+					UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_DiabloPlayerController: set MenuAction"));
 				}
 			}
 		}
@@ -1288,7 +1302,38 @@ void FDiabloAssetGenerator::SetupHUD()
 		}
 	}
 
-	// --- Set HUDWidgetClass, CharPanelClass, InventoryPanelClass, SpellbookPanelClass on BP_DiabloPlayerController ---
+	// --- Create BP_DiabloMainMenu ---
+	const FString MMPath = TEXT("/Game/Blueprints/BP_DiabloMainMenu");
+	const FString MMObjPath = MMPath + TEXT(".BP_DiabloMainMenu");
+
+	UWidgetBlueprint* MainMenuBP = LoadObject<UWidgetBlueprint>(nullptr, *MMObjPath);
+	if (!MainMenuBP)
+	{
+		UPackage* MMPackage = CreatePackage(*MMPath);
+		MMPackage->FullyLoad();
+
+		UWidgetBlueprintFactory* MMFactory = NewObject<UWidgetBlueprintFactory>();
+		MMFactory->ParentClass = UDiabloMainMenu::StaticClass();
+
+		MainMenuBP = Cast<UWidgetBlueprint>(MMFactory->FactoryCreateNew(
+			UWidgetBlueprint::StaticClass(),
+			MMPackage,
+			TEXT("BP_DiabloMainMenu"),
+			RF_Public | RF_Standalone,
+			nullptr,
+			GWarn
+		));
+
+		if (MainMenuBP)
+		{
+			FKismetEditorUtilities::CompileBlueprint(MainMenuBP);
+			SaveAsset(MainMenuBP, MMPackage, MMPath);
+			NotifyAssetCreated(MainMenuBP);
+			UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Created BP_DiabloMainMenu"));
+		}
+	}
+
+	// --- Set HUDWidgetClass, CharPanelClass, InventoryPanelClass, SpellbookPanelClass, MainMenuClass on BP_DiabloPlayerController ---
 	UBlueprint* ControllerBP = LoadObject<UBlueprint>(nullptr,
 		TEXT("/Game/Blueprints/BP_DiabloPlayerController.BP_DiabloPlayerController"));
 
@@ -1342,6 +1387,18 @@ void FDiabloAssetGenerator::SetupHUD()
 				{
 					ObjProp->SetObjectPropertyValue(ObjProp->ContainerPtrToValuePtr<void>(CDO), SpellbookBP->GeneratedClass);
 					UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_DiabloPlayerController: set SpellbookPanelClass -> BP_DiabloSpellbookPanel"));
+				}
+			}
+		}
+
+		if (MainMenuBP && MainMenuBP->GeneratedClass)
+		{
+			if (FProperty* Prop = ControllerBP->GeneratedClass->FindPropertyByName(TEXT("MainMenuClass")))
+			{
+				if (FObjectProperty* ObjProp = CastField<FObjectProperty>(Prop))
+				{
+					ObjProp->SetObjectPropertyValue(ObjProp->ContainerPtrToValuePtr<void>(CDO), MainMenuBP->GeneratedClass);
+					UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_DiabloPlayerController: set MainMenuClass -> BP_DiabloMainMenu"));
 				}
 			}
 		}

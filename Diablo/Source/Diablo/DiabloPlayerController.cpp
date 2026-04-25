@@ -4,6 +4,9 @@
 #include "DiabloCharacterPanel.h"
 #include "DiabloInventoryPanel.h"
 #include "DiabloSpellbookPanel.h"
+#include "DiabloMainMenu.h"
+#include "DiabloSaveGame.h"
+#include "DiabloGameInstance.h"
 #include "InventoryComponent.h"
 #include "DiabloEnemy.h"
 #include "DroppedItem.h"
@@ -15,6 +18,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/GameModeBase.h"
 #include "Camera/PlayerCameraManager.h"
+#include "Kismet/GameplayStatics.h"
 
 ADiabloPlayerController::ADiabloPlayerController()
 {
@@ -123,6 +127,17 @@ void ADiabloPlayerController::CreateHUD()
 			}
 		}
 	}
+
+	if (MainMenuClass)
+	{
+		MainMenu = CreateWidget<UDiabloMainMenu>(this, MainMenuClass);
+		if (MainMenu)
+		{
+			MainMenu->AddToViewport(100);
+			MainMenu->SetVisibility(ESlateVisibility::Collapsed);
+			MainMenu->Init(this);
+		}
+	}
 }
 
 void ADiabloPlayerController::SetupInputComponent()
@@ -147,6 +162,10 @@ void ADiabloPlayerController::SetupInputComponent()
 		if (SpellbookAction)
 		{
 			EIC->BindAction(SpellbookAction, ETriggerEvent::Started, this, &ADiabloPlayerController::OnToggleSpellbook);
+		}
+		if (MenuAction)
+		{
+			EIC->BindAction(MenuAction, ETriggerEvent::Started, this, &ADiabloPlayerController::OnToggleMainMenu);
 		}
 	}
 }
@@ -326,6 +345,106 @@ void ADiabloPlayerController::OnRespawnTimerExpired()
 	}
 
 	EnableInput(this);
+}
+
+void ADiabloPlayerController::OnToggleMainMenu()
+{
+	if (!MainMenu)
+	{
+		return;
+	}
+
+	if (MainMenu->GetVisibility() == ESlateVisibility::Visible)
+	{
+		CloseMainMenu();
+	}
+	else
+	{
+		if (CharPanel && CharPanel->GetVisibility() != ESlateVisibility::Collapsed)
+		{
+			CharPanel->SetVisibility(ESlateVisibility::Collapsed);
+		}
+		if (InventoryPanel && InventoryPanel->GetVisibility() != ESlateVisibility::Collapsed)
+		{
+			InventoryPanel->SetVisibility(ESlateVisibility::Collapsed);
+		}
+		if (SpellbookPanel && SpellbookPanel->GetVisibility() != ESlateVisibility::Collapsed)
+		{
+			SpellbookPanel->SetVisibility(ESlateVisibility::Collapsed);
+		}
+
+		const FString LevelName = UGameplayStatics::GetCurrentLevelName(this, true);
+		const bool bInTown = LevelName == TEXT("Lvl_Diablo");
+		const bool bSaveExists = UGameplayStatics::DoesSaveGameExist(UDiabloSaveGame::SaveSlotName, UDiabloSaveGame::UserIndex);
+
+		MainMenu->UpdateButtonStates(bInTown, bSaveExists);
+		MainMenu->SetVisibility(ESlateVisibility::Visible);
+
+		UGameplayStatics::SetGamePaused(this, true);
+		bShowMouseCursor = true;
+		FInputModeGameAndUI Mode;
+		Mode.SetWidgetToFocus(MainMenu->TakeWidget());
+		SetInputMode(Mode);
+	}
+}
+
+void ADiabloPlayerController::CloseMainMenu()
+{
+	if (MainMenu)
+	{
+		MainMenu->SetVisibility(ESlateVisibility::Collapsed);
+	}
+	UGameplayStatics::SetGamePaused(this, false);
+	SetInputMode(FInputModeGameOnly());
+}
+
+void ADiabloPlayerController::SaveGame()
+{
+	ADiabloHero* Hero = Cast<ADiabloHero>(GetPawn());
+	if (!Hero)
+	{
+		return;
+	}
+
+	Hero->SaveToGameInstance();
+
+	UDiabloGameInstance* GI = Cast<UDiabloGameInstance>(GetGameInstance());
+	if (!GI)
+	{
+		return;
+	}
+
+	UDiabloSaveGame* Save = Cast<UDiabloSaveGame>(
+		UGameplayStatics::CreateSaveGameObject(UDiabloSaveGame::StaticClass()));
+	Save->PopulateFromGameInstance(GI);
+
+	UGameplayStatics::SaveGameToSlot(Save, UDiabloSaveGame::SaveSlotName, UDiabloSaveGame::UserIndex);
+	UE_LOG(LogDiablo, Display, TEXT("Game saved to slot: %s"), *UDiabloSaveGame::SaveSlotName);
+
+	CloseMainMenu();
+}
+
+void ADiabloPlayerController::LoadGame()
+{
+	UDiabloSaveGame* Save = Cast<UDiabloSaveGame>(
+		UGameplayStatics::LoadGameFromSlot(UDiabloSaveGame::SaveSlotName, UDiabloSaveGame::UserIndex));
+	if (!Save)
+	{
+		UE_LOG(LogDiablo, Warning, TEXT("Failed to load save from slot: %s"), *UDiabloSaveGame::SaveSlotName);
+		return;
+	}
+
+	UDiabloGameInstance* GI = Cast<UDiabloGameInstance>(GetGameInstance());
+	if (!GI)
+	{
+		return;
+	}
+
+	Save->ApplyToGameInstance(GI);
+	UE_LOG(LogDiablo, Display, TEXT("Game loaded from slot: %s"), *UDiabloSaveGame::SaveSlotName);
+
+	CloseMainMenu();
+	UGameplayStatics::OpenLevel(this, FName(TEXT("Lvl_Diablo")));
 }
 
 void ADiabloPlayerController::Tick(float DeltaTime)
