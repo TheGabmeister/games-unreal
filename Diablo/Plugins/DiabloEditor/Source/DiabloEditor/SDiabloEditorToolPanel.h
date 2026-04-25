@@ -19,10 +19,12 @@ private:
 	FReply OnImportAttackSFX();
 	FReply OnImportLevelUpSFX();
 	FReply OnImportPotion();
+	FReply OnImportItemIcons();
 	FReply OnSetupHero();
 	FReply OnSetupController();
 	FReply OnSetupGameMode();
 	FReply OnSetupEnemy();
 	FReply OnSetupPotion();
 	FReply OnSetupHUD();
+	FReply OnSetupInventory();
 };

@@ -41,6 +41,8 @@
 #include "WidgetBlueprintFactory.h"
 #include "DiabloHUDWidget.h"
 #include "DiabloCharacterPanel.h"
+#include "DiabloInventoryPanel.h"
+#include "ItemDefinition.h"
 
 void FDiabloAssetGenerator::GenerateAllAssets()
 {
@@ -62,6 +64,7 @@ void FDiabloAssetGenerator::SetupAllBlueprints()
 	SetupEnemy();
 	SetupPotion();
 	SetupHUD();
+	SetupInventory();
 }
 
 void FDiabloAssetGenerator::GenerateDefaultMap()
@@ -194,6 +197,7 @@ void FDiabloAssetGenerator::GenerateInputAssets()
 		{ TEXT("IA_Move"),      EInputActionValueType::Axis2D,  EKeys::Invalid },
 		{ TEXT("IA_Look"),      EInputActionValueType::Axis2D,  EKeys::Invalid },
 		{ TEXT("IA_CharPanel"), EInputActionValueType::Boolean, EKeys::C },
+		{ TEXT("IA_Inventory"), EInputActionValueType::Boolean, EKeys::I },
 	};
 
 	const FString InputBasePath = TEXT("/Game/Input/Actions");
@@ -496,6 +500,48 @@ void FDiabloAssetGenerator::ImportPotionSprite()
 }
 
 // ---------------------------------------------------------------------------
+// Import item icon textures
+// ---------------------------------------------------------------------------
+
+void FDiabloAssetGenerator::ImportItemIcons()
+{
+	const FString DestPath = TEXT("/Game/Items/Icons");
+	const FString SrcDir = FPaths::ProjectDir() / TEXT("Tools/svg/out");
+
+	struct FIconEntry { FString PngName; FString AssetName; };
+	TArray<FIconEntry> Icons = {
+		{ TEXT("T_ShortSword.png"), TEXT("T_ShortSword") },
+		{ TEXT("T_Buckler.png"), TEXT("T_Buckler") },
+		{ TEXT("T_SkullCap.png"), TEXT("T_SkullCap") },
+		{ TEXT("T_Rags.png"), TEXT("T_Rags") },
+		{ TEXT("T_Ring.png"), TEXT("T_Ring") },
+	};
+
+	IAssetTools& AssetTools = FAssetToolsModule::GetModule().Get();
+
+	for (const FIconEntry& Entry : Icons)
+	{
+		const FString PngPath = SrcDir / Entry.PngName;
+		if (!FPaths::FileExists(PngPath))
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[DiabloTools] %s not found — run convert_items.sh first"), *Entry.PngName);
+			continue;
+		}
+
+		UAssetImportTask* Task = NewObject<UAssetImportTask>();
+		Task->Filename = PngPath;
+		Task->DestinationPath = DestPath;
+		Task->DestinationName = Entry.AssetName;
+		Task->bReplaceExisting = true;
+		Task->bAutomated = true;
+		Task->bSave = true;
+
+		AssetTools.ImportAssetTasks({ Task });
+		UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Imported item icon: %s"), *Entry.AssetName);
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Configure dropped item (healing potion) defaults
 // ---------------------------------------------------------------------------
 
@@ -653,6 +699,7 @@ void FDiabloAssetGenerator::SetupController()
 	UBlueprint* ControllerBP = LoadObject<UBlueprint>(nullptr, TEXT("/Game/Blueprints/BP_DiabloPlayerController.BP_DiabloPlayerController"));
 	UInputAction* ClickAction = LoadObject<UInputAction>(nullptr, TEXT("/Game/Input/Actions/IA_Click.IA_Click"));
 	UInputAction* CharPanelAction = LoadObject<UInputAction>(nullptr, TEXT("/Game/Input/Actions/IA_CharPanel.IA_CharPanel"));
+	UInputAction* InventoryAction = LoadObject<UInputAction>(nullptr, TEXT("/Game/Input/Actions/IA_Inventory.IA_Inventory"));
 	UInputMappingContext* IMC = LoadObject<UInputMappingContext>(nullptr, TEXT("/Game/Input/IMC_Diablo.IMC_Diablo"));
 
 	if (!ControllerBP || !ControllerBP->GeneratedClass)
@@ -682,6 +729,17 @@ void FDiabloAssetGenerator::SetupController()
 				{
 					ObjProp->SetObjectPropertyValue(ObjProp->ContainerPtrToValuePtr<void>(CDO), CharPanelAction);
 					UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_DiabloPlayerController: set CharPanelAction"));
+				}
+			}
+		}
+		if (FProperty* InvProp = ControllerBP->GeneratedClass->FindPropertyByName(TEXT("InventoryAction")))
+		{
+			if (FObjectProperty* ObjProp = CastField<FObjectProperty>(InvProp))
+			{
+				if (InventoryAction)
+				{
+					ObjProp->SetObjectPropertyValue(ObjProp->ContainerPtrToValuePtr<void>(CDO), InventoryAction);
+					UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_DiabloPlayerController: set InventoryAction"));
 				}
 			}
 		}
@@ -867,7 +925,38 @@ void FDiabloAssetGenerator::SetupHUD()
 		}
 	}
 
-	// --- Set HUDWidgetClass and CharPanelClass on BP_DiabloPlayerController ---
+	// --- Create BP_DiabloInventoryPanel ---
+	const FString InvPath = TEXT("/Game/Blueprints/BP_DiabloInventoryPanel");
+	const FString InvObjPath = InvPath + TEXT(".BP_DiabloInventoryPanel");
+
+	UWidgetBlueprint* InvPanelBP = LoadObject<UWidgetBlueprint>(nullptr, *InvObjPath);
+	if (!InvPanelBP)
+	{
+		UPackage* InvPackage = CreatePackage(*InvPath);
+		InvPackage->FullyLoad();
+
+		UWidgetBlueprintFactory* InvFactory = NewObject<UWidgetBlueprintFactory>();
+		InvFactory->ParentClass = UDiabloInventoryPanel::StaticClass();
+
+		InvPanelBP = Cast<UWidgetBlueprint>(InvFactory->FactoryCreateNew(
+			UWidgetBlueprint::StaticClass(),
+			InvPackage,
+			TEXT("BP_DiabloInventoryPanel"),
+			RF_Public | RF_Standalone,
+			nullptr,
+			GWarn
+		));
+
+		if (InvPanelBP)
+		{
+			FKismetEditorUtilities::CompileBlueprint(InvPanelBP);
+			SaveAsset(InvPanelBP, InvPackage, InvPath);
+			NotifyAssetCreated(InvPanelBP);
+			UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Created BP_DiabloInventoryPanel"));
+		}
+	}
+
+	// --- Set HUDWidgetClass, CharPanelClass, InventoryPanelClass on BP_DiabloPlayerController ---
 	UBlueprint* ControllerBP = LoadObject<UBlueprint>(nullptr,
 		TEXT("/Game/Blueprints/BP_DiabloPlayerController.BP_DiabloPlayerController"));
 
@@ -901,8 +990,119 @@ void FDiabloAssetGenerator::SetupHUD()
 			}
 		}
 
+		if (InvPanelBP && InvPanelBP->GeneratedClass)
+		{
+			if (FProperty* Prop = ControllerBP->GeneratedClass->FindPropertyByName(TEXT("InventoryPanelClass")))
+			{
+				if (FObjectProperty* ObjProp = CastField<FObjectProperty>(Prop))
+				{
+					ObjProp->SetObjectPropertyValue(ObjProp->ContainerPtrToValuePtr<void>(CDO), InvPanelBP->GeneratedClass);
+					UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_DiabloPlayerController: set InventoryPanelClass -> BP_DiabloInventoryPanel"));
+				}
+			}
+		}
+
 		SaveAsset(ControllerBP, ControllerBP->GetOutermost(),
 			TEXT("/Game/Blueprints/BP_DiabloPlayerController"));
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Item Definitions
+// ---------------------------------------------------------------------------
+
+void FDiabloAssetGenerator::SetupInventory()
+{
+	struct FItemDef
+	{
+		FString Name;
+		EItemCategory Category;
+		EEquipSlot Slot;
+		int32 W, H;
+		float MinDmg, MaxDmg, AC;
+		float Str, Mag, Dex, Vit;
+		int32 Durability, GoldValue;
+		float HealAmount;
+		bool bStackable;
+		int32 MaxStack;
+		FString IconAsset;
+	};
+
+	TArray<FItemDef> Items = {
+		{ TEXT("Short Sword"), EItemCategory::Weapon, EEquipSlot::RightHand, 1, 3,
+		  2.f, 6.f, 0.f, 0.f, 0.f, 0.f, 0.f, 24, 50, 0.f, false, 1,
+		  TEXT("/Game/Items/Icons/T_ShortSword.T_ShortSword") },
+		{ TEXT("Buckler"), EItemCategory::Shield, EEquipSlot::LeftHand, 1, 2,
+		  0.f, 0.f, 5.f, 0.f, 0.f, 0.f, 0.f, 16, 30, 0.f, false, 1,
+		  TEXT("/Game/Items/Icons/T_Buckler.T_Buckler") },
+		{ TEXT("Skull Cap"), EItemCategory::Helm, EEquipSlot::Head, 2, 2,
+		  0.f, 0.f, 3.f, 0.f, 0.f, 0.f, 0.f, 15, 25, 0.f, false, 1,
+		  TEXT("/Game/Items/Icons/T_SkullCap.T_SkullCap") },
+		{ TEXT("Rags"), EItemCategory::Armor, EEquipSlot::Chest, 2, 3,
+		  0.f, 0.f, 2.f, 0.f, 0.f, 0.f, 0.f, 12, 15, 0.f, false, 1,
+		  TEXT("/Game/Items/Icons/T_Rags.T_Rags") },
+		{ TEXT("Ring of Strength"), EItemCategory::Ring, EEquipSlot::LeftRing, 1, 1,
+		  0.f, 0.f, 0.f, 5.f, 0.f, 0.f, 0.f, 0, 100, 0.f, false, 1,
+		  TEXT("/Game/Items/Icons/T_Ring.T_Ring") },
+		{ TEXT("Healing Potion"), EItemCategory::Potion, EEquipSlot::None, 1, 1,
+		  0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0, 50, 50.f, true, 20,
+		  TEXT("/Game/Items/Potions/T_HealingPotion.T_HealingPotion") },
+	};
+
+	const FString BasePath = TEXT("/Game/Items/Definitions");
+
+	for (const FItemDef& Def : Items)
+	{
+		FString SafeName = Def.Name;
+		SafeName.ReplaceInline(TEXT(" "), TEXT("_"));
+		const FString FullPath = BasePath / (TEXT("ID_") + SafeName);
+		const FString ObjPath = FullPath + TEXT(".ID_") + SafeName;
+
+		UItemDefinition* Existing = LoadObject<UItemDefinition>(nullptr, *ObjPath);
+		if (Existing)
+		{
+			UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Item definition already exists: %s"), *Def.Name);
+			continue;
+		}
+
+		UPackage* Package = CreatePackage(*FullPath);
+		Package->FullyLoad();
+
+		UItemDefinition* ItemDef = NewObject<UItemDefinition>(
+			Package, *(TEXT("ID_") + SafeName), RF_Public | RF_Standalone);
+
+		ItemDef->DisplayName = FText::FromString(Def.Name);
+		ItemDef->Category = Def.Category;
+		ItemDef->EquipSlot = Def.Slot;
+		ItemDef->GridWidth = Def.W;
+		ItemDef->GridHeight = Def.H;
+		ItemDef->MinDamage = Def.MinDmg;
+		ItemDef->MaxDamage = Def.MaxDmg;
+		ItemDef->ArmorClass = Def.AC;
+		ItemDef->BonusStr = Def.Str;
+		ItemDef->BonusMag = Def.Mag;
+		ItemDef->BonusDex = Def.Dex;
+		ItemDef->BonusVit = Def.Vit;
+		ItemDef->MaxDurability = Def.Durability;
+		ItemDef->GoldValue = Def.GoldValue;
+		ItemDef->HealAmount = Def.HealAmount;
+		ItemDef->bStackable = Def.bStackable;
+		ItemDef->MaxStack = Def.MaxStack;
+
+		if (!Def.IconAsset.IsEmpty())
+		{
+			UTexture2D* IconTex = LoadObject<UTexture2D>(nullptr, *Def.IconAsset);
+			if (IconTex)
+			{
+				ItemDef->Icon = IconTex;
+			}
+		}
+
+		if (SaveAsset(ItemDef, Package, FullPath))
+		{
+			NotifyAssetCreated(ItemDef);
+			UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Created item definition: %s"), *Def.Name);
+		}
 	}
 }
 

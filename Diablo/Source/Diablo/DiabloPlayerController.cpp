@@ -2,6 +2,8 @@
 #include "DiabloHero.h"
 #include "DiabloHUDWidget.h"
 #include "DiabloCharacterPanel.h"
+#include "DiabloInventoryPanel.h"
+#include "InventoryComponent.h"
 #include "DiabloEnemy.h"
 #include "DroppedItem.h"
 #include "Diablo.h"
@@ -45,6 +47,10 @@ void ADiabloPlayerController::OnPossess(APawn* InPawn)
 		{
 			CharPanel->InitForHero(Hero);
 		}
+		if (InventoryPanel)
+		{
+			InventoryPanel->InitForInventory(Hero->Inventory);
+		}
 	}
 }
 
@@ -81,6 +87,21 @@ void ADiabloPlayerController::CreateHUD()
 			}
 		}
 	}
+
+	if (InventoryPanelClass)
+	{
+		InventoryPanel = CreateWidget<UDiabloInventoryPanel>(this, InventoryPanelClass);
+		if (InventoryPanel)
+		{
+			InventoryPanel->AddToViewport();
+			InventoryPanel->SetVisibility(ESlateVisibility::Collapsed);
+
+			if (ADiabloHero* Hero = Cast<ADiabloHero>(GetPawn()))
+			{
+				InventoryPanel->InitForInventory(Hero->Inventory);
+			}
+		}
+	}
 }
 
 void ADiabloPlayerController::SetupInputComponent()
@@ -93,6 +114,10 @@ void ADiabloPlayerController::SetupInputComponent()
 		if (CharPanelAction)
 		{
 			EIC->BindAction(CharPanelAction, ETriggerEvent::Started, this, &ADiabloPlayerController::OnToggleCharPanel);
+		}
+		if (InventoryAction)
+		{
+			EIC->BindAction(InventoryAction, ETriggerEvent::Started, this, &ADiabloPlayerController::OnToggleInventory);
 		}
 	}
 }
@@ -115,6 +140,28 @@ void ADiabloPlayerController::OnToggleCharPanel()
 	else
 	{
 		CharPanel->SetVisibility(ESlateVisibility::Collapsed);
+		SetInputMode(FInputModeGameOnly());
+	}
+}
+
+void ADiabloPlayerController::OnToggleInventory()
+{
+	if (!InventoryPanel)
+	{
+		return;
+	}
+
+	if (InventoryPanel->GetVisibility() == ESlateVisibility::Collapsed)
+	{
+		InventoryPanel->SetVisibility(ESlateVisibility::Visible);
+		bShowMouseCursor = true;
+		FInputModeGameAndUI Mode;
+		Mode.SetWidgetToFocus(InventoryPanel->TakeWidget());
+		SetInputMode(Mode);
+	}
+	else
+	{
+		InventoryPanel->SetVisibility(ESlateVisibility::Collapsed);
 		SetInputMode(FInputModeGameOnly());
 	}
 }

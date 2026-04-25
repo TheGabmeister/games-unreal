@@ -1,5 +1,6 @@
 #include "DiabloHero.h"
 #include "DiabloPlayerController.h"
+#include "InventoryComponent.h"
 #include "Diablo.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "Camera/CameraComponent.h"
@@ -44,6 +45,8 @@ ADiabloHero::ADiabloHero()
 
 	GetCharacterMovement()->bOrientRotationToMovement = true;
 	GetCharacterMovement()->RotationRate = FRotator(0.f, 540.f, 0.f);
+
+	Inventory = CreateDefaultSubobject<UInventoryComponent>(TEXT("Inventory"));
 }
 
 float ADiabloHero::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent,

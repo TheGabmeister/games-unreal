@@ -48,13 +48,13 @@ IntelliSense errors like `cannot open source file "X.h"` are usually false posit
 
 - `ADiabloGameMode` (Abstract) — sets `DefaultPawnClass` and `PlayerControllerClass` to C++ bases; BP subclass `BP_DiabloGameMode` overrides to BP versions
 - `ADiabloHero : ACharacter` (Abstract) — isometric camera via `USpringArmComponent` (pitch -45°, yaw 225°, arm 1800, no collision test) + `UCameraComponent` (orthographic, OrthoWidth 2048). Capsule sized to 90 half-height, mesh offset -90 Z to align feet with capsule bottom. Uses `FDiabloStats` (HP 70/70 Warrior defaults). `TakeDamage` override → `Die()` on HP <= 0. `Heal(Amount)` for pickups. `IsDead()` check.
-- `ADiabloPlayerController` (Abstract) — Enhanced Input click-to-move, click-to-attack, click-to-pickup. LMB on ground → `SimpleMoveToLocation`; LMB on enemy → stores `TargetEnemy`, walks into `AttackRange`, then calls `Hero->StartAttack()`; LMB on `ADroppedItem` → walks into `PickupRange`, calls `OnPickedUp`. UPROPERTY slots for `ClickAction` and `DefaultMappingContext` assigned via BP. `OnHeroDeath()` → disable input, camera fade to black, 2s timer → `RestartPlayer` at `PlayerStart` → fade in.
+- `ADiabloPlayerController` (Abstract) — Enhanced Input click-to-move, click-to-attack, click-to-pickup. LMB on ground → `SimpleMoveToLocation`; LMB on enemy → stores `TargetEnemy`, walks into `AttackRange`, then calls `Hero->StartAttack()`; LMB on `ADroppedItem` → walks into `PickupRange`, calls `OnPickedUp`. UPROPERTY slots for `ClickAction` and `DefaultMappingContext` assigned via BP. `OnHeroDeath()` → disable input, 2s timer → `RestartPlayer` at `PlayerStart`.
 - `UDiabloAnimInstance` (Abstract) — exposes `float Speed` from pawn velocity in `NativeUpdateAnimation`. AnimBP `ABP_Warrior` parents to this class (manual editor creation)
 
 ### Combat (M2)
 
 - `ADiabloHero::StartAttack()` — plays `AttackMontage` via the DefaultSlot in the AnimBP. Sets `AttackTarget` so the notify knows who to damage. `bIsAttacking` flag prevents re-triggering mid-swing.
-- `UAnimNotify_Attack` (DisplayName "Melee Attack Trace") — fires on a montage keyframe. Reads `AttackTarget` from either `ADiabloHero` or `ADiabloEnemy` and applies `TakeDamage` directly (no sphere trace — Diablo 1 uses targeted hit, not physics). `Damage` is configurable on the notify. Guards against dead targets.
+- `UAnimNotify_Attack` (DisplayName "Melee Attack Trace") — fires on a montage keyframe. Reads `AttackTarget` from either `ADiabloHero` or `ADiabloEnemy`. Hero→enemy: computes D1 To-Hit% (`50 + Dex/2 + CharLevel - MonsterAC + (CharLevel - MonsterLevel)`, clamped 5–95%), rolls, then deals `BaseDamage + Str/5`. Enemy→hero: flat `Damage` reduced by hero AC (`Dex/5`, min 1). Guards against dead targets.
 - `ADiabloEnemy : ACharacter` (Abstract) — uses `FDiabloStats` for HP. `TakeDamage` override; on death plays `DeathMontage`, disables collision, delays `Destroy()` by montage duration + 2s. Has `StartAttack(Target)`, `AttackMontage`, `AttackTarget` for AI-driven attacks. Capsule explicitly blocks `ECC_Visibility` for cursor click detection.
 - `AM_Attack` (AnimMontage) — manually authored in editor from `Warrior_Anim_Attack`. Contains Melee Attack Trace notify at the hit frame plus optional PlaySound notifies for SwordSwing/SwordHit.
 - `AM_Death` (AnimMontage) — manually authored in editor from `Warrior_Anim_Death`. `bEnableAutoBlendOut = false` so the death pose holds. Used by both hero and enemy.
@@ -67,7 +67,7 @@ IntelliSense errors like `cannot open source file "X.h"` are usually false posit
 ### HP + Death + Respawn (M4)
 
 - `FDiabloStats` ([DiabloStats.h](Source/Diablo/DiabloStats.h)) — USTRUCT with HP/MaxHP/Mana/MaxMana/Str/Mag/Dex/Vit. Used by both `ADiabloHero` and `ADiabloEnemy`. All fields active as of M6.
-- **Hero death:** `TakeDamage` → `Die()` → disable movement, play `DeathMontage` → controller `OnHeroDeath()` → `DisableInput`, camera fade to black (0.5s), 2s `FTimerHandle` → `UnPossess` + `Destroy` dead pawn → `AGameModeBase::RestartPlayer` spawns fresh hero at `PlayerStart` with full HP → `EnableInput`, fade in (0.5s).
+- **Hero death:** `TakeDamage` → `Die()` → disable movement, play `DeathMontage` → controller `OnHeroDeath()` → `DisableInput`, 2s `FTimerHandle` → `UnPossess` + `Destroy` dead pawn → `AGameModeBase::RestartPlayer` spawns fresh hero at `PlayerStart` with full HP → `EnableInput`.
 - **Enemy death:** `TakeDamage` → HP <= 0 → disable collision + movement, play `DeathMontage` → delayed `Destroy()` after montage + 2s corpse linger.
 - `ADroppedItem : AActor` ([DroppedItem.h](Source/Diablo/DroppedItem.h)) (Abstract) — `UStaticMeshComponent` root (plane mesh with sprite material, rotated to face isometric camera) that blocks `ECC_Visibility` for cursor detection. `HealAmount = 50`. `OnPickedUp(Hero)` heals and destroys. BP subclass `BP_HealingPotion` uses `T_HealingPotion` sprite from SVG pipeline.
 
@@ -88,12 +88,29 @@ IntelliSense errors like `cannot open source file "X.h"` are usually false posit
 - **Warrior starting stats:** Str 30, Mag 10, Dex 20, Vit 25, HP 70/70, Mana 10/10 (D1 reference). Class caps: Str 250, Mag 50, Dex 60, Vit 100.
 - **Enemy XP:** `ADiabloEnemy` has `XPReward` (default 100) and `MonsterLevel` (default 1). On death, awards XP to player hero if `CharLevel - MonsterLevel < 10` (D1 zeroing rule).
 - `LevelUpSound` — `USoundWave` UPROPERTY on hero, set via `SetupHero`. Generated by `Tools/audio/levelup_sfx.py`, imported via `ImportLevelUpSFX`.
+- **Stat allocation:** `SpendStatPoint(FName)` increments one stat by 1, decrements `UnspentStatPoints`, respects Warrior class caps, calls `RecomputeDerivedStats` + broadcasts `OnStatsChanged`.
+- `UDiabloCharacterPanel : UUserWidget` ([DiabloCharacterPanel.h](Source/Diablo/DiabloCharacterPanel.h)) (Abstract) — C++ widget tree (VerticalBox with stat rows, + buttons, HP/Mana display). Toggle via **C key** (`IA_CharPanel`). + buttons hidden when no unspent points. Event-driven via `FOnStatsChanged`.
+- `ADiabloPlayerController` owns the character panel: `CharPanelClass` UPROPERTY (set via `SetupHUD` → `BP_DiabloCharPanel`). Toggle in `OnToggleCharPanel()` switches between `Collapsed` / `Visible` + `GameAndUI` input mode.
+
+### Inventory (M7)
+
+- `UItemDefinition : UPrimaryDataAsset` ([ItemDefinition.h](Source/Diablo/ItemDefinition.h)) — icon, display name, grid size (w×h), stackable, equip slot, category (`EItemCategory`), base stats (BonusStr/Mag/Dex/Vit, MinDamage/MaxDamage, ArmorClass), durability, gold value, heal amount. Data assets live under `Content/Items/Definitions/` (prefix `ID_`).
+- `FItemInstance` ([ItemInstance.h](Source/Diablo/ItemInstance.h)) — `UItemDefinition*` + `TArray<FItemAffix>` (empty for now, M17) + current durability + stack count.
+- `EEquipSlot` — Head, Chest, LeftHand, RightHand, LeftRing, RightRing, Amulet (7 slots).
+- `EItemCategory` — Misc, Weapon, Armor, Shield, Helm, Ring, Amulet, Potion, Scroll, Gold.
+- `UInventoryComponent : UActorComponent` ([InventoryComponent.h](Source/Diablo/InventoryComponent.h)) — 10×4 grid, 7 equipment slots (`TMap<EEquipSlot, FItemInstance>`), gold. Occupancy grid tracks multi-cell items. API: `TryAddItem`, `TryAddItemAt`, `MoveItem`, `RemoveItemAt`, `Equip`, `Unequip`, `AddGold`, `SpendGold`. Broadcasts `FOnInventoryChanged` delegate.
+- `ADiabloHero` has `UInventoryComponent* Inventory` (created in constructor via `CreateDefaultSubobject`).
+- `ADroppedItem` has `FItemInstance ItemData` — if valid, `OnPickedUp` adds to inventory via `TryAddItem`; if invalid, falls back to legacy `HealAmount` heal-and-destroy.
+- `UDiabloInventoryPanel : UUserWidget` ([DiabloInventoryPanel.h](Source/Diablo/DiabloInventoryPanel.h)) (Abstract) — C++ widget tree (equipment slots row, 10×4 grid, gold display). Toggle via **I key** (`IA_Inventory`). Drag-drop via panel-level `NativeOnMouseButtonDown`/`NativeOnDragDetected`/`NativeOnDrop` with `UInventoryDragDrop` operation. Right-click equips (grid) or unequips (equipment slot). Event-driven via `FOnInventoryChanged`.
+- `ADiabloPlayerController` owns the inventory panel: `InventoryPanelClass` UPROPERTY (set via `SetupHUD` → `BP_DiabloInventoryPanel`), `InventoryAction` (set via `SetupController` → `IA_Inventory`). Toggle in `OnToggleInventory()`.
+- Icon sprites generated via SVG pipeline (`Tools/svg/`) → Inkscape CLI conversion → imported via `ImportItemIcons`.
+- `SetupInventory` creates starter `UItemDefinition` data assets (Short Sword, Buckler, Skull Cap, Rags, Ring of Strength, Healing Potion) with icon texture references.
 
 ### Input
 
 **Enhanced Input only.** No legacy `InputComponent` axis bindings.
 
-- IA assets generated by the DiabloEditor plugin under `Content/Input/Actions/` (`IA_Click` mapped to LMB, `IA_Move`, `IA_Look`). IMC at `Content/Input/IMC_Diablo`.
+- IA assets generated by the DiabloEditor plugin under `Content/Input/Actions/` (`IA_Click` mapped to LMB, `IA_CharPanel` mapped to C, `IA_Inventory` mapped to I, `IA_Move`, `IA_Look`). IMC at `Content/Input/IMC_Diablo`.
 - **Don't create IA/IMC at runtime via `NewObject<>`** — assign the editor assets to BP UPROPERTY slots.
 - `ADiabloPlayerController` holds `TObjectPtr<UInputAction>` and `TObjectPtr<UInputMappingContext>` slots, binds in `SetupInputComponent`.
 - No touch controls — desktop-only (Diablo 1 is mouse+keyboard).
@@ -110,17 +127,19 @@ IntelliSense errors like `cannot open source file "X.h"` are usually false posit
 | `ImportAttackSFX` | Imports `Tools/audio/out/SwordSwing.wav` and `SwordHit.wav` under `/Game/Audio/SFX/` |
 | `ImportLevelUpSFX` | Imports `Tools/audio/out/LevelUp.wav` under `/Game/Audio/SFX/` |
 | `ImportPotionSprite` | Imports `Tools/svg/out/HealingPotion.png` as texture under `/Game/Items/Potions/` |
+| `ImportItemIcons` | Imports item icon PNGs from `Tools/svg/out/` under `/Game/Items/Icons/` |
 
 **Setup** (create BP if needed + configure CDO defaults — one button per blueprint):
 
 | Method | Creates | Configures |
 |---|---|---|
 | `SetupHero` | `BP_DiabloHero` | Skeletal mesh, anim class, attack montage, death montage, LevelUpSound |
-| `SetupController` | `BP_DiabloPlayerController` | ClickAction, DefaultMappingContext |
+| `SetupController` | `BP_DiabloPlayerController` | ClickAction, CharPanelAction, InventoryAction, DefaultMappingContext |
 | `SetupGameMode` | `BP_DiabloGameMode` | DefaultPawnClass, PlayerControllerClass |
 | `SetupEnemy` | `BP_DiabloEnemy` | Skeletal mesh, anim class, attack montage, death montage |
 | `SetupPotion` | `BP_HealingPotion` | Plane mesh with sprite material (upright, facing isometric camera) |
-| `SetupHUD` | `BP_DiabloHUD` (WidgetBlueprint) | Creates WBP parented to `UDiabloHUDWidget`, sets `HUDWidgetClass` on `BP_DiabloPlayerController` |
+| `SetupHUD` | `BP_DiabloHUD` + `BP_DiabloCharPanel` + `BP_DiabloInventoryPanel` (WidgetBlueprints) | Creates WBPs parented to C++ widget classes, sets `HUDWidgetClass`, `CharPanelClass`, `InventoryPanelClass` on `BP_DiabloPlayerController` |
+| `SetupInventory` | Starter `UItemDefinition` data assets | Creates ID_Short_Sword, ID_Buckler, ID_Skull_Cap, ID_Rags, ID_Ring_of_Strength, ID_Healing_Potion under `/Game/Items/Definitions/` |
 | `SetupAllBlueprints` | All of the above | All of the above |
 
 **World:**
@@ -190,7 +209,7 @@ When in doubt, lean KISS over DRY.
 
 The full Diablo (1997) gameplay reference, milestone roadmap, and verification criteria are in [SPEC.md](SPEC.md). Consult it before making design decisions.
 
-**Combat model:** Diablo 1 uses targeted hit (not physics traces). Click enemy → walk into range → play attack montage → apply damage directly to target. To-hit% roll comes in M6 with stats.
+**Combat model:** Diablo 1 uses targeted hit (not physics traces). Click enemy → walk into range → play attack montage → apply damage directly to target. To-Hit% roll + Str-based damage + AC reduction implemented in M6.
 
 ## Auto-Memory
 

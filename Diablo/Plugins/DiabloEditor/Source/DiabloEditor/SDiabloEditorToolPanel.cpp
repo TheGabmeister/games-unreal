@@ -79,6 +79,15 @@ void SDiabloEditorToolPanel::Construct(const FArguments& InArgs)
 				.OnClicked(this, &SDiabloEditorToolPanel::OnImportPotion)
 			]
 
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(0.f, 4.f)
+			[
+				SNew(SButton)
+				.Text(FText::FromString(TEXT("Import Item Icons")))
+				.OnClicked(this, &SDiabloEditorToolPanel::OnImportItemIcons)
+			]
+
 			// --- Blueprints ---
 
 			+ SVerticalBox::Slot()
@@ -142,6 +151,15 @@ void SDiabloEditorToolPanel::Construct(const FArguments& InArgs)
 				SNew(SButton)
 				.Text(FText::FromString(TEXT("Setup HUD")))
 				.OnClicked(this, &SDiabloEditorToolPanel::OnSetupHUD)
+			]
+
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(0.f, 4.f)
+			[
+				SNew(SButton)
+				.Text(FText::FromString(TEXT("Setup Inventory")))
+				.OnClicked(this, &SDiabloEditorToolPanel::OnSetupInventory)
 			]
 
 			// --- World ---
@@ -218,6 +236,12 @@ FReply SDiabloEditorToolPanel::OnImportPotion()
 	return FReply::Handled();
 }
 
+FReply SDiabloEditorToolPanel::OnImportItemIcons()
+{
+	FDiabloAssetGenerator::ImportItemIcons();
+	return FReply::Handled();
+}
+
 FReply SDiabloEditorToolPanel::OnSetupHero()
 {
 	FDiabloAssetGenerator::SetupHero();
@@ -251,5 +275,11 @@ FReply SDiabloEditorToolPanel::OnSetupPotion()
 FReply SDiabloEditorToolPanel::OnSetupHUD()
 {
 	FDiabloAssetGenerator::SetupHUD();
+	return FReply::Handled();
+}
+
+FReply SDiabloEditorToolPanel::OnSetupInventory()
+{
+	FDiabloAssetGenerator::SetupInventory();
 	return FReply::Handled();
 }

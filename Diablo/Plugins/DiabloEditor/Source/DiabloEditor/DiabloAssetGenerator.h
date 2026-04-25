@@ -14,6 +14,7 @@ struct FDiabloAssetGenerator
 	static void ImportAttackSFX();
 	static void ImportLevelUpSFX();
 	static void ImportPotionSprite();
+	static void ImportItemIcons();
 
 	static void SetupHero();
 	static void SetupController();
@@ -21,6 +22,7 @@ struct FDiabloAssetGenerator
 	static void SetupEnemy();
 	static void SetupPotion();
 	static void SetupHUD();
+	static void SetupInventory();
 	static void SetupAllBlueprints();
 
 private:

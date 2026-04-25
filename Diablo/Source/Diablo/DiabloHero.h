@@ -10,6 +10,7 @@ class UCameraComponent;
 class UAnimMontage;
 class USoundWave;
 class ADiabloEnemy;
+class UInventoryComponent;
 
 DECLARE_MULTICAST_DELEGATE(FOnStatsChanged);
 
@@ -62,6 +63,9 @@ public:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Audio")
 	TObjectPtr<USoundWave> LevelUpSound;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Inventory")
+	TObjectPtr<UInventoryComponent> Inventory;
 
 	int64 GetXPForLevel(int32 Level) const;
 	int64 GetXPForNextLevel() const;

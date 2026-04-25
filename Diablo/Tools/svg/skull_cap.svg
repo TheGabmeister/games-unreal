@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Helm dome -->
+  <path d="M12 40 Q12 10 32 10 Q52 10 52 40 L12 40 Z" fill="#808080"/>
+  <path d="M12 40 Q12 10 32 10 Q52 10 52 40" fill="none" stroke="#606060" stroke-width="2"/>
+  <!-- Brim -->
+  <rect x="8" y="38" width="48" height="6" rx="2" fill="#707070"/>
+  <rect x="8" y="38" width="48" height="6" rx="2" fill="none" stroke="#505050" stroke-width="1.5"/>
+  <!-- Nose guard -->
+  <rect x="30" y="36" width="4" height="14" rx="1" fill="#707070" stroke="#505050" stroke-width="1"/>
+  <!-- Highlight -->
+  <path d="M20 20 Q24 14 32 12" fill="none" stroke="white" stroke-width="1.5" opacity="0.3"/>
+</svg>

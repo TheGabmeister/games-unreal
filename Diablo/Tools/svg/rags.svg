@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Torso -->
+  <path d="M20 16 L16 28 L16 56 L48 56 L48 28 L44 16 Z" fill="#6B4226"/>
+  <path d="M20 16 L16 28 L16 56 L48 56 L48 28 L44 16 Z" fill="none" stroke="#4B2206" stroke-width="1.5"/>
+  <!-- Neckline -->
+  <path d="M24 16 Q32 22 40 16" fill="none" stroke="#4B2206" stroke-width="1.5"/>
+  <!-- Left sleeve -->
+  <path d="M16 28 L6 36 L10 38 L18 32" fill="#6B4226" stroke="#4B2206" stroke-width="1"/>
+  <!-- Right sleeve -->
+  <path d="M48 28 L58 36 L54 38 L46 32" fill="#6B4226" stroke="#4B2206" stroke-width="1"/>
+  <!-- Patches -->
+  <rect x="22" y="34" width="8" height="8" rx="1" fill="#7B5236" stroke="#5B3216" stroke-width="0.5"/>
+  <rect x="36" y="42" width="6" height="6" rx="1" fill="#5B3216" stroke="#3B1206" stroke-width="0.5"/>
+</svg>
