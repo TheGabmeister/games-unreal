@@ -123,7 +123,7 @@ FReply UDiabloInventoryPanel::NativeOnMouseButtonDown(const FGeometry& InGeometr
 		int32 GridX, GridY;
 		if (HitTestGrid(InGeometry, ScreenPos, GridX, GridY))
 		{
-			CachedInventory->Equip(GridX, GridY);
+			CachedInventory->UseItem(GridX, GridY);
 			return FReply::Handled();
 		}
 

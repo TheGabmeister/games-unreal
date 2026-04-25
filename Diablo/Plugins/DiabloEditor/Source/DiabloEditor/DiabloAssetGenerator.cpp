@@ -597,7 +597,7 @@ void FDiabloAssetGenerator::SetupPotion()
 		if (UStaticMeshComponent* MeshComp = CDO->FindComponentByClass<UStaticMeshComponent>())
 		{
 			MeshComp->SetStaticMesh(PlaneMesh);
-			MeshComp->SetRelativeScale3D(FVector(0.3f, 0.3f, 0.3f));
+			MeshComp->SetRelativeScale3D(FVector(0.6f, 0.6f, 0.6f));
 			// Stand upright facing the isometric camera (pitch -45, yaw 225)
 			MeshComp->SetRelativeRotation(FRotator(90.f, 45.f, 0.f));
 			if (PotionMat)
@@ -605,6 +605,20 @@ void FDiabloAssetGenerator::SetupPotion()
 				MeshComp->SetMaterial(0, PotionMat);
 			}
 			UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_HealingPotion: set plane mesh + sprite material"));
+		}
+	}
+
+	// Set ItemData so pickup routes through inventory
+	UItemDefinition* PotionDef = LoadObject<UItemDefinition>(nullptr,
+		TEXT("/Game/Items/Definitions/ID_Healing_Potion.ID_Healing_Potion"));
+	if (PotionDef)
+	{
+		ADroppedItem* ItemCDO = Cast<ADroppedItem>(PotionBP->GeneratedClass->GetDefaultObject());
+		if (ItemCDO)
+		{
+			ItemCDO->ItemData.Definition = PotionDef;
+			ItemCDO->ItemData.StackCount = 1;
+			UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_HealingPotion: set ItemData -> ID_Healing_Potion"));
 		}
 	}
 

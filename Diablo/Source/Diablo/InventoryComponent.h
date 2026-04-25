@@ -26,6 +26,7 @@ public:
 
 	bool Equip(int32 GridX, int32 GridY);
 	bool Unequip(EEquipSlot Slot);
+	bool UseItem(int32 GridX, int32 GridY);
 
 	const FItemInstance* GetItemAt(int32 GridX, int32 GridY) const;
 	const FItemInstance& GetEquipped(EEquipSlot Slot) const;

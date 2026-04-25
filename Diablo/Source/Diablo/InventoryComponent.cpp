@@ -1,4 +1,5 @@
 #include "InventoryComponent.h"
+#include "DiabloHero.h"
 #include "Diablo.h"
 
 UInventoryComponent::UInventoryComponent()
@@ -177,6 +178,46 @@ bool UInventoryComponent::RemoveItemAt(int32 GridX, int32 GridY)
 	Item = FItemInstance();
 	OnInventoryChanged.Broadcast();
 	return true;
+}
+
+bool UInventoryComponent::UseItem(int32 GridX, int32 GridY)
+{
+	const int32 Idx = GridIndex(GridX, GridY);
+	if (Idx < 0 || Idx >= GridItems.Num()) return false;
+
+	FItemInstance& Item = GridItems[Idx];
+	if (!Item.IsValid()) return false;
+
+	const UItemDefinition* Def = Item.Definition;
+
+	if (Def->Category == EItemCategory::Potion && Def->HealAmount > 0.f)
+	{
+		if (ADiabloHero* Hero = Cast<ADiabloHero>(GetOwner()))
+		{
+			Hero->Heal(Def->HealAmount);
+			UE_LOG(LogDiablo, Display, TEXT("Used %s (healed %.0f)"),
+				*Def->DisplayName.ToString(), Def->HealAmount);
+		}
+
+		if (Item.StackCount > 1)
+		{
+			Item.StackCount--;
+		}
+		else
+		{
+			RemoveItemAt(GridX, GridY);
+		}
+
+		OnInventoryChanged.Broadcast();
+		return true;
+	}
+
+	if (Def->EquipSlot != EEquipSlot::None)
+	{
+		return Equip(GridX, GridY);
+	}
+
+	return false;
 }
 
 bool UInventoryComponent::Equip(int32 GridX, int32 GridY)
