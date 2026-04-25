@@ -395,7 +395,9 @@ void ADiabloPlayerController::CloseMainMenu()
 		MainMenu->SetVisibility(ESlateVisibility::Collapsed);
 	}
 	UGameplayStatics::SetGamePaused(this, false);
-	SetInputMode(FInputModeGameOnly());
+	FInputModeGameAndUI Mode;
+	Mode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+	SetInputMode(Mode);
 }
 
 void ADiabloPlayerController::SaveGame()
