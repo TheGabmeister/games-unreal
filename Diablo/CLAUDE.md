@@ -141,6 +141,8 @@ IntelliSense errors like `cannot open source file "X.h"` are usually false posit
 - `ADiabloPlayerController` has `TargetStairs` — click stairs → walk into range → `OnInteract()` triggers level transition. Checked in `Tick` before items/enemies.
 - `Lvl_Diablo` (town) has `Stairs_Down` pointing to `Lvl_Cathedral_L1`. Cathedral has `Stairs_Up` pointing back to `Lvl_Diablo`.
 - `GenerateCathedralMap` creates `Lvl_Cathedral_L1` with dim lighting, cube-wall corridors, 3 enemies, a healing potion, NavMesh, and return stairs.
+- Both map generators call `UNavigationSystemV1::Build()` before saving so NavMesh is baked — without this, `SimpleMoveToLocation` fails after `OpenLevel` transitions.
+
 ### Persistent State (M13)
 
 - `UDiabloGameInstance : UGameInstance` ([DiabloGameInstance.h](Source/Diablo/DiabloGameInstance.h)) — persists across `OpenLevel` transitions. Holds `bHasSavedState` flag, `SavedStats`, `SavedCharLevel`, `SavedCurrentXP`, `SavedUnspentStatPoints`, full inventory state (grid items, occupancy, equipped items, gold), `SavedKnownSpells`, `SavedActiveSpell`.
@@ -193,7 +195,7 @@ IntelliSense errors like `cannot open source file "X.h"` are usually false posit
 |---|---|
 | `GenerateDefaultMap` | Creates `Lvl_Diablo` with PlayerStart, DirectionalLight, floor plane, NavMeshBoundsVolume, test enemy, healing potion, stairs to cathedral — **always recreates** |
 | `GenerateCathedralMap` | Creates `Lvl_Cathedral_L1` with dim lighting, cube-wall corridors, 3 enemies, healing potion, NavMesh, return stairs — **always recreates** |
-| `GenerateInputAssets` | Creates/updates IA_Click/Move/Look and IMC_Diablo — **updates in place** |
+| `GenerateInputAssets` | Creates/updates IA_Click/Cast/CharPanel/Inventory/Spellbook/Move/Look and IMC_Diablo — **updates in place** |
 
 **Do not attempt programmatic AnimBP generation.** State machine graph construction via K2 nodes is too fragile (wrong pin names, function reference ordering, MinimalAPI exports). AnimBPs are the one asset type authored manually in the editor.
 
