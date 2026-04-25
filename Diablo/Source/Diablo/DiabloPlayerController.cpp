@@ -7,6 +7,7 @@
 #include "InventoryComponent.h"
 #include "DiabloEnemy.h"
 #include "DroppedItem.h"
+#include "DungeonStairs.h"
 #include "Diablo.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
@@ -251,13 +252,25 @@ void ADiabloPlayerController::OnClickStarted()
 	{
 		TargetItem = Item;
 		TargetEnemy = nullptr;
+		TargetStairs = nullptr;
 		UE_LOG(LogDiablo, Display, TEXT("Targeting item: %s"), *Item->GetName());
 		UAIBlueprintHelperLibrary::SimpleMoveToActor(this, Item);
 		return;
 	}
 
+	if (ADungeonStairs* Stairs = Cast<ADungeonStairs>(HitActor))
+	{
+		TargetStairs = Stairs;
+		TargetEnemy = nullptr;
+		TargetItem = nullptr;
+		UE_LOG(LogDiablo, Display, TEXT("Targeting stairs: %s"), *Stairs->GetName());
+		UAIBlueprintHelperLibrary::SimpleMoveToActor(this, Stairs);
+		return;
+	}
+
 	TargetEnemy = nullptr;
 	TargetItem = nullptr;
+	TargetStairs = nullptr;
 	UAIBlueprintHelperLibrary::SimpleMoveToLocation(this, HitResult.ImpactPoint);
 }
 
@@ -277,6 +290,7 @@ void ADiabloPlayerController::OnCastStarted()
 
 	TargetEnemy = nullptr;
 	TargetItem = nullptr;
+	TargetStairs = nullptr;
 
 	Hero->CastSpell(HitResult.ImpactPoint);
 }
@@ -285,6 +299,7 @@ void ADiabloPlayerController::OnHeroDeath()
 {
 	TargetEnemy = nullptr;
 	TargetItem = nullptr;
+	TargetStairs = nullptr;
 
 	if (HUDWidget)
 	{
@@ -322,7 +337,25 @@ void ADiabloPlayerController::Tick(float DeltaTime)
 	{
 		TargetEnemy = nullptr;
 		TargetItem = nullptr;
+		TargetStairs = nullptr;
 		return;
+	}
+
+	if (TargetStairs && IsValid(TargetStairs))
+	{
+		const float StairsDist = FVector::Dist(Hero->GetActorLocation(), TargetStairs->GetActorLocation());
+		if (StairsDist <= InteractRange)
+		{
+			StopMovement();
+			Hero->GetCharacterMovement()->StopActiveMovement();
+			TargetStairs->OnInteract();
+			TargetStairs = nullptr;
+		}
+		return;
+	}
+	else
+	{
+		TargetStairs = nullptr;
 	}
 
 	if (TargetItem && !IsValid(TargetItem))

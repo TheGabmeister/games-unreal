@@ -14,6 +14,7 @@ public:
 private:
 	FReply OnGenerateAll();
 	FReply OnGenerateMap();
+	FReply OnGenerateCathedral();
 	FReply OnGenerateInput();
 	FReply OnImportWarrior();
 	FReply OnImportAttackSFX();

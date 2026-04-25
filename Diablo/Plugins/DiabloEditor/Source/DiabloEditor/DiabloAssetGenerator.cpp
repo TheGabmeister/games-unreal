@@ -50,6 +50,8 @@
 #include "Fireball.h"
 #include "LightningBolt.h"
 #include "DiabloSpellbookPanel.h"
+#include "DungeonStairs.h"
+#include "NavigationSystem.h"
 
 void FDiabloAssetGenerator::GenerateAllAssets()
 {
@@ -90,6 +92,18 @@ void FDiabloAssetGenerator::GenerateDefaultMap()
 	FActorSpawnParameters SpawnParams;
 	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
+	// Set GameMode override
+	UBlueprint* GameModeBP = LoadObject<UBlueprint>(nullptr,
+		TEXT("/Game/Blueprints/BP_DiabloGameMode.BP_DiabloGameMode"));
+	if (GameModeBP && GameModeBP->GeneratedClass)
+	{
+		AWorldSettings* WS = NewWorld->GetWorldSettings();
+		if (WS)
+		{
+			WS->DefaultGameMode = GameModeBP->GeneratedClass;
+		}
+	}
+
 	NewWorld->SpawnActor<APlayerStart>(APlayerStart::StaticClass(), FTransform(FVector(0.f, 0.f, 100.f)), SpawnParams);
 
 	ADirectionalLight* Sun = NewWorld->SpawnActor<ADirectionalLight>(ADirectionalLight::StaticClass(), FTransform::Identity, SpawnParams);
@@ -117,10 +131,174 @@ void FDiabloAssetGenerator::GenerateDefaultMap()
 		UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Spawned BP_HealingPotion in map"));
 	}
 
+	// Spawn stairs to cathedral
+	ADungeonStairs* DownStairs = NewWorld->SpawnActor<ADungeonStairs>(
+		ADungeonStairs::StaticClass(), FTransform(FVector(-400.f, 0.f, 50.f)), SpawnParams);
+	if (DownStairs)
+	{
+		DownStairs->TargetLevelName = FName("Lvl_Cathedral_L1");
+		DownStairs->SetActorScale3D(FVector(1.5f, 1.5f, 0.5f));
+		DownStairs->SetActorLabel(TEXT("Stairs_Down"));
+		UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Spawned stairs to Cathedral"));
+	}
+
+	// Build NavMesh so it's baked into the saved map
+	if (UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(NewWorld))
+	{
+		NavSys->Build();
+	}
+
 	const FString FilePath = FPackageName::LongPackageNameToFilename(MapPackagePath, FPackageName::GetMapPackageExtension());
 	FEditorFileUtils::SaveMap(NewWorld, FilePath);
 
 	UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Created map: %s"), *MapPackagePath);
+}
+
+void FDiabloAssetGenerator::GenerateCathedralMap()
+{
+	const FString MapPackagePath = TEXT("/Game/Maps/Lvl_Cathedral_L1");
+
+	UWorld* NewWorld = UEditorLoadingAndSavingUtils::NewBlankMap(false);
+	if (!NewWorld)
+	{
+		UE_LOG(LogTemp, Error, TEXT("[DiabloTools] Failed to create blank cathedral map"));
+		return;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+	// Set GameMode override so the correct hero + controller spawn
+	UBlueprint* GameModeBP = LoadObject<UBlueprint>(nullptr,
+		TEXT("/Game/Blueprints/BP_DiabloGameMode.BP_DiabloGameMode"));
+	if (GameModeBP && GameModeBP->GeneratedClass)
+	{
+		AWorldSettings* WS = NewWorld->GetWorldSettings();
+		if (WS)
+		{
+			WS->DefaultGameMode = GameModeBP->GeneratedClass;
+			UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Cathedral: set GameMode override -> BP_DiabloGameMode"));
+		}
+	}
+
+	// PlayerStart near the entrance
+	NewWorld->SpawnActor<APlayerStart>(APlayerStart::StaticClass(),
+		FTransform(FVector(0.f, 0.f, 100.f)), SpawnParams);
+
+	// Dim directional light for dungeon atmosphere
+	ADirectionalLight* Sun = NewWorld->SpawnActor<ADirectionalLight>(
+		ADirectionalLight::StaticClass(), FTransform::Identity, SpawnParams);
+	if (Sun)
+	{
+		Sun->SetActorRotation(FRotator(-60.f, -45.f, 0.f));
+		if (UDirectionalLightComponent* LC = Sun->FindComponentByClass<UDirectionalLightComponent>())
+		{
+			LC->SetIntensity(2.f);
+		}
+	}
+
+	// Floor
+	UStaticMesh* CubeMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+	UStaticMesh* PlaneMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Plane.Plane"));
+
+	if (PlaneMesh)
+	{
+		AStaticMeshActor* Floor = NewWorld->SpawnActor<AStaticMeshActor>(
+			AStaticMeshActor::StaticClass(), FTransform::Identity, SpawnParams);
+		if (Floor)
+		{
+			Floor->GetStaticMeshComponent()->SetStaticMesh(PlaneMesh);
+			Floor->SetActorScale3D(FVector(40.f, 40.f, 1.f));
+			Floor->SetActorLabel(TEXT("DungeonFloor"));
+		}
+	}
+
+	// NavMesh
+	SpawnNavMeshVolume(NewWorld);
+
+	// Wall layout: L-shaped corridor using cube walls
+	struct FWallDef { FVector Location; FVector Scale; };
+	TArray<FWallDef> Walls = {
+		// Entrance corridor (north-south)
+		{{ -300.f,  -200.f, 100.f }, { 0.1f, 8.f, 2.f }},
+		{{  300.f,  -200.f, 100.f }, { 0.1f, 8.f, 2.f }},
+		// East wing
+		{{  300.f,   600.f, 100.f }, { 10.f, 0.1f, 2.f }},
+		{{  300.f,  -1000.f, 100.f }, { 10.f, 0.1f, 2.f }},
+		// West wall of east wing
+		{{ -300.f,  -1000.f, 100.f }, { 10.f, 0.1f, 2.f }},
+		// Back wall
+		{{ 1300.f,  -200.f, 100.f }, { 0.1f, 8.f, 2.f }},
+	};
+
+	if (CubeMesh)
+	{
+		for (int32 i = 0; i < Walls.Num(); ++i)
+		{
+			const FWallDef& W = Walls[i];
+			AStaticMeshActor* Wall = NewWorld->SpawnActor<AStaticMeshActor>(
+				AStaticMeshActor::StaticClass(),
+				FTransform(FVector(W.Location)), SpawnParams);
+			if (Wall)
+			{
+				Wall->GetStaticMeshComponent()->SetStaticMesh(CubeMesh);
+				Wall->SetActorScale3D(W.Scale);
+				Wall->SetActorLabel(*FString::Printf(TEXT("Wall_%d"), i));
+			}
+		}
+	}
+
+	// Enemies
+	UBlueprint* EnemyBP = LoadObject<UBlueprint>(nullptr,
+		TEXT("/Game/Blueprints/BP_DiabloEnemy.BP_DiabloEnemy"));
+	if (EnemyBP && EnemyBP->GeneratedClass)
+	{
+		FVector EnemyPositions[] = {
+			{ 500.f, 0.f, 100.f },
+			{ 800.f, -300.f, 100.f },
+			{ 600.f, -600.f, 100.f },
+		};
+		for (const FVector& Pos : EnemyPositions)
+		{
+			NewWorld->SpawnActor<AActor>(EnemyBP->GeneratedClass,
+				FTransform(Pos), SpawnParams);
+		}
+		UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Spawned 3 enemies in Cathedral L1"));
+	}
+
+	// Healing potion
+	UBlueprint* PotionBP = LoadObject<UBlueprint>(nullptr,
+		TEXT("/Game/Blueprints/BP_HealingPotion.BP_HealingPotion"));
+	if (PotionBP && PotionBP->GeneratedClass)
+	{
+		NewWorld->SpawnActor<AActor>(PotionBP->GeneratedClass,
+			FTransform(FVector(700.f, 200.f, 100.f)), SpawnParams);
+	}
+
+	// Stairs back to town
+	ADungeonStairs* UpStairs = NewWorld->SpawnActor<ADungeonStairs>(
+		ADungeonStairs::StaticClass(),
+		FTransform(FVector(-200.f, 0.f, 50.f)), SpawnParams);
+	if (UpStairs)
+	{
+		UpStairs->TargetLevelName = FName("Lvl_Diablo");
+		UpStairs->SetActorScale3D(FVector(1.5f, 1.5f, 0.5f));
+		UpStairs->SetActorLabel(TEXT("Stairs_Up"));
+		UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Spawned stairs back to town"));
+	}
+
+	// Build NavMesh so it's baked into the saved map
+	if (UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(NewWorld))
+	{
+		NavSys->Build();
+		UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Cathedral: NavMesh built"));
+	}
+
+	const FString FilePath = FPackageName::LongPackageNameToFilename(
+		MapPackagePath, FPackageName::GetMapPackageExtension());
+	FEditorFileUtils::SaveMap(NewWorld, FilePath);
+
+	UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Created cathedral map: %s"), *MapPackagePath);
 }
 
 void FDiabloAssetGenerator::SpawnFloorPlane(UWorld* World)

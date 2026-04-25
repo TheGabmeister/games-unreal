@@ -205,6 +205,15 @@ void SDiabloEditorToolPanel::Construct(const FArguments& InArgs)
 			.Padding(0.f, 4.f)
 			[
 				SNew(SButton)
+				.Text(FText::FromString(TEXT("Generate Cathedral Map")))
+				.OnClicked(this, &SDiabloEditorToolPanel::OnGenerateCathedral)
+			]
+
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(0.f, 4.f)
+			[
+				SNew(SButton)
 				.Text(FText::FromString(TEXT("Generate Input Assets")))
 				.OnClicked(this, &SDiabloEditorToolPanel::OnGenerateInput)
 			]
@@ -221,6 +230,12 @@ FReply SDiabloEditorToolPanel::OnGenerateAll()
 FReply SDiabloEditorToolPanel::OnGenerateMap()
 {
 	FDiabloAssetGenerator::GenerateDefaultMap();
+	return FReply::Handled();
+}
+
+FReply SDiabloEditorToolPanel::OnGenerateCathedral()
+{
+	FDiabloAssetGenerator::GenerateCathedralMap();
 	return FReply::Handled();
 }
 

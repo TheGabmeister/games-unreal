@@ -135,6 +135,14 @@ IntelliSense errors like `cannot open source file "X.h"` are usually false posit
 - `UDiabloSpellbookPanel : UUserWidget` ([DiabloSpellbookPanel.h](Source/Diablo/DiabloSpellbookPanel.h)) (Abstract) — C++ widget tree listing known spells. Toggle via **S key** (`IA_Spellbook`). RMB-click a spell to bind it to the active (RMB) slot. Active spell highlighted in gold. Anchored top-right.
 - `SetupSpells` creates 5 `USpellDefinition` data assets: Firebolt, Fireball, Lightning, Nova, Healing.
 
+### Dungeon + Level Transitions (M12)
+
+- `ADungeonStairs : AActor` ([DungeonStairs.h](Source/Diablo/DungeonStairs.h)) — cube mesh that blocks `ECC_Visibility` for cursor click detection. `TargetLevelName` (FName) set per-instance. `OnInteract()` calls `UGameplayStatics::OpenLevel`. Click-to-interact uses the same walk-into-range pattern as enemies/items; `InteractRange = 200`.
+- `ADiabloPlayerController` has `TargetStairs` — click stairs → walk into range → `OnInteract()` triggers level transition. Checked in `Tick` before items/enemies.
+- `Lvl_Diablo` (town) has `Stairs_Down` pointing to `Lvl_Cathedral_L1`. Cathedral has `Stairs_Up` pointing back to `Lvl_Diablo`.
+- `GenerateCathedralMap` creates `Lvl_Cathedral_L1` with dim lighting, cube-wall corridors, 3 enemies, a healing potion, NavMesh, and return stairs.
+- **State loss:** hero stats, inventory, and spells are lost on `OpenLevel` — this is the intentional "state loss" problem that M13 solves with `UDiabloGameInstance`.
+
 ### Input
 
 **Enhanced Input only.** No legacy `InputComponent` axis bindings.
@@ -177,7 +185,8 @@ IntelliSense errors like `cannot open source file "X.h"` are usually false posit
 
 | Method | Behavior |
 |---|---|
-| `GenerateDefaultMap` | Creates `Lvl_Diablo` with PlayerStart, DirectionalLight, floor plane, NavMeshBoundsVolume, test enemy, healing potion — **always recreates** |
+| `GenerateDefaultMap` | Creates `Lvl_Diablo` with PlayerStart, DirectionalLight, floor plane, NavMeshBoundsVolume, test enemy, healing potion, stairs to cathedral — **always recreates** |
+| `GenerateCathedralMap` | Creates `Lvl_Cathedral_L1` with dim lighting, cube-wall corridors, 3 enemies, healing potion, NavMesh, return stairs — **always recreates** |
 | `GenerateInputAssets` | Creates/updates IA_Click/Move/Look and IMC_Diablo — **updates in place** |
 
 **Do not attempt programmatic AnimBP generation.** State machine graph construction via K2 nodes is too fragile (wrong pin names, function reference ordering, MinimalAPI exports). AnimBPs are the one asset type authored manually in the editor.

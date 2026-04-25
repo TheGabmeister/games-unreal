@@ -9,6 +9,7 @@ struct FDiabloAssetGenerator
 {
 	static void GenerateAllAssets();
 	static void GenerateDefaultMap();
+	static void GenerateCathedralMap();
 	static void GenerateInputAssets();
 	static void ImportWarriorFBX();
 	static void ImportAttackSFX();

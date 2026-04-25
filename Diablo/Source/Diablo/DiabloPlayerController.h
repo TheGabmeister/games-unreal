@@ -8,6 +8,7 @@ class UInputAction;
 class UInputMappingContext;
 class ADiabloEnemy;
 class ADroppedItem;
+class ADungeonStairs;
 class UDiabloHUDWidget;
 class UDiabloCharacterPanel;
 class UDiabloInventoryPanel;
@@ -65,6 +66,9 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Interaction")
 	float PickupRange = 150.f;
 
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Interaction")
+	float InteractRange = 200.f;
+
 private:
 	void CreateHUD();
 	void OnClickStarted();
@@ -79,6 +83,9 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<ADroppedItem> TargetItem;
+
+	UPROPERTY()
+	TObjectPtr<ADungeonStairs> TargetStairs;
 
 	UPROPERTY()
 	TObjectPtr<UDiabloHUDWidget> HUDWidget;
