@@ -171,6 +171,15 @@ void SDiabloEditorToolPanel::Construct(const FArguments& InArgs)
 				.OnClicked(this, &SDiabloEditorToolPanel::OnSetupDropMaterial)
 			]
 
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(0.f, 4.f)
+			[
+				SNew(SButton)
+				.Text(FText::FromString(TEXT("Setup Spells")))
+				.OnClicked(this, &SDiabloEditorToolPanel::OnSetupSpells)
+			]
+
 			// --- World ---
 
 			+ SVerticalBox::Slot()
@@ -296,5 +305,11 @@ FReply SDiabloEditorToolPanel::OnSetupInventory()
 FReply SDiabloEditorToolPanel::OnSetupDropMaterial()
 {
 	FDiabloAssetGenerator::SetupDropMaterial();
+	return FReply::Handled();
+}
+
+FReply SDiabloEditorToolPanel::OnSetupSpells()
+{
+	FDiabloAssetGenerator::SetupSpells();
 	return FReply::Handled();
 }

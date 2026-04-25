@@ -1,8 +1,12 @@
 #include "DiabloHero.h"
 #include "DiabloPlayerController.h"
 #include "InventoryComponent.h"
+#include "SpellDefinition.h"
 #include "SpellProjectile.h"
+#include "DiabloEnemy.h"
 #include "Diablo.h"
+#include "Engine/DamageEvents.h"
+#include "Engine/OverlapResult.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "Camera/CameraComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -136,15 +140,16 @@ void ADiabloHero::Tick(float DeltaTime)
 	}
 }
 
+void ADiabloHero::SetActiveSpell(USpellDefinition* Spell)
+{
+	ActiveSpell = Spell;
+	UE_LOG(LogDiablo, Display, TEXT("Active spell: %s"),
+		Spell ? *Spell->DisplayName.ToString() : TEXT("None"));
+}
+
 bool ADiabloHero::CastSpell(const FVector& TargetLocation)
 {
-	if (IsDead() || !SpellClass)
-	{
-		return false;
-	}
-
-	const ASpellProjectile* SpellCDO = SpellClass->GetDefaultObject<ASpellProjectile>();
-	if (!SpellCDO)
+	if (IsDead() || !ActiveSpell)
 	{
 		return false;
 	}
@@ -155,15 +160,15 @@ bool ADiabloHero::CastSpell(const FVector& TargetLocation)
 		return false;
 	}
 
-	if (Stats.Mana < SpellCDO->ManaCost)
+	if (Stats.Mana < ActiveSpell->ManaCost)
 	{
 		UE_LOG(LogDiablo, Display, TEXT("Not enough mana (%.0f/%.0f needed)"),
-			Stats.Mana, SpellCDO->ManaCost);
+			Stats.Mana, ActiveSpell->ManaCost);
 		return false;
 	}
 
-	Stats.Mana -= SpellCDO->ManaCost;
-	SpellCooldownRemaining = SpellCDO->Cooldown;
+	Stats.Mana -= ActiveSpell->ManaCost;
+	SpellCooldownRemaining = ActiveSpell->Cooldown;
 
 	FVector Direction = (TargetLocation - GetActorLocation()).GetSafeNormal2D();
 	if (Direction.IsNearlyZero())
@@ -173,20 +178,51 @@ bool ADiabloHero::CastSpell(const FVector& TargetLocation)
 
 	SetActorRotation(Direction.Rotation());
 
-	const FVector SpawnLoc = GetActorLocation() + Direction * 80.f + FVector(0.f, 0.f, 50.f);
-	const FRotator SpawnRot = Direction.Rotation();
+	if (ActiveSpell->bIsProjectile && ActiveSpell->ProjectileClass)
+	{
+		const FVector SpawnLoc = GetActorLocation() + Direction * 80.f + FVector(0.f, 0.f, 50.f);
+		const FRotator SpawnRot = Direction.Rotation();
 
-	FActorSpawnParameters Params;
-	Params.Instigator = this;
-	Params.Owner = this;
-	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		FActorSpawnParameters Params;
+		Params.Instigator = this;
+		Params.Owner = this;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
-	GetWorld()->SpawnActor<ASpellProjectile>(SpellClass, SpawnLoc, SpawnRot, Params);
+		ASpellProjectile* Proj = GetWorld()->SpawnActor<ASpellProjectile>(
+			ActiveSpell->ProjectileClass, SpawnLoc, SpawnRot, Params);
+		if (Proj)
+		{
+			Proj->Damage = ActiveSpell->Damage;
+		}
+	}
+	else if (ActiveSpell->HealAmount > 0.f)
+	{
+		Heal(ActiveSpell->HealAmount);
+	}
+	else
+	{
+		// AoE (Nova): damage all enemies within radius
+		const float NovaRadius = 500.f;
+		TArray<FOverlapResult> Overlaps;
+		FCollisionShape Shape = FCollisionShape::MakeSphere(NovaRadius);
+		GetWorld()->OverlapMultiByChannel(Overlaps, GetActorLocation(), FQuat::Identity,
+			ECC_Pawn, Shape);
+
+		for (const FOverlapResult& Overlap : Overlaps)
+		{
+			ADiabloEnemy* Enemy = Cast<ADiabloEnemy>(Overlap.GetActor());
+			if (Enemy && !Enemy->IsDead())
+			{
+				FDamageEvent DamageEvent;
+				Enemy->TakeDamage(ActiveSpell->Damage, DamageEvent, GetController(), this);
+			}
+		}
+	}
 
 	OnStatsChanged.Broadcast();
 
 	UE_LOG(LogDiablo, Display, TEXT("%s cast %s (mana: %.0f/%.0f)"),
-		*GetName(), *SpellClass->GetName(), Stats.Mana, Stats.MaxMana);
+		*GetName(), *ActiveSpell->DisplayName.ToString(), Stats.Mana, Stats.MaxMana);
 	return true;
 }
 

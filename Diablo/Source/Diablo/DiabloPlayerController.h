@@ -11,6 +11,7 @@ class ADroppedItem;
 class UDiabloHUDWidget;
 class UDiabloCharacterPanel;
 class UDiabloInventoryPanel;
+class UDiabloSpellbookPanel;
 
 UCLASS(Abstract)
 class DIABLO_API ADiabloPlayerController : public APlayerController
@@ -43,6 +44,9 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input")
 	TObjectPtr<UInputAction> CastAction;
 
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input")
+	TObjectPtr<UInputAction> SpellbookAction;
+
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "HUD")
 	TSubclassOf<UDiabloHUDWidget> HUDWidgetClass;
 
@@ -51,6 +55,9 @@ protected:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "HUD")
 	TSubclassOf<UDiabloInventoryPanel> InventoryPanelClass;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "HUD")
+	TSubclassOf<UDiabloSpellbookPanel> SpellbookPanelClass;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Combat")
 	float AttackRange = 200.f;
@@ -64,6 +71,7 @@ private:
 	void OnCastStarted();
 	void OnToggleCharPanel();
 	void OnToggleInventory();
+	void OnToggleSpellbook();
 	void OnRespawnTimerExpired();
 
 	UPROPERTY()
@@ -80,6 +88,9 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<UDiabloInventoryPanel> InventoryPanel;
+
+	UPROPERTY()
+	TObjectPtr<UDiabloSpellbookPanel> SpellbookPanel;
 
 	FTimerHandle RespawnTimerHandle;
 };

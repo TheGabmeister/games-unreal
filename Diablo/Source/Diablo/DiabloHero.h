@@ -12,6 +12,7 @@ class USoundWave;
 class ADiabloEnemy;
 class UInventoryComponent;
 class ASpellProjectile;
+class USpellDefinition;
 
 DECLARE_MULTICAST_DELEGATE(FOnStatsChanged);
 
@@ -33,6 +34,8 @@ public:
 	void AwardXP(int64 Amount);
 	bool SpendStatPoint(FName StatName);
 	bool CastSpell(const FVector& TargetLocation);
+	void SetActiveSpell(USpellDefinition* Spell);
+	USpellDefinition* GetActiveSpell() const { return ActiveSpell; }
 
 	FOnStatsChanged OnStatsChanged;
 
@@ -70,7 +73,10 @@ public:
 	TObjectPtr<UInventoryComponent> Inventory;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Spell")
-	TSubclassOf<ASpellProjectile> SpellClass;
+	TArray<TObjectPtr<USpellDefinition>> KnownSpells;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Spell")
+	TObjectPtr<USpellDefinition> ActiveSpell;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat")
 	float EquipMinDamage = 0.f;

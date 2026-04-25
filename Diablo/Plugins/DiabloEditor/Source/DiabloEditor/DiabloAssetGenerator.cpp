@@ -44,7 +44,12 @@
 #include "DiabloCharacterPanel.h"
 #include "DiabloInventoryPanel.h"
 #include "ItemDefinition.h"
+#include "SpellDefinition.h"
+#include "SpellProjectile.h"
 #include "Firebolt.h"
+#include "Fireball.h"
+#include "LightningBolt.h"
+#include "DiabloSpellbookPanel.h"
 
 void FDiabloAssetGenerator::GenerateAllAssets()
 {
@@ -68,6 +73,7 @@ void FDiabloAssetGenerator::SetupAllBlueprints()
 	SetupHUD();
 	SetupInventory();
 	SetupDropMaterial();
+	SetupSpells();
 }
 
 void FDiabloAssetGenerator::GenerateDefaultMap()
@@ -202,6 +208,7 @@ void FDiabloAssetGenerator::GenerateInputAssets()
 		{ TEXT("IA_CharPanel"), EInputActionValueType::Boolean, EKeys::C },
 		{ TEXT("IA_Inventory"), EInputActionValueType::Boolean, EKeys::I },
 		{ TEXT("IA_Cast"),      EInputActionValueType::Boolean, EKeys::RightMouseButton },
+		{ TEXT("IA_Spellbook"), EInputActionValueType::Boolean, EKeys::S },
 	};
 
 	const FString InputBasePath = TEXT("/Game/Input/Actions");
@@ -706,13 +713,36 @@ void FDiabloAssetGenerator::SetupHero()
 		}
 	}
 
-	if (FProperty* SpellProp = HeroBP->GeneratedClass->FindPropertyByName(TEXT("SpellClass")))
+	// Set KnownSpells + ActiveSpell from spell definitions
+	ADiabloHero* HeroDefaults = Cast<ADiabloHero>(HeroCDO);
+	if (HeroDefaults)
 	{
-		if (FClassProperty* ClassProp = CastField<FClassProperty>(SpellProp))
+		HeroDefaults->KnownSpells.Empty();
+
+		const TCHAR* SpellPaths[] = {
+			TEXT("/Game/Spells/Definitions/SD_Firebolt.SD_Firebolt"),
+			TEXT("/Game/Spells/Definitions/SD_Fireball.SD_Fireball"),
+			TEXT("/Game/Spells/Definitions/SD_Lightning.SD_Lightning"),
+			TEXT("/Game/Spells/Definitions/SD_Nova.SD_Nova"),
+			TEXT("/Game/Spells/Definitions/SD_Healing.SD_Healing"),
+		};
+
+		for (const TCHAR* Path : SpellPaths)
 		{
-			ClassProp->SetObjectPropertyValue(ClassProp->ContainerPtrToValuePtr<void>(HeroCDO), AFirebolt::StaticClass());
-			UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_DiabloHero: set SpellClass -> AFirebolt"));
+			USpellDefinition* Def = LoadObject<USpellDefinition>(nullptr, Path);
+			if (Def)
+			{
+				HeroDefaults->KnownSpells.Add(Def);
+			}
 		}
+
+		if (HeroDefaults->KnownSpells.Num() > 0)
+		{
+			HeroDefaults->ActiveSpell = HeroDefaults->KnownSpells[0];
+		}
+
+		UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_DiabloHero: set KnownSpells (%d) + ActiveSpell"),
+			HeroDefaults->KnownSpells.Num());
 	}
 
 	FKismetEditorUtilities::CompileBlueprint(HeroBP);
@@ -728,6 +758,7 @@ void FDiabloAssetGenerator::SetupController()
 	UInputAction* CharPanelAction = LoadObject<UInputAction>(nullptr, TEXT("/Game/Input/Actions/IA_CharPanel.IA_CharPanel"));
 	UInputAction* InventoryAction = LoadObject<UInputAction>(nullptr, TEXT("/Game/Input/Actions/IA_Inventory.IA_Inventory"));
 	UInputAction* CastAction = LoadObject<UInputAction>(nullptr, TEXT("/Game/Input/Actions/IA_Cast.IA_Cast"));
+	UInputAction* SpellbookAction = LoadObject<UInputAction>(nullptr, TEXT("/Game/Input/Actions/IA_Spellbook.IA_Spellbook"));
 	UInputMappingContext* IMC = LoadObject<UInputMappingContext>(nullptr, TEXT("/Game/Input/IMC_Diablo.IMC_Diablo"));
 
 	if (!ControllerBP || !ControllerBP->GeneratedClass)
@@ -779,6 +810,17 @@ void FDiabloAssetGenerator::SetupController()
 				{
 					ObjProp->SetObjectPropertyValue(ObjProp->ContainerPtrToValuePtr<void>(CDO), CastAction);
 					UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_DiabloPlayerController: set CastAction"));
+				}
+			}
+		}
+		if (FProperty* SBProp = ControllerBP->GeneratedClass->FindPropertyByName(TEXT("SpellbookAction")))
+		{
+			if (FObjectProperty* ObjProp = CastField<FObjectProperty>(SBProp))
+			{
+				if (SpellbookAction)
+				{
+					ObjProp->SetObjectPropertyValue(ObjProp->ContainerPtrToValuePtr<void>(CDO), SpellbookAction);
+					UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_DiabloPlayerController: set SpellbookAction"));
 				}
 			}
 		}
@@ -1037,7 +1079,38 @@ void FDiabloAssetGenerator::SetupHUD()
 		}
 	}
 
-	// --- Set HUDWidgetClass, CharPanelClass, InventoryPanelClass on BP_DiabloPlayerController ---
+	// --- Create BP_DiabloSpellbookPanel ---
+	const FString SBPath = TEXT("/Game/Blueprints/BP_DiabloSpellbookPanel");
+	const FString SBObjPath = SBPath + TEXT(".BP_DiabloSpellbookPanel");
+
+	UWidgetBlueprint* SpellbookBP = LoadObject<UWidgetBlueprint>(nullptr, *SBObjPath);
+	if (!SpellbookBP)
+	{
+		UPackage* SBPackage = CreatePackage(*SBPath);
+		SBPackage->FullyLoad();
+
+		UWidgetBlueprintFactory* SBFactory = NewObject<UWidgetBlueprintFactory>();
+		SBFactory->ParentClass = UDiabloSpellbookPanel::StaticClass();
+
+		SpellbookBP = Cast<UWidgetBlueprint>(SBFactory->FactoryCreateNew(
+			UWidgetBlueprint::StaticClass(),
+			SBPackage,
+			TEXT("BP_DiabloSpellbookPanel"),
+			RF_Public | RF_Standalone,
+			nullptr,
+			GWarn
+		));
+
+		if (SpellbookBP)
+		{
+			FKismetEditorUtilities::CompileBlueprint(SpellbookBP);
+			SaveAsset(SpellbookBP, SBPackage, SBPath);
+			NotifyAssetCreated(SpellbookBP);
+			UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Created BP_DiabloSpellbookPanel"));
+		}
+	}
+
+	// --- Set HUDWidgetClass, CharPanelClass, InventoryPanelClass, SpellbookPanelClass on BP_DiabloPlayerController ---
 	UBlueprint* ControllerBP = LoadObject<UBlueprint>(nullptr,
 		TEXT("/Game/Blueprints/BP_DiabloPlayerController.BP_DiabloPlayerController"));
 
@@ -1079,6 +1152,18 @@ void FDiabloAssetGenerator::SetupHUD()
 				{
 					ObjProp->SetObjectPropertyValue(ObjProp->ContainerPtrToValuePtr<void>(CDO), InvPanelBP->GeneratedClass);
 					UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_DiabloPlayerController: set InventoryPanelClass -> BP_DiabloInventoryPanel"));
+				}
+			}
+		}
+
+		if (SpellbookBP && SpellbookBP->GeneratedClass)
+		{
+			if (FProperty* Prop = ControllerBP->GeneratedClass->FindPropertyByName(TEXT("SpellbookPanelClass")))
+			{
+				if (FObjectProperty* ObjProp = CastField<FObjectProperty>(Prop))
+				{
+					ObjProp->SetObjectPropertyValue(ObjProp->ContainerPtrToValuePtr<void>(CDO), SpellbookBP->GeneratedClass);
+					UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_DiabloPlayerController: set SpellbookPanelClass -> BP_DiabloSpellbookPanel"));
 				}
 			}
 		}
@@ -1126,6 +1211,75 @@ void FDiabloAssetGenerator::SetupDropMaterial()
 	SaveAsset(Mat, MatPkg, MatPath);
 	NotifyAssetCreated(Mat);
 	UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Created M_ItemDrop material with texture parameter"));
+}
+
+// ---------------------------------------------------------------------------
+// Spell Definitions
+// ---------------------------------------------------------------------------
+
+void FDiabloAssetGenerator::SetupSpells()
+{
+	struct FSpellDef
+	{
+		FString Name;
+		FText DisplayName;
+		float ManaCost;
+		float Cooldown;
+		float Damage;
+		TSubclassOf<ASpellProjectile> ProjectileClass;
+		bool bIsProjectile;
+		float HealAmount;
+	};
+
+	TArray<FSpellDef> Spells = {
+		{ TEXT("SD_Firebolt"),  FText::FromString(TEXT("Firebolt")),  6.f,  0.8f, 20.f, AFirebolt::StaticClass(),      true,  0.f },
+		{ TEXT("SD_Fireball"),  FText::FromString(TEXT("Fireball")),  12.f, 1.2f, 40.f, AFireball::StaticClass(),      true,  0.f },
+		{ TEXT("SD_Lightning"), FText::FromString(TEXT("Lightning")), 8.f,  0.5f, 15.f, ALightningBolt::StaticClass(), true,  0.f },
+		{ TEXT("SD_Nova"),      FText::FromString(TEXT("Nova")),      20.f, 2.0f, 30.f, nullptr,                       false, 0.f },
+		{ TEXT("SD_Healing"),   FText::FromString(TEXT("Healing")),   15.f, 3.0f, 0.f,  nullptr,                       false, 50.f },
+	};
+
+	const FString BasePath = TEXT("/Game/Spells/Definitions");
+
+	for (const FSpellDef& Def : Spells)
+	{
+		const FString FullPath = BasePath / Def.Name;
+		const FString ObjPath = FullPath + TEXT(".") + Def.Name;
+
+		USpellDefinition* Existing = LoadObject<USpellDefinition>(nullptr, *ObjPath);
+		if (Existing)
+		{
+			Existing->DisplayName = Def.DisplayName;
+			Existing->ManaCost = Def.ManaCost;
+			Existing->Cooldown = Def.Cooldown;
+			Existing->Damage = Def.Damage;
+			Existing->ProjectileClass = Def.ProjectileClass;
+			Existing->bIsProjectile = Def.bIsProjectile;
+			Existing->HealAmount = Def.HealAmount;
+			SaveAsset(Existing, Existing->GetOutermost(), FullPath);
+			UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Updated spell definition: %s"), *Def.Name);
+			continue;
+		}
+
+		UPackage* Package = CreatePackage(*FullPath);
+		Package->FullyLoad();
+
+		USpellDefinition* SpellDef = NewObject<USpellDefinition>(
+			Package, *Def.Name, RF_Public | RF_Standalone);
+		SpellDef->DisplayName = Def.DisplayName;
+		SpellDef->ManaCost = Def.ManaCost;
+		SpellDef->Cooldown = Def.Cooldown;
+		SpellDef->Damage = Def.Damage;
+		SpellDef->ProjectileClass = Def.ProjectileClass;
+		SpellDef->bIsProjectile = Def.bIsProjectile;
+		SpellDef->HealAmount = Def.HealAmount;
+
+		if (SaveAsset(SpellDef, Package, FullPath))
+		{
+			NotifyAssetCreated(SpellDef);
+			UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Created spell definition: %s"), *Def.Name);
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------

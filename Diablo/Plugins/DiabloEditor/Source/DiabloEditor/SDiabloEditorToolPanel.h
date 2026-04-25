@@ -28,4 +28,5 @@ private:
 	FReply OnSetupHUD();
 	FReply OnSetupInventory();
 	FReply OnSetupDropMaterial();
+	FReply OnSetupSpells();
 };

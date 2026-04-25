@@ -3,6 +3,7 @@
 #include "DiabloHUDWidget.h"
 #include "DiabloCharacterPanel.h"
 #include "DiabloInventoryPanel.h"
+#include "DiabloSpellbookPanel.h"
 #include "InventoryComponent.h"
 #include "DiabloEnemy.h"
 #include "DroppedItem.h"
@@ -50,6 +51,10 @@ void ADiabloPlayerController::OnPossess(APawn* InPawn)
 		if (InventoryPanel)
 		{
 			InventoryPanel->InitForInventory(Hero->Inventory);
+		}
+		if (SpellbookPanel)
+		{
+			SpellbookPanel->InitForHero(Hero);
 		}
 	}
 }
@@ -102,6 +107,21 @@ void ADiabloPlayerController::CreateHUD()
 			}
 		}
 	}
+
+	if (SpellbookPanelClass)
+	{
+		SpellbookPanel = CreateWidget<UDiabloSpellbookPanel>(this, SpellbookPanelClass);
+		if (SpellbookPanel)
+		{
+			SpellbookPanel->AddToViewport();
+			SpellbookPanel->SetVisibility(ESlateVisibility::Collapsed);
+
+			if (ADiabloHero* Hero = Cast<ADiabloHero>(GetPawn()))
+			{
+				SpellbookPanel->InitForHero(Hero);
+			}
+		}
+	}
 }
 
 void ADiabloPlayerController::SetupInputComponent()
@@ -122,6 +142,10 @@ void ADiabloPlayerController::SetupInputComponent()
 		if (CastAction)
 		{
 			EIC->BindAction(CastAction, ETriggerEvent::Started, this, &ADiabloPlayerController::OnCastStarted);
+		}
+		if (SpellbookAction)
+		{
+			EIC->BindAction(SpellbookAction, ETriggerEvent::Started, this, &ADiabloPlayerController::OnToggleSpellbook);
 		}
 	}
 }
@@ -166,6 +190,28 @@ void ADiabloPlayerController::OnToggleInventory()
 	else
 	{
 		InventoryPanel->SetVisibility(ESlateVisibility::Collapsed);
+		SetInputMode(FInputModeGameOnly());
+	}
+}
+
+void ADiabloPlayerController::OnToggleSpellbook()
+{
+	if (!SpellbookPanel)
+	{
+		return;
+	}
+
+	if (SpellbookPanel->GetVisibility() == ESlateVisibility::Collapsed)
+	{
+		SpellbookPanel->SetVisibility(ESlateVisibility::Visible);
+		bShowMouseCursor = true;
+		FInputModeGameAndUI Mode;
+		Mode.SetWidgetToFocus(SpellbookPanel->TakeWidget());
+		SetInputMode(Mode);
+	}
+	else
+	{
+		SpellbookPanel->SetVisibility(ESlateVisibility::Collapsed);
 		SetInputMode(FInputModeGameOnly());
 	}
 }
