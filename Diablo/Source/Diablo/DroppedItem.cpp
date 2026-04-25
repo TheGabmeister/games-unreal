@@ -5,6 +5,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Engine/StaticMesh.h"
+#include "UObject/ConstructorHelpers.h"
 
 ADroppedItem::ADroppedItem()
 {
@@ -12,6 +13,13 @@ ADroppedItem::ADroppedItem()
 	RootComponent = MeshComponent;
 
 	MeshComponent->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
+
+	static ConstructorHelpers::FObjectFinder<UMaterial> DropMatFinder(
+		TEXT("/Game/Items/M_ItemDrop.M_ItemDrop"));
+	if (DropMatFinder.Succeeded())
+	{
+		DropMaterial = DropMatFinder.Object;
+	}
 }
 
 void ADroppedItem::InitFromItem(const FItemInstance& InItem)
@@ -25,10 +33,9 @@ void ADroppedItem::InitFromItem(const FItemInstance& InItem)
 	MeshComponent->SetRelativeScale3D(FVector(0.5f, 0.5f, 0.5f));
 	MeshComponent->SetRelativeRotation(FRotator(90.f, 45.f, 0.f));
 
-	UMaterial* DropMat = LoadObject<UMaterial>(nullptr, TEXT("/Game/Items/M_ItemDrop.M_ItemDrop"));
-	if (DropMat && ItemData.Definition && ItemData.Definition->Icon)
+	if (DropMaterial && ItemData.Definition && ItemData.Definition->Icon)
 	{
-		UMaterialInstanceDynamic* DynMat = UMaterialInstanceDynamic::Create(DropMat, this);
+		UMaterialInstanceDynamic* DynMat = UMaterialInstanceDynamic::Create(DropMaterial, this);
 		DynMat->SetTextureParameterValue(TEXT("Texture"), ItemData.Definition->Icon);
 		MeshComponent->SetMaterial(0, DynMat);
 	}
