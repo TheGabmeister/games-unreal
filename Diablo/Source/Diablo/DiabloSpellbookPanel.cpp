@@ -107,9 +107,9 @@ TSharedRef<SWidget> UDiabloSpellbookPanel::RebuildWidget()
 		BG->SetPadding(FMargin(12.f));
 
 		UCanvasPanelSlot* BGSlot = Root->AddChildToCanvas(BG);
-		BGSlot->SetAnchors(FAnchors(1.f, 0.f, 1.f, 0.f));
-		BGSlot->SetAlignment(FVector2D(1.f, 0.f));
-		BGSlot->SetPosition(FVector2D(-10.f, 10.f));
+		BGSlot->SetAnchors(FAnchors(0.f, 0.f, 0.f, 0.f));
+		BGSlot->SetAlignment(FVector2D(0.f, 0.f));
+		BGSlot->SetPosition(FVector2D(240.f, 10.f));
 		BGSlot->SetSize(FVector2D(250.f, 320.f));
 
 		UVerticalBox* VBox = WidgetTree->ConstructWidget<UVerticalBox>(

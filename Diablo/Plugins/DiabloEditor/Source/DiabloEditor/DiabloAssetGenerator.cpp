@@ -1235,7 +1235,7 @@ void FDiabloAssetGenerator::SetupSpells()
 		{ TEXT("SD_Firebolt"),  FText::FromString(TEXT("Firebolt")),  6.f,  0.8f, 20.f, AFirebolt::StaticClass(),      true,  0.f },
 		{ TEXT("SD_Fireball"),  FText::FromString(TEXT("Fireball")),  12.f, 1.2f, 40.f, AFireball::StaticClass(),      true,  0.f },
 		{ TEXT("SD_Lightning"), FText::FromString(TEXT("Lightning")), 8.f,  0.5f, 15.f, ALightningBolt::StaticClass(), true,  0.f },
-		{ TEXT("SD_Nova"),      FText::FromString(TEXT("Nova")),      20.f, 2.0f, 30.f, nullptr,                       false, 0.f },
+		{ TEXT("SD_Nova"),      FText::FromString(TEXT("Nova")),      10.f, 2.0f, 30.f, nullptr,                       false, 0.f },
 		{ TEXT("SD_Healing"),   FText::FromString(TEXT("Healing")),   15.f, 3.0f, 0.f,  nullptr,                       false, 50.f },
 	};
 
