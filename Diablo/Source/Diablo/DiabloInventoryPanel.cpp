@@ -68,6 +68,18 @@ void UDiabloInventoryPanel::OnInventoryChanged()
 // Input: mouse down, drag, drop
 // ---------------------------------------------------------------------------
 
+static bool IsScreenPosInsideWidget(const UWidget* Widget, const FVector2D& ScreenPos)
+{
+	if (!Widget) return false;
+	const TSharedPtr<SWidget> SlateWidget = Widget->GetCachedWidget();
+	if (!SlateWidget) return false;
+
+	const FGeometry Geom = SlateWidget->GetTickSpaceGeometry();
+	const FVector2D LocalPos = Geom.AbsoluteToLocal(ScreenPos);
+	const FVector2D Size = Geom.GetLocalSize();
+	return LocalPos.X >= 0.f && LocalPos.Y >= 0.f && LocalPos.X <= Size.X && LocalPos.Y <= Size.Y;
+}
+
 bool UDiabloInventoryPanel::HitTestGrid(const FGeometry& InGeometry, const FVector2D& ScreenPos,
 	int32& OutX, int32& OutY) const
 {
@@ -76,13 +88,9 @@ bool UDiabloInventoryPanel::HitTestGrid(const FGeometry& InGeometry, const FVect
 		for (int32 x = 0; x < UInventoryComponent::GridWidth; ++x)
 		{
 			const int32 Idx = y * UInventoryComponent::GridWidth + x;
-			if (Idx >= GridCellWidgets.Num() || !GridCellWidgets[Idx]) continue;
+			if (Idx >= GridCellWidgets.Num()) continue;
 
-			const TSharedPtr<SWidget> SlateWidget = GridCellWidgets[Idx]->GetCachedWidget();
-			if (!SlateWidget) continue;
-
-			const FGeometry CellGeom = SlateWidget->GetPaintSpaceGeometry();
-			if (CellGeom.IsUnderLocation(ScreenPos))
+			if (IsScreenPosInsideWidget(GridCellWidgets[Idx], ScreenPos))
 			{
 				OutX = x;
 				OutY = y;
@@ -98,12 +106,7 @@ bool UDiabloInventoryPanel::HitTestEquip(const FGeometry& InGeometry, const FVec
 {
 	for (const auto& Pair : EquipSlotWidgets)
 	{
-		if (!Pair.Value) continue;
-		const TSharedPtr<SWidget> SlateWidget = Pair.Value->GetCachedWidget();
-		if (!SlateWidget) continue;
-
-		const FGeometry CellGeom = SlateWidget->GetPaintSpaceGeometry();
-		if (CellGeom.IsUnderLocation(ScreenPos))
+		if (IsScreenPosInsideWidget(Pair.Value, ScreenPos))
 		{
 			OutSlot = Pair.Key;
 			return true;
