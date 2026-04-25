@@ -119,6 +119,10 @@ void ADiabloPlayerController::SetupInputComponent()
 		{
 			EIC->BindAction(InventoryAction, ETriggerEvent::Started, this, &ADiabloPlayerController::OnToggleInventory);
 		}
+		if (CastAction)
+		{
+			EIC->BindAction(CastAction, ETriggerEvent::Started, this, &ADiabloPlayerController::OnCastStarted);
+		}
 	}
 }
 
@@ -209,6 +213,26 @@ void ADiabloPlayerController::OnClickStarted()
 	TargetEnemy = nullptr;
 	TargetItem = nullptr;
 	UAIBlueprintHelperLibrary::SimpleMoveToLocation(this, HitResult.ImpactPoint);
+}
+
+void ADiabloPlayerController::OnCastStarted()
+{
+	ADiabloHero* Hero = Cast<ADiabloHero>(GetPawn());
+	if (!Hero || Hero->IsDead())
+	{
+		return;
+	}
+
+	FHitResult HitResult;
+	if (!GetHitResultUnderCursorByChannel(UEngineTypes::ConvertToTraceType(ECC_Visibility), false, HitResult))
+	{
+		return;
+	}
+
+	TargetEnemy = nullptr;
+	TargetItem = nullptr;
+
+	Hero->CastSpell(HitResult.ImpactPoint);
 }
 
 void ADiabloPlayerController::OnHeroDeath()

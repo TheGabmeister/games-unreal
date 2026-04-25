@@ -1,6 +1,7 @@
 #include "DiabloHero.h"
 #include "DiabloPlayerController.h"
 #include "InventoryComponent.h"
+#include "SpellProjectile.h"
 #include "Diablo.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "Camera/CameraComponent.h"
@@ -123,6 +124,70 @@ void ADiabloHero::StartAttack()
 void ADiabloHero::OnAttackMontageEnded(UAnimMontage* Montage, bool bInterrupted)
 {
 	bIsAttacking = false;
+}
+
+void ADiabloHero::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+
+	if (SpellCooldownRemaining > 0.f)
+	{
+		SpellCooldownRemaining -= DeltaTime;
+	}
+}
+
+bool ADiabloHero::CastSpell(const FVector& TargetLocation)
+{
+	if (IsDead() || !SpellClass)
+	{
+		return false;
+	}
+
+	const ASpellProjectile* SpellCDO = SpellClass->GetDefaultObject<ASpellProjectile>();
+	if (!SpellCDO)
+	{
+		return false;
+	}
+
+	if (SpellCooldownRemaining > 0.f)
+	{
+		UE_LOG(LogDiablo, Display, TEXT("Spell on cooldown (%.1fs remaining)"), SpellCooldownRemaining);
+		return false;
+	}
+
+	if (Stats.Mana < SpellCDO->ManaCost)
+	{
+		UE_LOG(LogDiablo, Display, TEXT("Not enough mana (%.0f/%.0f needed)"),
+			Stats.Mana, SpellCDO->ManaCost);
+		return false;
+	}
+
+	Stats.Mana -= SpellCDO->ManaCost;
+	SpellCooldownRemaining = SpellCDO->Cooldown;
+
+	FVector Direction = (TargetLocation - GetActorLocation()).GetSafeNormal2D();
+	if (Direction.IsNearlyZero())
+	{
+		Direction = GetActorForwardVector();
+	}
+
+	SetActorRotation(Direction.Rotation());
+
+	const FVector SpawnLoc = GetActorLocation() + Direction * 80.f + FVector(0.f, 0.f, 50.f);
+	const FRotator SpawnRot = Direction.Rotation();
+
+	FActorSpawnParameters Params;
+	Params.Instigator = this;
+	Params.Owner = this;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+	GetWorld()->SpawnActor<ASpellProjectile>(SpellClass, SpawnLoc, SpawnRot, Params);
+
+	OnStatsChanged.Broadcast();
+
+	UE_LOG(LogDiablo, Display, TEXT("%s cast %s (mana: %.0f/%.0f)"),
+		*GetName(), *SpellClass->GetName(), Stats.Mana, Stats.MaxMana);
+	return true;
 }
 
 // ---------------------------------------------------------------------------

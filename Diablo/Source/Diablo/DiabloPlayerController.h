@@ -40,6 +40,9 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input")
 	TObjectPtr<UInputAction> InventoryAction;
 
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input")
+	TObjectPtr<UInputAction> CastAction;
+
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "HUD")
 	TSubclassOf<UDiabloHUDWidget> HUDWidgetClass;
 
@@ -58,6 +61,7 @@ protected:
 private:
 	void CreateHUD();
 	void OnClickStarted();
+	void OnCastStarted();
 	void OnToggleCharPanel();
 	void OnToggleInventory();
 	void OnRespawnTimerExpired();

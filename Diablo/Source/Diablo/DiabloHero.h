@@ -11,6 +11,7 @@ class UAnimMontage;
 class USoundWave;
 class ADiabloEnemy;
 class UInventoryComponent;
+class ASpellProjectile;
 
 DECLARE_MULTICAST_DELEGATE(FOnStatsChanged);
 
@@ -31,6 +32,7 @@ public:
 	void Heal(float Amount);
 	void AwardXP(int64 Amount);
 	bool SpendStatPoint(FName StatName);
+	bool CastSpell(const FVector& TargetLocation);
 
 	FOnStatsChanged OnStatsChanged;
 
@@ -67,6 +69,9 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Inventory")
 	TObjectPtr<UInventoryComponent> Inventory;
 
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Spell")
+	TSubclassOf<ASpellProjectile> SpellClass;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat")
 	float EquipMinDamage = 0.f;
 
@@ -83,11 +88,14 @@ public:
 
 private:
 	bool bIsAttacking = false;
+	float SpellCooldownRemaining = 0.f;
 
 	void Die();
 	void LevelUp();
 
 	static const TArray<int64>& GetXPTable();
+
+	virtual void Tick(float DeltaTime) override;
 
 	UFUNCTION()
 	void OnAttackMontageEnded(UAnimMontage* Montage, bool bInterrupted);

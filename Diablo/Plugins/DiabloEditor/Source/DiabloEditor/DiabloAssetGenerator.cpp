@@ -44,6 +44,7 @@
 #include "DiabloCharacterPanel.h"
 #include "DiabloInventoryPanel.h"
 #include "ItemDefinition.h"
+#include "Firebolt.h"
 
 void FDiabloAssetGenerator::GenerateAllAssets()
 {
@@ -200,6 +201,7 @@ void FDiabloAssetGenerator::GenerateInputAssets()
 		{ TEXT("IA_Look"),      EInputActionValueType::Axis2D,  EKeys::Invalid },
 		{ TEXT("IA_CharPanel"), EInputActionValueType::Boolean, EKeys::C },
 		{ TEXT("IA_Inventory"), EInputActionValueType::Boolean, EKeys::I },
+		{ TEXT("IA_Cast"),      EInputActionValueType::Boolean, EKeys::RightMouseButton },
 	};
 
 	const FString InputBasePath = TEXT("/Game/Input/Actions");
@@ -704,6 +706,15 @@ void FDiabloAssetGenerator::SetupHero()
 		}
 	}
 
+	if (FProperty* SpellProp = HeroBP->GeneratedClass->FindPropertyByName(TEXT("SpellClass")))
+	{
+		if (FClassProperty* ClassProp = CastField<FClassProperty>(SpellProp))
+		{
+			ClassProp->SetObjectPropertyValue(ClassProp->ContainerPtrToValuePtr<void>(HeroCDO), AFirebolt::StaticClass());
+			UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_DiabloHero: set SpellClass -> AFirebolt"));
+		}
+	}
+
 	FKismetEditorUtilities::CompileBlueprint(HeroBP);
 	SaveAsset(HeroBP, HeroBP->GetOutermost(), TEXT("/Game/Blueprints/BP_DiabloHero"));
 }
@@ -716,6 +727,7 @@ void FDiabloAssetGenerator::SetupController()
 	UInputAction* ClickAction = LoadObject<UInputAction>(nullptr, TEXT("/Game/Input/Actions/IA_Click.IA_Click"));
 	UInputAction* CharPanelAction = LoadObject<UInputAction>(nullptr, TEXT("/Game/Input/Actions/IA_CharPanel.IA_CharPanel"));
 	UInputAction* InventoryAction = LoadObject<UInputAction>(nullptr, TEXT("/Game/Input/Actions/IA_Inventory.IA_Inventory"));
+	UInputAction* CastAction = LoadObject<UInputAction>(nullptr, TEXT("/Game/Input/Actions/IA_Cast.IA_Cast"));
 	UInputMappingContext* IMC = LoadObject<UInputMappingContext>(nullptr, TEXT("/Game/Input/IMC_Diablo.IMC_Diablo"));
 
 	if (!ControllerBP || !ControllerBP->GeneratedClass)
@@ -756,6 +768,17 @@ void FDiabloAssetGenerator::SetupController()
 				{
 					ObjProp->SetObjectPropertyValue(ObjProp->ContainerPtrToValuePtr<void>(CDO), InventoryAction);
 					UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_DiabloPlayerController: set InventoryAction"));
+				}
+			}
+		}
+		if (FProperty* CastProp = ControllerBP->GeneratedClass->FindPropertyByName(TEXT("CastAction")))
+		{
+			if (FObjectProperty* ObjProp = CastField<FObjectProperty>(CastProp))
+			{
+				if (CastAction)
+				{
+					ObjProp->SetObjectPropertyValue(ObjProp->ContainerPtrToValuePtr<void>(CDO), CastAction);
+					UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_DiabloPlayerController: set CastAction"));
 				}
 			}
 		}
