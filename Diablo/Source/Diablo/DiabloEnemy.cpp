@@ -11,6 +11,7 @@ ADiabloEnemy::ADiabloEnemy()
 {
 	Stats.HP = 30.f;
 	Stats.MaxHP = 30.f;
+	XPReward = 2000;
 
 	GetCapsuleComponent()->InitCapsuleSize(34.f, 90.f);
 	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
