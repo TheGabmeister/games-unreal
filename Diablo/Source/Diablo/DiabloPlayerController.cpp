@@ -188,7 +188,9 @@ void ADiabloPlayerController::OnToggleCharPanel()
 	else
 	{
 		CharPanel->SetVisibility(ESlateVisibility::Collapsed);
-		SetInputMode(FInputModeGameOnly());
+		FInputModeGameAndUI Mode;
+		Mode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+		SetInputMode(Mode);
 	}
 }
 
@@ -210,7 +212,9 @@ void ADiabloPlayerController::OnToggleInventory()
 	else
 	{
 		InventoryPanel->SetVisibility(ESlateVisibility::Collapsed);
-		SetInputMode(FInputModeGameOnly());
+		FInputModeGameAndUI Mode;
+		Mode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+		SetInputMode(Mode);
 	}
 }
 
@@ -232,7 +236,9 @@ void ADiabloPlayerController::OnToggleSpellbook()
 	else
 	{
 		SpellbookPanel->SetVisibility(ESlateVisibility::Collapsed);
-		SetInputMode(FInputModeGameOnly());
+		FInputModeGameAndUI Mode;
+		Mode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+		SetInputMode(Mode);
 	}
 }
 
