@@ -32,4 +32,5 @@ private:
 	FReply OnSetupSpells();
 	FReply OnSetupShopData();
 	FReply OnSetupAffixes();
+	FReply OnSetupDungeonPalette();
 };

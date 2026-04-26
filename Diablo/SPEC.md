@@ -247,13 +247,15 @@ Prefix/suffix tables as `UDataAsset` entries: name + stat modifier + qlvl gate. 
 
 **Teaches:** Randomized data composition, qlvl gating, identify-reveal flow.
 
-### M18 — Procedural Dungeon Generation (Cathedral-Style)
-C++ tile generator following Boris the Brave's D1 algorithm:
+### M18 — Procedural Dungeon Generation (Cathedral-Style) ✅ (done)
+Runtime C++ tile generator following Boris the Brave's D1 algorithm:
 - 40×40 tile grid
 - Recursive room-and-corridor "budding"
-- Output: `TArray<ETileType>`
-- Instantiate at level start via `SpawnActor` using `UTilePalette : UDataAsset` (`ETileType → TSubclassOf<AActor>`)
-- Seed stored on GameMode, frozen per dungeon floor
+- Output: `TArray<EDungeonTileType>`
+- Instantiates at level start via `SpawnActor` using `UTilePalette : UPrimaryDataAsset` (`EDungeonTileType → TSubclassOf<AActor>`)
+- Seed stored on `ADiabloGameMode`, frozen per dungeon floor
+- `GenerateCathedralMap` now places `ADiabloDungeonGenerator` instead of static corridor walls
+- Recast runtime generation enabled so spawned floor/wall actors can participate in navmesh
 
 **Teaches:** Runtime level construction, grid→world transforms, `SpawnActor` at scale.
 
@@ -299,6 +301,7 @@ Every milestone ends with a manual play-test against specific criteria. Build vi
 - **M3:** Stationary enemy transitions Idle→Chase when hero approaches; attacks in range; returns to Idle if hero flees far.
 - **M4:** Hero death → respawn at `PlayerStart` after 2s. Healing potions drop and restore HP on pickup.
 - **M5+:** HUD globes reflect HP/mana in real time.
+- **M18:** Entering `Lvl_Cathedral_L1` spawns a seeded 40×40 Cathedral layout at runtime, with connected rooms/corridors, border walls, stairs back to town, enemies, a potion, and working click-to-move navmesh.
 - *(and so on per milestone)*
 
 **Asset pipeline smoke tests** (✅ all passing):

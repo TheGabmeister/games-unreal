@@ -11,4 +11,12 @@ class DIABLO_API ADiabloGameMode : public AGameModeBase
 
 public:
 	ADiabloGameMode();
+
+	int32 GetSeedForDungeonFloor(FName FloorName);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dungeon")
+	int32 DungeonSeed = 0;
+
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Dungeon")
+	TMap<FName, int32> DungeonFloorSeeds;
 };

@@ -28,6 +28,7 @@ struct FDiabloAssetGenerator
 	static void SetupSpells();
 	static void SetupShopData();
 	static void SetupAffixes();
+	static void SetupDungeonPalette();
 	static void SetupAllBlueprints();
 
 private:

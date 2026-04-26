@@ -198,6 +198,15 @@ void SDiabloEditorToolPanel::Construct(const FArguments& InArgs)
 				.OnClicked(this, &SDiabloEditorToolPanel::OnSetupAffixes)
 			]
 
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(0.f, 4.f)
+			[
+				SNew(SButton)
+				.Text(FText::FromString(TEXT("Setup Dungeon Palette")))
+				.OnClicked(this, &SDiabloEditorToolPanel::OnSetupDungeonPalette)
+			]
+
 			// --- World ---
 
 			+ SVerticalBox::Slot()
@@ -356,5 +365,11 @@ FReply SDiabloEditorToolPanel::OnSetupShopData()
 FReply SDiabloEditorToolPanel::OnSetupAffixes()
 {
 	FDiabloAssetGenerator::SetupAffixes();
+	return FReply::Handled();
+}
+
+FReply SDiabloEditorToolPanel::OnSetupDungeonPalette()
+{
+	FDiabloAssetGenerator::SetupDungeonPalette();
 	return FReply::Handled();
 }

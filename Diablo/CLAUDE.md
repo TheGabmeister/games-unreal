@@ -140,8 +140,8 @@ IntelliSense errors like `cannot open source file "X.h"` are usually false posit
 - `ADungeonStairs : AActor` ([DungeonStairs.h](Source/Diablo/DungeonStairs.h)) — cube mesh that blocks `ECC_Visibility` for cursor click detection. `TargetLevelName` (FName) set per-instance. `OnInteract()` calls `UGameplayStatics::OpenLevel`. Click-to-interact uses the same walk-into-range pattern as enemies/items; `InteractRange = 200`.
 - `ADiabloPlayerController` has `TargetInteractable` (`TObjectPtr<AActor>`) — click any `IInteractable` actor (stairs, NPCs) → walk into range → `Interact()` via interface. Checked in `Tick` before items/enemies.
 - `Lvl_Diablo` (town) has `Stairs_Down` pointing to `Lvl_Cathedral_L1`. Cathedral has `Stairs_Up` pointing back to `Lvl_Diablo`.
-- `GenerateCathedralMap` creates `Lvl_Cathedral_L1` with dim lighting, cube-wall corridors, 3 enemies, a healing potion, NavMesh, and return stairs.
-- Both map generators call `UNavigationSystemV1::Build()` before saving so NavMesh is baked — without this, `SimpleMoveToLocation` fails after `OpenLevel` transitions.
+- `GenerateCathedralMap` creates `Lvl_Cathedral_L1` with dim lighting, NavMeshBoundsVolume, and a runtime `ADiabloDungeonGenerator`. The generator now spawns the Cathedral floor/walls, enemies, potion, and return stairs in `BeginPlay()`.
+- `GenerateDefaultMap` calls `UNavigationSystemV1::Build()` before saving. Cathedral navigation is dynamic because the dungeon geometry is spawned at runtime.
 
 ### Persistent State (M13)
 
@@ -197,6 +197,17 @@ IntelliSense errors like `cannot open source file "X.h"` are usually false posit
 - Affixes apply when equipped even if unidentified (D1 behavior) — stats work, names/bonuses just hidden in UI.
 - No polymorphic dispatch — `EAffixType` enum + switch, consistent with M9's `EItemCategory` approach.
 
+### Procedural Cathedral Dungeon (M18)
+
+- `EDungeonTileType` enum ([DungeonTile.h](Source/Diablo/DungeonTile.h)) defines `Empty`, `Floor`, and `Wall`.
+- `ADungeonTile : AActor` ([DungeonTile.h](Source/Diablo/DungeonTile.h)) is a cube-backed runtime tile actor with collision and nav relevance. The default Cathedral palette uses it for both floor and wall entries.
+- `UTilePalette : UPrimaryDataAsset` ([TilePalette.h](Source/Diablo/TilePalette.h)) owns `TileSize` plus `FTilePaletteEntry` rows mapping tile type to `TSubclassOf<AActor>`, scale, and location offset. `TP_Cathedral` lives under `/Game/Dungeons/`.
+- `ADiabloDungeonGenerator : AActor` ([DiabloDungeonGenerator.h](Source/Diablo/DiabloDungeonGenerator.h)) builds a runtime 40x40 Cathedral layout in `BeginPlay()`: connected rooms/corridors via recursive budding, then border walls around floor cells, then spawned actors via `UTilePalette`.
+- `ADiabloGameMode::GetSeedForDungeonFloor(FName)` owns per-floor dungeon seeds. `DungeonSeed` can be set on the GameMode; otherwise a random base seed is combined with the floor name.
+- Gameplay population is part of the generator: stairs back to `Lvl_Diablo` in the start room, one healing potion, and up to `TargetEnemyCount` enemies distributed across non-start rooms.
+- `GenerateCathedralMap` now creates `Lvl_Cathedral_L1` with PlayerStart, dim light, a large NavMeshBoundsVolume, and `Runtime_Cathedral_Generator` instead of pre-placing static corridor walls/enemies/items.
+- `DefaultEngine.ini` sets Recast `RuntimeGeneration=Dynamic` so runtime-spawned floor/wall tiles can feed click-to-move navigation.
+
 ### Input
 
 **Enhanced Input only.** No legacy `InputComponent` axis bindings.
@@ -236,6 +247,7 @@ IntelliSense errors like `cannot open source file "X.h"` are usually false posit
 | `SetupSpells` | `USpellDefinition` data assets | Creates SD_Firebolt, SD_Fireball, SD_Lightning, SD_Nova, SD_Healing under `/Game/Spells/Definitions/` |
 | `SetupShopData` | `UNPCShopData` data assets | Creates SD_Griswold, SD_Adria under `/Game/NPCs/ShopData/` referencing existing item definitions |
 | `SetupAffixes` | `UAffixTable` data assets | Creates AT_Prefixes (10 entries), AT_Suffixes (10 entries) under `/Game/Items/Affixes/` |
+| `SetupDungeonPalette` | `UTilePalette` data asset | Creates TP_Cathedral under `/Game/Dungeons/` with floor/wall entries backed by `ADungeonTile` |
 | `SetupAllBlueprints` | All of the above | All of the above |
 
 **World:**
@@ -243,7 +255,7 @@ IntelliSense errors like `cannot open source file "X.h"` are usually false posit
 | Method | Behavior |
 |---|---|
 | `GenerateDefaultMap` | Creates `Lvl_Diablo` with PlayerStart, DirectionalLight, floor plane, NavMeshBoundsVolume, test enemy, healing potion, stairs to cathedral, 6 Tristram NPCs (Griswold, Adria, Pepin, Cain, Wirt, Ogden) with types and shop data — **always recreates** |
-| `GenerateCathedralMap` | Creates `Lvl_Cathedral_L1` with dim lighting, cube-wall corridors, 3 enemies, healing potion, NavMesh, return stairs — **always recreates** |
+| `GenerateCathedralMap` | Creates `Lvl_Cathedral_L1` with dim lighting, NavMeshBoundsVolume, and `ADiabloDungeonGenerator`; the generator spawns the seeded 40x40 Cathedral layout, enemies, potion, and return stairs at runtime — **always recreates** |
 | `GenerateInputAssets` | Creates/updates IA_Click/Cast/CharPanel/Inventory/Spellbook/Menu/Move/Look and IMC_Diablo — **updates in place** |
 
 **Do not attempt programmatic AnimBP generation.** State machine graph construction via K2 nodes is too fragile (wrong pin names, function reference ordering, MinimalAPI exports). AnimBPs are the one asset type authored manually in the editor.

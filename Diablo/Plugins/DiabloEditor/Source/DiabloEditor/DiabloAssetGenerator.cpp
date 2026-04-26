@@ -56,8 +56,11 @@
 #include "DiabloNPC.h"
 #include "NPCShopData.h"
 #include "AffixTable.h"
+#include "DiabloDungeonGenerator.h"
+#include "DungeonTile.h"
 #include "DungeonStairs.h"
 #include "NavigationSystem.h"
+#include "TilePalette.h"
 
 void FDiabloAssetGenerator::GenerateAllAssets()
 {
@@ -144,6 +147,50 @@ void FDiabloAssetGenerator::SetupAllBlueprints()
 	SetupSpells();
 	SetupShopData();
 	SetupAffixes();
+	SetupDungeonPalette();
+}
+
+void FDiabloAssetGenerator::SetupDungeonPalette()
+{
+	const FString FullPath = TEXT("/Game/Dungeons/TP_Cathedral");
+	const FString ObjPath = FullPath + TEXT(".TP_Cathedral");
+
+	UTilePalette* Palette = LoadObject<UTilePalette>(nullptr, *ObjPath);
+	if (!Palette)
+	{
+		UPackage* Package = CreatePackage(*FullPath);
+		Package->FullyLoad();
+		Palette = NewObject<UTilePalette>(Package, TEXT("TP_Cathedral"), RF_Public | RF_Standalone);
+	}
+
+	if (!Palette)
+	{
+		UE_LOG(LogTemp, Error, TEXT("[DiabloTools] Failed to create dungeon tile palette"));
+		return;
+	}
+
+	Palette->TileSize = 300.f;
+	Palette->Entries.Empty();
+
+	FTilePaletteEntry FloorEntry;
+	FloorEntry.TileType = EDungeonTileType::Floor;
+	FloorEntry.ActorClass = ADungeonTile::StaticClass();
+	FloorEntry.Scale = FVector(3.f, 3.f, 0.1f);
+	FloorEntry.LocationOffset = FVector(0.f, 0.f, -5.f);
+	Palette->Entries.Add(FloorEntry);
+
+	FTilePaletteEntry WallEntry;
+	WallEntry.TileType = EDungeonTileType::Wall;
+	WallEntry.ActorClass = ADungeonTile::StaticClass();
+	WallEntry.Scale = FVector(3.f, 3.f, 2.f);
+	WallEntry.LocationOffset = FVector(0.f, 0.f, 100.f);
+	Palette->Entries.Add(WallEntry);
+
+	if (SaveAsset(Palette, Palette->GetOutermost(), FullPath))
+	{
+		NotifyAssetCreated(Palette);
+		UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Created/updated dungeon tile palette: %s"), *FullPath);
+	}
 }
 
 void FDiabloAssetGenerator::GenerateDefaultMap()
@@ -294,94 +341,53 @@ void FDiabloAssetGenerator::GenerateCathedralMap()
 		}
 	}
 
-	// Floor
-	UStaticMesh* CubeMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
-	UStaticMesh* PlaneMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Plane.Plane"));
-
-	if (PlaneMesh)
-	{
-		AStaticMeshActor* Floor = NewWorld->SpawnActor<AStaticMeshActor>(
-			AStaticMeshActor::StaticClass(), FTransform::Identity, SpawnParams);
-		if (Floor)
-		{
-			Floor->GetStaticMeshComponent()->SetStaticMesh(PlaneMesh);
-			Floor->SetActorScale3D(FVector(40.f, 40.f, 1.f));
-			Floor->SetActorLabel(TEXT("DungeonFloor"));
-		}
-	}
-
-	// NavMesh
+	SetupDungeonPalette();
 	SpawnNavMeshVolume(NewWorld);
 
-	// Wall layout: L-shaped corridor using cube walls
-	struct FWallDef { FVector Location; FVector Scale; };
-	TArray<FWallDef> Walls = {
-		// Entrance corridor (north-south)
-		{{ -300.f,  -200.f, 100.f }, { 0.1f, 8.f, 2.f }},
-		{{  300.f,  -200.f, 100.f }, { 0.1f, 8.f, 2.f }},
-		// East wing
-		{{  300.f,   600.f, 100.f }, { 10.f, 0.1f, 2.f }},
-		{{  300.f,  -1000.f, 100.f }, { 10.f, 0.1f, 2.f }},
-		// West wall of east wing
-		{{ -300.f,  -1000.f, 100.f }, { 10.f, 0.1f, 2.f }},
-		// Back wall
-		{{ 1300.f,  -200.f, 100.f }, { 0.1f, 8.f, 2.f }},
-	};
-
-	if (CubeMesh)
+	ADiabloDungeonGenerator* Generator = NewWorld->SpawnActor<ADiabloDungeonGenerator>(
+		ADiabloDungeonGenerator::StaticClass(), FTransform::Identity, SpawnParams);
+	if (Generator)
 	{
-		for (int32 i = 0; i < Walls.Num(); ++i)
+		Generator->DungeonFloorName = FName("Cathedral_L1");
+		Generator->GridWidth = 40;
+		Generator->GridHeight = 40;
+		Generator->TargetRoomCount = 15;
+		Generator->TargetEnemyCount = 8;
+		Generator->ReturnLevelName = FName("Lvl_Diablo");
+		Generator->TilePalette = LoadObject<UTilePalette>(nullptr,
+			TEXT("/Game/Dungeons/TP_Cathedral.TP_Cathedral"));
+
+		UBlueprint* EnemyBP = LoadObject<UBlueprint>(nullptr,
+			TEXT("/Game/Blueprints/BP_DiabloEnemy.BP_DiabloEnemy"));
+		if (EnemyBP && EnemyBP->GeneratedClass)
 		{
-			const FWallDef& W = Walls[i];
-			AStaticMeshActor* Wall = NewWorld->SpawnActor<AStaticMeshActor>(
-				AStaticMeshActor::StaticClass(),
-				FTransform(FVector(W.Location)), SpawnParams);
-			if (Wall)
-			{
-				Wall->GetStaticMeshComponent()->SetStaticMesh(CubeMesh);
-				Wall->SetActorScale3D(W.Scale);
-				Wall->SetActorLabel(*FString::Printf(TEXT("Wall_%d"), i));
-			}
+			Generator->EnemyClass = EnemyBP->GeneratedClass;
 		}
+
+		UBlueprint* PotionBP = LoadObject<UBlueprint>(nullptr,
+			TEXT("/Game/Blueprints/BP_HealingPotion.BP_HealingPotion"));
+		if (PotionBP && PotionBP->GeneratedClass)
+		{
+			Generator->HealingPotionClass = PotionBP->GeneratedClass;
+		}
+
+		Generator->SetActorLabel(TEXT("Runtime_Cathedral_Generator"));
+		UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Cathedral: placed runtime dungeon generator"));
 	}
 
-	// Enemies
+	// Keep these BP loads near the map generator so missing setup is visible in the log.
 	UBlueprint* EnemyBP = LoadObject<UBlueprint>(nullptr,
 		TEXT("/Game/Blueprints/BP_DiabloEnemy.BP_DiabloEnemy"));
-	if (EnemyBP && EnemyBP->GeneratedClass)
+	if (!EnemyBP || !EnemyBP->GeneratedClass)
 	{
-		FVector EnemyPositions[] = {
-			{ 500.f, 0.f, 100.f },
-			{ 800.f, -300.f, 100.f },
-			{ 600.f, -600.f, 100.f },
-		};
-		for (const FVector& Pos : EnemyPositions)
-		{
-			NewWorld->SpawnActor<AActor>(EnemyBP->GeneratedClass,
-				FTransform(Pos), SpawnParams);
-		}
-		UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Spawned 3 enemies in Cathedral L1"));
+		UE_LOG(LogTemp, Warning, TEXT("[DiabloTools] Cathedral: BP_DiabloEnemy missing; runtime generator will skip enemies"));
 	}
 
-	// Healing potion
 	UBlueprint* PotionBP = LoadObject<UBlueprint>(nullptr,
 		TEXT("/Game/Blueprints/BP_HealingPotion.BP_HealingPotion"));
-	if (PotionBP && PotionBP->GeneratedClass)
+	if (!PotionBP || !PotionBP->GeneratedClass)
 	{
-		NewWorld->SpawnActor<AActor>(PotionBP->GeneratedClass,
-			FTransform(FVector(700.f, 200.f, 100.f)), SpawnParams);
-	}
-
-	// Stairs back to town
-	ADungeonStairs* UpStairs = NewWorld->SpawnActor<ADungeonStairs>(
-		ADungeonStairs::StaticClass(),
-		FTransform(FVector(-200.f, 0.f, 50.f)), SpawnParams);
-	if (UpStairs)
-	{
-		UpStairs->TargetLevelName = FName("Lvl_Diablo");
-		UpStairs->SetActorScale3D(FVector(1.5f, 1.5f, 0.5f));
-		UpStairs->SetActorLabel(TEXT("Stairs_Up"));
-		UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Spawned stairs back to town"));
+		UE_LOG(LogTemp, Warning, TEXT("[DiabloTools] Cathedral: BP_HealingPotion missing; runtime generator will skip potion pickup"));
 	}
 
 	// Build NavMesh so it's baked into the saved map
@@ -449,8 +455,8 @@ void FDiabloAssetGenerator::SpawnNavMeshVolume(UWorld* World)
 	NavVol->GetBrushComponent()->Brush = NavVol->Brush;
 
 	UCubeBuilder* Builder = NewObject<UCubeBuilder>();
-	Builder->X = 10000.f;
-	Builder->Y = 10000.f;
+	Builder->X = 16000.f;
+	Builder->Y = 16000.f;
 	Builder->Z = 2000.f;
 	NavVol->BrushBuilder = DuplicateObject<UBrushBuilder>(Builder, NavVol);
 	Builder->Build(World, NavVol);
