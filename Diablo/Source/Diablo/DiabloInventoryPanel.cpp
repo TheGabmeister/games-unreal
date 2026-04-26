@@ -182,13 +182,22 @@ FReply UDiabloInventoryPanel::NativeOnMouseButtonDown(const FGeometry& InGeometr
 	{
 		int32 GridX, GridY;
 		EEquipSlot HitSlot;
+		int32 BeltSlot;
 
 		if (HitTestGrid(InGeometry, ScreenPos, GridX, GridY) &&
 			CachedInventory->GetItemAt(GridX, GridY))
 		{
 			DragSourceX = GridX;
 			DragSourceY = GridY;
-			bDragFromEquip = false;
+			DragSourceType = EInventoryDragSource::Grid;
+			return FReply::Handled().DetectDrag(TakeWidget(), EKeys::LeftMouseButton);
+		}
+
+		if (HitTestBelt(InGeometry, ScreenPos, BeltSlot) &&
+			CachedInventory->GetBeltItem(BeltSlot).IsValid())
+		{
+			DragSourceBeltSlot = BeltSlot;
+			DragSourceType = EInventoryDragSource::Belt;
 			return FReply::Handled().DetectDrag(TakeWidget(), EKeys::LeftMouseButton);
 		}
 
@@ -196,7 +205,7 @@ FReply UDiabloInventoryPanel::NativeOnMouseButtonDown(const FGeometry& InGeometr
 			CachedInventory->HasEquipped(HitSlot))
 		{
 			DragSourceSlot = HitSlot;
-			bDragFromEquip = true;
+			DragSourceType = EInventoryDragSource::Equipment;
 			return FReply::Handled().DetectDrag(TakeWidget(), EKeys::LeftMouseButton);
 		}
 	}
@@ -209,17 +218,20 @@ void UDiabloInventoryPanel::NativeOnDragDetected(const FGeometry& InGeometry, co
 {
 	UInventoryDragDrop* DragOp = NewObject<UInventoryDragDrop>();
 	DragOp->Pivot = EDragPivot::CenterCenter;
+	DragOp->Source = DragSourceType;
 
-	if (bDragFromEquip)
+	switch (DragSourceType)
 	{
-		DragOp->Source = EInventoryDragSource::Equipment;
-		DragOp->SourceEquipSlot = DragSourceSlot;
-	}
-	else
-	{
-		DragOp->Source = EInventoryDragSource::Grid;
+	case EInventoryDragSource::Grid:
 		DragOp->SourceGridX = DragSourceX;
 		DragOp->SourceGridY = DragSourceY;
+		break;
+	case EInventoryDragSource::Equipment:
+		DragOp->SourceEquipSlot = DragSourceSlot;
+		break;
+	case EInventoryDragSource::Belt:
+		DragOp->SourceBeltSlot = DragSourceBeltSlot;
+		break;
 	}
 
 	UBorder* Visual = NewObject<UBorder>(this);
@@ -238,6 +250,7 @@ bool UDiabloInventoryPanel::NativeOnDrop(const FGeometry& InGeometry, const FDra
 	const FVector2D ScreenPos = InDragDropEvent.GetScreenSpacePosition();
 	int32 DropX, DropY;
 	EEquipSlot DropSlot;
+	int32 DropBeltSlot;
 
 	if (DragOp->Source == EInventoryDragSource::Grid)
 	{
@@ -249,6 +262,22 @@ bool UDiabloInventoryPanel::NativeOnDrop(const FGeometry& InGeometry, const FDra
 		{
 			return CachedInventory->Equip(DragOp->SourceGridX, DragOp->SourceGridY);
 		}
+		if (HitTestBelt(InGeometry, ScreenPos, DropBeltSlot))
+		{
+			const FItemInstance* Item = CachedInventory->GetItemAt(DragOp->SourceGridX, DragOp->SourceGridY);
+			if (Item && UInventoryComponent::IsBeltCompatible(Item->Definition))
+			{
+				FItemInstance Copy = *Item;
+				FItemInstance Displaced = CachedInventory->GetBeltItem(DropBeltSlot);
+				CachedInventory->RemoveItemAt(DragOp->SourceGridX, DragOp->SourceGridY);
+				CachedInventory->SetBeltItem(DropBeltSlot, Copy);
+				if (Displaced.IsValid())
+				{
+					CachedInventory->TryAddItem(Displaced);
+				}
+				return true;
+			}
+		}
 	}
 
 	if (DragOp->Source == EInventoryDragSource::Equipment)
@@ -256,6 +285,34 @@ bool UDiabloInventoryPanel::NativeOnDrop(const FGeometry& InGeometry, const FDra
 		if (HitTestGrid(InGeometry, ScreenPos, DropX, DropY))
 		{
 			return CachedInventory->Unequip(DragOp->SourceEquipSlot);
+		}
+	}
+
+	if (DragOp->Source == EInventoryDragSource::Belt)
+	{
+		if (HitTestBelt(InGeometry, ScreenPos, DropBeltSlot))
+		{
+			if (DropBeltSlot != DragOp->SourceBeltSlot)
+			{
+				FItemInstance FromItem = CachedInventory->GetBeltItem(DragOp->SourceBeltSlot);
+				FItemInstance ToItem = CachedInventory->GetBeltItem(DropBeltSlot);
+				CachedInventory->SetBeltItem(DragOp->SourceBeltSlot, ToItem);
+				CachedInventory->SetBeltItem(DropBeltSlot, FromItem);
+				return true;
+			}
+		}
+		if (HitTestGrid(InGeometry, ScreenPos, DropX, DropY))
+		{
+			FItemInstance BeltItem = CachedInventory->GetBeltItem(DragOp->SourceBeltSlot);
+			if (BeltItem.IsValid())
+			{
+				CachedInventory->RemoveBeltSlot(DragOp->SourceBeltSlot);
+				if (!CachedInventory->TryAddItemAt(BeltItem, DropX, DropY))
+				{
+					CachedInventory->TryAddItem(BeltItem);
+				}
+				return true;
+			}
 		}
 	}
 

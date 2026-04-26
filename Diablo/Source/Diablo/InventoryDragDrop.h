@@ -9,7 +9,8 @@ UENUM()
 enum class EInventoryDragSource : uint8
 {
 	Grid,
-	Equipment
+	Equipment,
+	Belt
 };
 
 UCLASS()
@@ -24,4 +25,6 @@ public:
 	int32 SourceGridY = -1;
 
 	EEquipSlot SourceEquipSlot = EEquipSlot::None;
+
+	int32 SourceBeltSlot = -1;
 };

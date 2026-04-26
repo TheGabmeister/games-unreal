@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
 #include "ItemDefinition.h"
+#include "InventoryDragDrop.h"
 #include "DiabloInventoryPanel.generated.h"
 
 class UInventoryComponent;
@@ -74,5 +75,6 @@ private:
 	int32 DragSourceX = -1;
 	int32 DragSourceY = -1;
 	EEquipSlot DragSourceSlot = EEquipSlot::None;
-	bool bDragFromEquip = false;
+	int32 DragSourceBeltSlot = -1;
+	EInventoryDragSource DragSourceType = EInventoryDragSource::Grid;
 };
