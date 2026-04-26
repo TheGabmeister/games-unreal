@@ -169,7 +169,7 @@ LMB on `ADiabloEnemy` → hero walks into range, plays attack `UAnimMontage` (ge
 ### M3 — Enemy AI (C++ State Machine)
 `ADiabloAIController : AAIController`. Logic is a plain `enum class EAIState` + switch in `Tick` (Idle / Chase / Attack / Dead), with `AIMoveTo` for pathing and a 0.5s distance-check for aggro. **Deliberately no StateTree** — abstraction not justified for ≤4 states.
 
-**Teaches:** `AAIController`, `AIMoveTo`, tick-based state machines. Sets up the "state machine pain" that justifies StateTree in M19.
+**Teaches:** `AAIController`, `AIMoveTo`, tick-based state machines. This remains the default AI architecture until enemy variety creates real abstraction pressure.
 
 ### M4 — HP + Death + Respawn
 Shared `FDiabloStats` struct (HP/MaxHP/Mana/MaxMana, Str/Mag/Dex/Vit) used by hero and enemy — just a USTRUCT, not a component yet. Hero death → `AGameModeBase::RestartPlayer` at `PlayerStart` (placeholder — pre-town; in M15 this becomes respawn in Tristram). Enemy death → play death animation → destroy. Add a simple Healing Potion: `ADroppedItem` with hardcoded restore amount, click-to-use (no inventory yet, direct HP heal on pickup).
@@ -259,13 +259,24 @@ Runtime C++ tile generator following Boris the Brave's D1 algorithm:
 
 **Teaches:** Runtime level construction, grid→world transforms, `SpawnActor` at scale.
 
-### M19 — Migrate AI to StateTree
-Behaviors have multiplied (grunt, fast-melee, ranged-archer, spellcaster, summoner, boss) — the M3 C++ state machine is painful. Migrate to `UStateTreeComponent` with custom tasks as `USTRUCT`s in a `DiabloStateTreeUtility.h`:
-- `FStateTreeChaseTask`, `FStateTreeMeleeAttackTask`, `FStateTreeRangedAttackTask`, `FStateTreeCastSpellTask`, `FStateTreeFleeTask`, `FStateTreeSummonTask`
+### M19 — Enemy Archetypes + C++ AI Behaviors ✅ (done)
+Keeps the M3 C++ state machine and expands behavior only as Diablo 1 needs it. StateTree is **not** required yet; revisit it only if the C++ state machine becomes hard to read or enemy behavior needs editor-authored composition.
 
-Enable Fallen cheer/flee patterns.
+Add data-driven enemy archetype tuning:
+- **Melee grunt** — baseline chase-and-attack behavior
+- **Fast melee** — higher movement speed, lower HP, shorter attack cooldown
+- **Ranged archer** — keeps distance, stops to fire projectile attacks
+- **Spellcaster** — kites, casts a simple projectile/instant spell on cooldown
+- **Summoner** — periodically spawns weak melee minions if under a cap
+- **Fallen-style coward** — flees at low HP, can re-engage after distance/time
 
-**Teaches:** StateTree tasks/conditions, `STATETREE_POD_INSTANCEDATA`, `EnterState`/`ExitState`/`Tick` virtuals. Justified by 6+ distinct AI behaviors.
+Refactor `ADiabloAIController` only enough to avoid a giant switch:
+- Keep `EAIState` for core states: Idle / Chase / Attack / Flee / Dead
+- Move per-archetype decisions into small helper functions (`ShouldFlee`, `StartSpecialAttack`, `TrySummonMinion`, etc.)
+- Put tuning values on `ADiabloEnemy` or an enemy data asset only when repeated enemy setup becomes noisy
+- Keep off-screen freeze as a future optimization; do not simulate monster packs outside relevance radius once level populations grow
+
+**Teaches:** AI behavior variation, cooldown/timer decisions, data-driven tuning, and recognizing when an abstraction has actually earned its keep.
 
 ### M20 — Belt + Hotkeys (1–8) + Scroll Casting
 Belt = dedicated 8-slot sub-inventory on `UInventoryComponent`, potions/scrolls only. Keys 1–8 bound to `IA_Belt1..8`. Healing / Mana / Rejuvenation potions restore HP/Mana/both. Scrolls cast their spell at the hero's learned level (or L1 if unlearned) and are consumed. Use dispatches through `UItemDefinition::OnUseEffect` — an enum (`EItemUseEffect::RestoreHP`, `RestoreMana`, `RestoreBoth`, `CastSpell`) plus data fields, not a polymorphic interface (same rationale as M9 — items are structs).
@@ -302,6 +313,7 @@ Every milestone ends with a manual play-test against specific criteria. Build vi
 - **M4:** Hero death → respawn at `PlayerStart` after 2s. Healing potions drop and restore HP on pickup.
 - **M5+:** HUD globes reflect HP/mana in real time.
 - **M18:** Entering `Lvl_Cathedral_L1` spawns a seeded 40×40 Cathedral layout at runtime, with connected rooms/corridors, border walls, stairs back to town, enemies, a potion, and working click-to-move navmesh.
+- **M19:** Cathedral enemies spawn as a mix of melee, fast melee, ranged, caster, summoner, and Fallen-style coward archetypes. Ranged/caster/summoner enemies use cooldowns and spacing; cowards flee at low HP; summoned minions grant no drops/XP.
 - *(and so on per milestone)*
 
 **Asset pipeline smoke tests** (✅ all passing):

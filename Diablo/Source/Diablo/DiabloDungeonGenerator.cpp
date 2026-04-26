@@ -1,6 +1,7 @@
 #include "DiabloDungeonGenerator.h"
 
 #include "Diablo.h"
+#include "DiabloEnemy.h"
 #include "DiabloGameMode.h"
 #include "DungeonStairs.h"
 #include "TilePalette.h"
@@ -316,15 +317,26 @@ void ADiabloDungeonGenerator::SpawnGameplayActors(FRandomStream& Stream)
 	}
 
 	const int32 EnemyCount = FMath::Min(TargetEnemyCount, CandidateRooms.Num());
+	const EDiabloEnemyArchetype ArchetypeCycle[] = {
+		EDiabloEnemyArchetype::MeleeGrunt,
+		EDiabloEnemyArchetype::FastMelee,
+		EDiabloEnemyArchetype::RangedArcher,
+		EDiabloEnemyArchetype::FallenCoward,
+		EDiabloEnemyArchetype::Spellcaster,
+		EDiabloEnemyArchetype::Summoner,
+	};
+
 	for (int32 i = 0; i < EnemyCount; ++i)
 	{
 		const FGridRoom& Room = Rooms[CandidateRooms[i]];
 		const int32 SpawnX = Stream.RandRange(Room.X + 1, Room.X + Room.W - 2);
 		const int32 SpawnY = Stream.RandRange(Room.Y + 1, Room.Y + Room.H - 2);
-		AActor* Enemy = GetWorld()->SpawnActor<AActor>(
+		ADiabloEnemy* Enemy = GetWorld()->SpawnActor<ADiabloEnemy>(
 			EnemyClass, FTransform(GetTileWorldLocation(SpawnX, SpawnY, 100.f)), SpawnParams);
 		if (Enemy)
 		{
+			Enemy->ConfigureArchetype(ArchetypeCycle[i % UE_ARRAY_COUNT(ArchetypeCycle)]);
+			Enemy->SummonClass = EnemyClass;
 			SpawnedActors.Add(Enemy);
 		}
 	}

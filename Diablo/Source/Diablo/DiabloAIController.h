@@ -9,6 +9,7 @@ enum class EAIState : uint8
 {
 	Idle,
 	Chase,
+	Flee,
 	Attack,
 	Dead
 };
@@ -37,8 +38,13 @@ private:
 
 	void TickIdle(float DeltaTime);
 	void TickChase(float DeltaTime);
+	void TickFlee(float DeltaTime);
 	void TickAttack(float DeltaTime);
 
 	APawn* FindTarget() const;
 	void SetState(EAIState NewState);
+	void StartFlee(float Duration, bool bConsumeLowHealthFlee);
+
+	float FleeEndTime = 0.f;
+	bool bUsedLowHealthFlee = false;
 };

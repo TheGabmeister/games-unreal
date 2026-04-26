@@ -27,6 +27,7 @@ void ADiabloAIController::Tick(float DeltaTime)
 	{
 	case EAIState::Idle:   TickIdle(DeltaTime);   break;
 	case EAIState::Chase:  TickChase(DeltaTime);   break;
+	case EAIState::Flee:   TickFlee(DeltaTime);    break;
 	case EAIState::Attack: TickAttack(DeltaTime);  break;
 	case EAIState::Dead:   break;
 	}
@@ -40,11 +41,17 @@ void ADiabloAIController::TickIdle(float DeltaTime)
 		return;
 	}
 
-	const float Distance = FVector::Dist(GetPawn()->GetActorLocation(), Target->GetActorLocation());
-	if (Distance <= AggroRange)
+	ADiabloEnemy* Enemy = Cast<ADiabloEnemy>(GetPawn());
+	if (!Enemy)
+	{
+		return;
+	}
+
+	const float Distance = FVector::Dist(Enemy->GetActorLocation(), Target->GetActorLocation());
+	if (Distance <= Enemy->AggroRange)
 	{
 		UE_LOG(LogDiablo, Display, TEXT("%s: aggro on %s (%.0f <= %.0f)"),
-			*GetPawn()->GetName(), *Target->GetName(), Distance, AggroRange);
+			*Enemy->GetName(), *Target->GetName(), Distance, Enemy->AggroRange);
 		SetState(EAIState::Chase);
 	}
 }
@@ -58,17 +65,29 @@ void ADiabloAIController::TickChase(float DeltaTime)
 		return;
 	}
 
-	const float Distance = FVector::Dist(GetPawn()->GetActorLocation(), Target->GetActorLocation());
-
-	if (Distance > LeashRange)
+	ADiabloEnemy* Enemy = Cast<ADiabloEnemy>(GetPawn());
+	if (!Enemy)
 	{
-		UE_LOG(LogDiablo, Display, TEXT("%s: target out of leash range, returning to idle"), *GetPawn()->GetName());
+		return;
+	}
+
+	const float Distance = FVector::Dist(Enemy->GetActorLocation(), Target->GetActorLocation());
+
+	if (Distance > Enemy->LeashRange)
+	{
+		UE_LOG(LogDiablo, Display, TEXT("%s: target out of leash range, returning to idle"), *Enemy->GetName());
 		StopMovement();
 		SetState(EAIState::Idle);
 		return;
 	}
 
-	if (Distance <= AttackRange)
+	if (Enemy->ShouldFlee() && !bUsedLowHealthFlee)
+	{
+		StartFlee(Enemy->FleeDuration, true);
+		return;
+	}
+
+	if (Distance <= Enemy->AttackRange)
 	{
 		StopMovement();
 		SetState(EAIState::Attack);
@@ -77,8 +96,42 @@ void ADiabloAIController::TickChase(float DeltaTime)
 
 	if (GetMoveStatus() != EPathFollowingStatus::Moving)
 	{
-		MoveToActor(Target, AttackRange * 0.5f);
+		const float AcceptanceRadius = Enemy->PreferredRange > 0.f ?
+			Enemy->PreferredRange : Enemy->AttackRange * 0.5f;
+		MoveToActor(Target, AcceptanceRadius);
 	}
+}
+
+void ADiabloAIController::TickFlee(float DeltaTime)
+{
+	APawn* Target = FindTarget();
+	ADiabloEnemy* Enemy = Cast<ADiabloEnemy>(GetPawn());
+	if (!Target || !Enemy)
+	{
+		SetState(EAIState::Idle);
+		return;
+	}
+
+	const float Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.f;
+	if (Now >= FleeEndTime)
+	{
+		SetState(EAIState::Chase);
+		return;
+	}
+
+	if (GetMoveStatus() == EPathFollowingStatus::Moving)
+	{
+		return;
+	}
+
+	FVector Away = (Enemy->GetActorLocation() - Target->GetActorLocation()).GetSafeNormal2D();
+	if (Away.IsNearlyZero())
+	{
+		Away = -Enemy->GetActorForwardVector();
+	}
+
+	const FVector FleeLocation = Enemy->GetActorLocation() + Away * FMath::Max(Enemy->PreferredRange, 650.f);
+	MoveToLocation(FleeLocation, 100.f);
 }
 
 void ADiabloAIController::TickAttack(float DeltaTime)
@@ -98,9 +151,21 @@ void ADiabloAIController::TickAttack(float DeltaTime)
 
 	const float Distance = FVector::Dist(Enemy->GetActorLocation(), Target->GetActorLocation());
 
-	if (Distance > AttackRange)
+	if (Distance > Enemy->AttackRange)
 	{
 		SetState(EAIState::Chase);
+		return;
+	}
+
+	if (Enemy->ShouldFlee() && !bUsedLowHealthFlee)
+	{
+		StartFlee(Enemy->FleeDuration, true);
+		return;
+	}
+
+	if (Enemy->PreferredRange > 0.f && Distance < Enemy->PreferredRange * 0.65f)
+	{
+		StartFlee(1.f, false);
 		return;
 	}
 
@@ -110,9 +175,9 @@ void ADiabloAIController::TickAttack(float DeltaTime)
 		Enemy->SetActorRotation(Direction.Rotation());
 	}
 
-	if (!Enemy->IsAttacking())
+	if (!Enemy->IsAttacking() && Enemy->CanUsePrimaryAttack())
 	{
-		Enemy->StartAttack(Target);
+		Enemy->StartSpecialAttack(Target);
 	}
 }
 
@@ -137,4 +202,15 @@ void ADiabloAIController::SetState(EAIState NewState)
 	}
 
 	State = NewState;
+}
+
+void ADiabloAIController::StartFlee(float Duration, bool bConsumeLowHealthFlee)
+{
+	StopMovement();
+	FleeEndTime = (GetWorld() ? GetWorld()->GetTimeSeconds() : 0.f) + Duration;
+	if (bConsumeLowHealthFlee)
+	{
+		bUsedLowHealthFlee = true;
+	}
+	SetState(EAIState::Flee);
 }

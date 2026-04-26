@@ -40,7 +40,7 @@ IntelliSense errors like `cannot open source file "X.h"` are usually false posit
 
 **Editor plugin:** [Plugins/DiabloEditor/](Plugins/DiabloEditor/) — editor-only plugin with `FDiabloAssetGenerator` (static utility struct) and a Slate toolbar panel accessible via **Tools > Diablo > Diablo Tools**. Generates BP subclasses, maps, input assets, imports FBX/audio, and configures Blueprint CDO defaults. Registered in `.uproject` with `"TargetAllowList": ["Editor"]`.
 
-**Plugins enabled** in `.uproject`: `StateTree`, `GameplayStateTree` (needed for AI in M19), `ModelingToolsEditorMode` (editor only), `DiabloEditor` (editor only).
+**Plugins enabled** in `.uproject`: `StateTree`, `GameplayStateTree` (reserved for a future AI refactor, not required by current M19), `ModelingToolsEditorMode` (editor only), `DiabloEditor` (editor only).
 
 ## Architecture
 
@@ -59,10 +59,15 @@ IntelliSense errors like `cannot open source file "X.h"` are usually false posit
 - `AM_Attack` (AnimMontage) — manually authored in editor from `Warrior_Anim_Attack`. Contains Melee Attack Trace notify at the hit frame plus optional PlaySound notifies for SwordSwing/SwordHit.
 - `AM_Death` (AnimMontage) — manually authored in editor from `Warrior_Anim_Death`. `bEnableAutoBlendOut = false` so the death pose holds. Used by both hero and enemy.
 
-### Enemy AI (M3)
+### Enemy AI (M3, M19)
 
-- `ADiabloAIController : AAIController` — tick-based state machine with `EAIState` enum (Idle / Chase / Attack / Dead). `FindTarget()` returns the player pawn (returns `nullptr` if hero is dead). Aggro at `AggroRange` (800), attacks at `AttackRange` (200), leashes at `LeashRange` (1500). Uses `MoveToActor` for pathfinding (only issued when `GetMoveStatus() != Moving` to prevent stutter).
+- `ADiabloAIController : AAIController` — tick-based state machine with `EAIState` enum (Idle / Chase / Flee / Attack / Dead). `FindTarget()` returns the player pawn (returns `nullptr` if hero is dead). Uses per-enemy `AggroRange`, `AttackRange`, `PreferredRange`, and `LeashRange`. Uses `MoveToActor` / `MoveToLocation` for pathfinding (only issued when `GetMoveStatus() != Moving` to prevent stutter).
 - `ADiabloEnemy` sets `AIControllerClass = ADiabloAIController` and `AutoPossessAI = PlacedInWorldOrSpawned` in constructor.
+- `EDiabloEnemyArchetype` on `ADiabloEnemy` drives lightweight behavior tuning: `MeleeGrunt`, `FastMelee`, `RangedArcher`, `Spellcaster`, `Summoner`, `FallenCoward`. `ConfigureArchetype()` calls `ApplyArchetypeDefaults()` to set HP, movement speed, attack range, preferred range, cooldowns, flee threshold, projectile damage/speed, and summon caps.
+- Ranged/caster/summoner enemies use `StartSpecialAttack()` and `FireProjectileAt()`; enemy projectiles set `bDamageEnemies = false` and `bDamageHero = true` on `ASpellProjectile`.
+- Summoners use `TrySummonMinion()` to spawn weak melee minions under `MaxSummons`; minions are marked `bIsSummonedMinion`, grant no XP, and drop no loot.
+- Fallen-style cowards use `ShouldFlee()` at low HP. The controller enters `Flee` once for the low-health retreat, while ranged archetypes can also briefly flee/reposition when the hero gets too close.
+- `ADiabloDungeonGenerator` cycles spawned Cathedral enemies through the archetype list and assigns `SummonClass = EnemyClass` so summoners can spawn minions from the same BP class.
 
 ### HP + Death + Respawn (M4)
 
@@ -292,7 +297,7 @@ Animations are keyframed in Blender Python scripts — the main mesh script and 
 - **AnimBlueprints** — manually authored in editor; parent to C++ `UDiabloAnimInstance` subclass. `ABP_Warrior` has a Locomotion state machine (Idle/Walk based on `Speed`) with a DefaultSlot node for montage overlay.
 - **AnimMontages** — `AM_Attack` created manually from `Warrior_Anim_Attack` with Melee Attack Trace and PlaySound notifies. `AM_Death` created manually from `Warrior_Anim_Death` with `bEnableAutoBlendOut = false`. Both set on hero and enemy BPs via `SetupHero`/`SetupEnemy`.
 - **Widget Blueprints** — `BP_DiabloHUD` under `Content/Blueprints/`; parents to C++ `UDiabloHUDWidget`. Widget tree built entirely in C++ — BP is a thin asset-reference shell.
-- **StateTree assets** — needed starting M19; reference C++ task/condition structs
+- **StateTree assets** — reserved for a future AI refactor only if enemy behavior composition outgrows the C++ state machine
 
 ### FBX Reimport Workflow
 

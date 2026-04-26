@@ -1,4 +1,5 @@
 #include "SpellProjectile.h"
+#include "DiabloHero.h"
 #include "DiabloEnemy.h"
 #include "Diablo.h"
 #include "Components/SphereComponent.h"
@@ -46,17 +47,34 @@ void ASpellProjectile::OnOverlap(UPrimitiveComponent* OverlappedComponent, AActo
 		return;
 	}
 
-	ADiabloEnemy* Enemy = Cast<ADiabloEnemy>(OtherActor);
-	if (!Enemy || Enemy->IsDead())
+	if (bDamageEnemies)
 	{
-		return;
+		ADiabloEnemy* Enemy = Cast<ADiabloEnemy>(OtherActor);
+		if (Enemy && !Enemy->IsDead())
+		{
+			FDamageEvent DamageEvent;
+			Enemy->TakeDamage(Damage, DamageEvent, InstigatorController, GetInstigator());
+
+			UE_LOG(LogDiablo, Display, TEXT("%s hit %s for %.0f damage"),
+				*GetName(), *Enemy->GetName(), Damage);
+
+			Destroy();
+			return;
+		}
 	}
 
-	FDamageEvent DamageEvent;
-	Enemy->TakeDamage(Damage, DamageEvent, InstigatorController, GetInstigator());
+	if (bDamageHero)
+	{
+		ADiabloHero* Hero = Cast<ADiabloHero>(OtherActor);
+		if (Hero && !Hero->IsDead())
+		{
+			FDamageEvent DamageEvent;
+			Hero->TakeDamage(Damage, DamageEvent, InstigatorController, GetInstigator());
 
-	UE_LOG(LogDiablo, Display, TEXT("%s hit %s for %.0f damage"),
-		*GetName(), *Enemy->GetName(), Damage);
+			UE_LOG(LogDiablo, Display, TEXT("%s hit %s for %.0f damage"),
+				*GetName(), *Hero->GetName(), Damage);
 
-	Destroy();
+			Destroy();
+		}
+	}
 }

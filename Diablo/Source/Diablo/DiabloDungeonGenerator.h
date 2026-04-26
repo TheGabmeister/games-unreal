@@ -38,7 +38,7 @@ public:
 	TObjectPtr<UTilePalette> TilePalette;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dungeon")
-	TSubclassOf<AActor> EnemyClass;
+	TSubclassOf<ADiabloEnemy> EnemyClass;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dungeon")
 	TSubclassOf<AActor> HealingPotionClass;

@@ -27,6 +27,12 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Spell")
 	float Speed = 1200.f;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spell")
+	bool bDamageEnemies = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spell")
+	bool bDamageHero = false;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Spell")
 	TObjectPtr<USphereComponent> CollisionComponent;
 
