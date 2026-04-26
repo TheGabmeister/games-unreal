@@ -78,6 +78,7 @@ void ADiabloHero::SaveToGameInstance()
 		GI->SavedOccupancyGrid = Inventory->GetOccupancyGrid();
 		GI->SavedEquippedItems = Inventory->GetEquippedItems();
 		GI->SavedGold = Inventory->GetGold();
+		GI->SavedBeltItems = Inventory->GetBeltItems();
 	}
 
 	GI->SavedKnownSpells = KnownSpells;
@@ -99,7 +100,7 @@ void ADiabloHero::LoadFromGameInstance()
 	if (Inventory)
 	{
 		Inventory->RestoreState(GI->SavedGridItems, GI->SavedOccupancyGrid,
-			GI->SavedEquippedItems, GI->SavedGold);
+			GI->SavedEquippedItems, GI->SavedGold, GI->SavedBeltItems);
 	}
 
 	KnownSpells = GI->SavedKnownSpells;
@@ -163,6 +164,70 @@ void ADiabloHero::Heal(float Amount)
 		*GetName(), Amount, Stats.HP, Stats.MaxHP);
 
 	OnStatsChanged.Broadcast();
+}
+
+void ADiabloHero::RestoreMana(float Amount)
+{
+	Stats.Mana = FMath::Min(Stats.Mana + Amount, Stats.MaxMana);
+	UE_LOG(LogDiablo, Display, TEXT("%s restored %.0f Mana (now %.0f/%.0f)"),
+		*GetName(), Amount, Stats.Mana, Stats.MaxMana);
+
+	OnStatsChanged.Broadcast();
+}
+
+bool ADiabloHero::CastSpellFromScroll(USpellDefinition* SpellDef)
+{
+	if (IsDead() || !SpellDef)
+	{
+		return false;
+	}
+
+	FVector Direction = GetActorForwardVector();
+	SetActorRotation(Direction.Rotation());
+
+	if (SpellDef->bIsProjectile && SpellDef->ProjectileClass)
+	{
+		const FVector SpawnLoc = GetActorLocation() + Direction * 80.f + FVector(0.f, 0.f, 50.f);
+		const FRotator SpawnRot = Direction.Rotation();
+
+		FActorSpawnParameters Params;
+		Params.Instigator = this;
+		Params.Owner = this;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+		ASpellProjectile* Proj = GetWorld()->SpawnActor<ASpellProjectile>(
+			SpellDef->ProjectileClass, SpawnLoc, SpawnRot, Params);
+		if (Proj)
+		{
+			Proj->Damage = SpellDef->Damage;
+		}
+	}
+	else if (SpellDef->HealAmount > 0.f)
+	{
+		Heal(SpellDef->HealAmount);
+	}
+	else
+	{
+		const float NovaRadius = 500.f;
+		TArray<FOverlapResult> Overlaps;
+		FCollisionShape Shape = FCollisionShape::MakeSphere(NovaRadius);
+		GetWorld()->OverlapMultiByChannel(Overlaps, GetActorLocation(), FQuat::Identity,
+			ECC_Pawn, Shape);
+
+		for (const FOverlapResult& Overlap : Overlaps)
+		{
+			ADiabloEnemy* Enemy = Cast<ADiabloEnemy>(Overlap.GetActor());
+			if (Enemy && !Enemy->IsDead())
+			{
+				FDamageEvent DamageEvent;
+				Enemy->TakeDamage(SpellDef->Damage, DamageEvent, GetController(), this);
+			}
+		}
+	}
+
+	UE_LOG(LogDiablo, Display, TEXT("%s cast %s from scroll"),
+		*GetName(), *SpellDef->DisplayName.ToString());
+	return true;
 }
 
 void ADiabloHero::StartAttack()

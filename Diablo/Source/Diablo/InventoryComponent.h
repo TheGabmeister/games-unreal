@@ -18,6 +18,7 @@ public:
 	static constexpr int32 GridWidth = 10;
 	static constexpr int32 GridHeight = 4;
 	static constexpr int32 NumEquipSlots = 7;
+	static constexpr int32 BeltSlots = 8;
 
 	bool TryAddItem(const FItemInstance& Item);
 	bool TryAddItemAt(const FItemInstance& Item, int32 GridX, int32 GridY);
@@ -27,6 +28,15 @@ public:
 	bool Equip(int32 GridX, int32 GridY);
 	bool Unequip(EEquipSlot Slot);
 	bool UseItem(int32 GridX, int32 GridY);
+
+	bool TryAddToBelt(const FItemInstance& Item);
+	bool SetBeltItem(int32 Slot, const FItemInstance& Item);
+	bool UseBeltSlot(int32 Slot);
+	bool RemoveBeltSlot(int32 Slot);
+	const FItemInstance& GetBeltItem(int32 Slot) const;
+	const TArray<FItemInstance>& GetBeltItems() const { return BeltItems; }
+	static bool IsBeltCompatible(const UItemDefinition* Def);
+	bool MoveGridToBelt(int32 GridX, int32 GridY);
 
 	const FItemInstance* GetItemAt(int32 GridX, int32 GridY) const;
 	const FItemInstance& GetEquipped(EEquipSlot Slot) const;
@@ -45,7 +55,8 @@ public:
 	const TMap<EEquipSlot, FItemInstance>& GetEquippedItems() const { return EquippedItems; }
 
 	void RestoreState(const TArray<FItemInstance>& InGridItems, const TArray<int32>& InOccupancy,
-		const TMap<EEquipSlot, FItemInstance>& InEquipped, int32 InGold);
+		const TMap<EEquipSlot, FItemInstance>& InEquipped, int32 InGold,
+		const TArray<FItemInstance>& InBeltItems);
 
 private:
 	bool CanPlaceAt(const UItemDefinition* Def, int32 GridX, int32 GridY, int32 IgnoreX = -1, int32 IgnoreY = -1) const;
@@ -60,6 +71,9 @@ private:
 
 	UPROPERTY()
 	TMap<EEquipSlot, FItemInstance> EquippedItems;
+
+	UPROPERTY()
+	TArray<FItemInstance> BeltItems;
 
 	UPROPERTY()
 	int32 Gold = 200;

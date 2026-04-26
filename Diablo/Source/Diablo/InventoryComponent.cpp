@@ -9,6 +9,7 @@ UInventoryComponent::UInventoryComponent()
 	GridItems.SetNum(GridWidth * GridHeight);
 	OccupancyGrid.SetNum(GridWidth * GridHeight);
 	FMemory::Memzero(OccupancyGrid.GetData(), OccupancyGrid.Num() * sizeof(int32));
+	BeltItems.SetNum(BeltSlots);
 }
 
 bool UInventoryComponent::CanPlaceAt(const UItemDefinition* Def, int32 GridX, int32 GridY, int32 IgnoreX, int32 IgnoreY) const
@@ -190,14 +191,37 @@ bool UInventoryComponent::UseItem(int32 GridX, int32 GridY)
 
 	const UItemDefinition* Def = Item.Definition;
 
-	if (Def->Category == EItemCategory::Potion && Def->HealAmount > 0.f)
+	if (Def->UseEffect != EItemUseEffect::None)
 	{
-		if (ADiabloHero* Hero = Cast<ADiabloHero>(GetOwner()))
+		ADiabloHero* Hero = Cast<ADiabloHero>(GetOwner());
+		if (!Hero) return false;
+
+		switch (Def->UseEffect)
 		{
+		case EItemUseEffect::RestoreHP:
 			Hero->Heal(Def->HealAmount);
-			UE_LOG(LogDiablo, Display, TEXT("Used %s (healed %.0f)"),
-				*Def->DisplayName.ToString(), Def->HealAmount);
+			break;
+		case EItemUseEffect::RestoreMana:
+			Hero->RestoreMana(Def->ManaRestoreAmount);
+			break;
+		case EItemUseEffect::RestoreBoth:
+			Hero->Heal(Def->HealAmount);
+			Hero->RestoreMana(Def->ManaRestoreAmount);
+			break;
+		case EItemUseEffect::CastSpell:
+			if (Def->ScrollSpell)
+			{
+				if (!Hero->CastSpellFromScroll(Def->ScrollSpell))
+				{
+					return false;
+				}
+			}
+			break;
+		default:
+			break;
 		}
+
+		UE_LOG(LogDiablo, Display, TEXT("Used %s"), *Def->DisplayName.ToString());
 
 		if (Item.StackCount > 1)
 		{
@@ -368,12 +392,152 @@ int32 UInventoryComponent::IdentifyAll()
 	return Count;
 }
 
+bool UInventoryComponent::IsBeltCompatible(const UItemDefinition* Def)
+{
+	if (!Def) return false;
+	return Def->Category == EItemCategory::Potion || Def->Category == EItemCategory::Scroll;
+}
+
+bool UInventoryComponent::TryAddToBelt(const FItemInstance& Item)
+{
+	if (!Item.IsValid() || !IsBeltCompatible(Item.Definition)) return false;
+
+	for (int32 i = 0; i < BeltSlots; ++i)
+	{
+		if (Item.Definition->bStackable && BeltItems[i].IsValid() &&
+			BeltItems[i].Definition == Item.Definition &&
+			BeltItems[i].StackCount < BeltItems[i].Definition->MaxStack)
+		{
+			int32 CanAdd = BeltItems[i].Definition->MaxStack - BeltItems[i].StackCount;
+			int32 ToAdd = FMath::Min(CanAdd, Item.StackCount);
+			BeltItems[i].StackCount += ToAdd;
+			OnInventoryChanged.Broadcast();
+			return true;
+		}
+	}
+
+	for (int32 i = 0; i < BeltSlots; ++i)
+	{
+		if (!BeltItems[i].IsValid())
+		{
+			BeltItems[i] = Item;
+			OnInventoryChanged.Broadcast();
+			UE_LOG(LogDiablo, Display, TEXT("Added %s to belt slot %d"),
+				*Item.Definition->DisplayName.ToString(), i + 1);
+			return true;
+		}
+	}
+
+	return false;
+}
+
+bool UInventoryComponent::SetBeltItem(int32 Slot, const FItemInstance& Item)
+{
+	if (Slot < 0 || Slot >= BeltSlots) return false;
+	if (Item.IsValid() && !IsBeltCompatible(Item.Definition)) return false;
+
+	BeltItems[Slot] = Item;
+	OnInventoryChanged.Broadcast();
+	return true;
+}
+
+bool UInventoryComponent::UseBeltSlot(int32 Slot)
+{
+	if (Slot < 0 || Slot >= BeltSlots) return false;
+
+	FItemInstance& Item = BeltItems[Slot];
+	if (!Item.IsValid()) return false;
+
+	const UItemDefinition* Def = Item.Definition;
+	ADiabloHero* Hero = Cast<ADiabloHero>(GetOwner());
+	if (!Hero) return false;
+
+	switch (Def->UseEffect)
+	{
+	case EItemUseEffect::RestoreHP:
+		Hero->Heal(Def->HealAmount);
+		break;
+	case EItemUseEffect::RestoreMana:
+		Hero->RestoreMana(Def->ManaRestoreAmount);
+		break;
+	case EItemUseEffect::RestoreBoth:
+		Hero->Heal(Def->HealAmount);
+		Hero->RestoreMana(Def->ManaRestoreAmount);
+		break;
+	case EItemUseEffect::CastSpell:
+		if (Def->ScrollSpell)
+		{
+			if (!Hero->CastSpellFromScroll(Def->ScrollSpell))
+			{
+				return false;
+			}
+		}
+		break;
+	default:
+		return false;
+	}
+
+	UE_LOG(LogDiablo, Display, TEXT("Used belt slot %d: %s"), Slot + 1, *Def->DisplayName.ToString());
+
+	if (Item.StackCount > 1)
+	{
+		Item.StackCount--;
+	}
+	else
+	{
+		Item = FItemInstance();
+	}
+
+	OnInventoryChanged.Broadcast();
+	return true;
+}
+
+bool UInventoryComponent::RemoveBeltSlot(int32 Slot)
+{
+	if (Slot < 0 || Slot >= BeltSlots) return false;
+	if (!BeltItems[Slot].IsValid()) return false;
+
+	BeltItems[Slot] = FItemInstance();
+	OnInventoryChanged.Broadcast();
+	return true;
+}
+
+const FItemInstance& UInventoryComponent::GetBeltItem(int32 Slot) const
+{
+	static const FItemInstance Empty;
+	if (Slot < 0 || Slot >= BeltSlots) return Empty;
+	return BeltItems[Slot];
+}
+
+bool UInventoryComponent::MoveGridToBelt(int32 GridX, int32 GridY)
+{
+	const int32 Idx = GridIndex(GridX, GridY);
+	if (Idx < 0 || Idx >= GridItems.Num()) return false;
+
+	FItemInstance& Item = GridItems[Idx];
+	if (!Item.IsValid() || !IsBeltCompatible(Item.Definition)) return false;
+
+	if (TryAddToBelt(Item))
+	{
+		RemoveItemAt(GridX, GridY);
+		return true;
+	}
+
+	return false;
+}
+
 void UInventoryComponent::RestoreState(const TArray<FItemInstance>& InGridItems, const TArray<int32>& InOccupancy,
-	const TMap<EEquipSlot, FItemInstance>& InEquipped, int32 InGold)
+	const TMap<EEquipSlot, FItemInstance>& InEquipped, int32 InGold,
+	const TArray<FItemInstance>& InBeltItems)
 {
 	GridItems = InGridItems;
 	OccupancyGrid = InOccupancy;
 	EquippedItems = InEquipped;
 	Gold = InGold;
+	BeltItems = InBeltItems;
+	if (BeltItems.Num() < BeltSlots)
+	{
+		BeltItems.SetNum(BeltSlots);
+	}
 	OnInventoryChanged.Broadcast();
 }

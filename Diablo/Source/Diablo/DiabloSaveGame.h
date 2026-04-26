@@ -46,6 +46,9 @@ public:
 	int32 SavedGold = 0;
 
 	UPROPERTY()
+	TArray<FItemInstance> SavedBeltItems;
+
+	UPROPERTY()
 	TArray<TObjectPtr<USpellDefinition>> SavedKnownSpells;
 
 	UPROPERTY()

@@ -36,9 +36,11 @@ private:
 	void RefreshGrid();
 	void RefreshEquipment();
 	void RefreshGold();
+	void RefreshBelt();
 
 	bool HitTestGrid(const FGeometry& InGeometry, const FVector2D& ScreenPos, int32& OutX, int32& OutY) const;
 	bool HitTestEquip(const FGeometry& InGeometry, const FVector2D& ScreenPos, EEquipSlot& OutSlot) const;
+	bool HitTestBelt(const FGeometry& InGeometry, const FVector2D& ScreenPos, int32& OutSlot) const;
 
 	UPROPERTY()
 	TObjectPtr<UInventoryComponent> CachedInventory;
@@ -60,6 +62,9 @@ private:
 
 	UPROPERTY()
 	TMap<EEquipSlot, TObjectPtr<UBorder>> EquipSlotWidgets;
+
+	UPROPERTY()
+	TArray<TObjectPtr<UBorder>> BeltCellWidgets;
 
 	FDelegateHandle InventoryChangedHandle;
 

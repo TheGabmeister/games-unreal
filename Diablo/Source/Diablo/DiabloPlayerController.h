@@ -54,6 +54,9 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input")
 	TObjectPtr<UInputAction> MenuAction;
 
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input")
+	TArray<TObjectPtr<UInputAction>> BeltActions;
+
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "HUD")
 	TSubclassOf<UDiabloHUDWidget> HUDWidgetClass;
 
@@ -93,6 +96,15 @@ private:
 	void OnToggleSpellbook();
 	void OnToggleMainMenu();
 	void OnRespawnTimerExpired();
+	void OnUseBeltSlot(int32 Slot);
+	void OnBelt0() { OnUseBeltSlot(0); }
+	void OnBelt1() { OnUseBeltSlot(1); }
+	void OnBelt2() { OnUseBeltSlot(2); }
+	void OnBelt3() { OnUseBeltSlot(3); }
+	void OnBelt4() { OnUseBeltSlot(4); }
+	void OnBelt5() { OnUseBeltSlot(5); }
+	void OnBelt6() { OnUseBeltSlot(6); }
+	void OnBelt7() { OnUseBeltSlot(7); }
 
 	UPROPERTY()
 	TObjectPtr<ADiabloEnemy> TargetEnemy;

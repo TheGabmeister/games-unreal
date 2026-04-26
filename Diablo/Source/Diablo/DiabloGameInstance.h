@@ -25,6 +25,7 @@ public:
 	TArray<int32> SavedOccupancyGrid;
 	TMap<EEquipSlot, FItemInstance> SavedEquippedItems;
 	int32 SavedGold = 0;
+	TArray<FItemInstance> SavedBeltItems;
 
 	UPROPERTY()
 	TArray<TObjectPtr<USpellDefinition>> SavedKnownSpells;

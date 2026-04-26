@@ -31,6 +31,8 @@ public:
 	bool IsAttacking() const { return bIsAttacking; }
 	bool IsDead() const { return !Stats.IsAlive(); }
 	void Heal(float Amount);
+	void RestoreMana(float Amount);
+	bool CastSpellFromScroll(USpellDefinition* SpellDef);
 	void AwardXP(int64 Amount);
 	bool SpendStatPoint(FName StatName);
 	bool CastSpell(const FVector& TargetLocation);

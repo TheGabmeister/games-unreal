@@ -191,6 +191,21 @@ void ADiabloPlayerController::SetupInputComponent()
 		{
 			EIC->BindAction(MenuAction, ETriggerEvent::Started, this, &ADiabloPlayerController::OnToggleMainMenu);
 		}
+
+		using FBeltHandler = void(ADiabloPlayerController::*)();
+		static const FBeltHandler BeltHandlers[] = {
+			&ADiabloPlayerController::OnBelt0, &ADiabloPlayerController::OnBelt1,
+			&ADiabloPlayerController::OnBelt2, &ADiabloPlayerController::OnBelt3,
+			&ADiabloPlayerController::OnBelt4, &ADiabloPlayerController::OnBelt5,
+			&ADiabloPlayerController::OnBelt6, &ADiabloPlayerController::OnBelt7,
+		};
+		for (int32 i = 0; i < BeltActions.Num() && i < 8; ++i)
+		{
+			if (BeltActions[i])
+			{
+				EIC->BindAction(BeltActions[i], ETriggerEvent::Started, this, BeltHandlers[i]);
+			}
+		}
 	}
 }
 
@@ -552,6 +567,15 @@ void ADiabloPlayerController::CloseShop()
 	FInputModeGameAndUI Mode;
 	Mode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
 	SetInputMode(Mode);
+}
+
+void ADiabloPlayerController::OnUseBeltSlot(int32 Slot)
+{
+	ADiabloHero* Hero = Cast<ADiabloHero>(GetPawn());
+	if (!Hero || Hero->IsDead()) return;
+	if (!Hero->Inventory) return;
+
+	Hero->Inventory->UseBeltSlot(Slot);
 }
 
 void ADiabloPlayerController::Tick(float DeltaTime)

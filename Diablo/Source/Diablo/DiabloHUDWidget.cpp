@@ -1,11 +1,18 @@
 #include "DiabloHUDWidget.h"
 #include "DiabloHero.h"
+#include "InventoryComponent.h"
+#include "ItemDefinition.h"
+#include "ItemInstance.h"
 #include "Diablo.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
 #include "Components/ProgressBar.h"
 #include "Components/SizeBox.h"
 #include "Components/TextBlock.h"
+#include "Components/Border.h"
+#include "Components/Image.h"
+#include "Components/HorizontalBox.h"
+#include "Components/HorizontalBoxSlot.h"
 #include "Blueprint/WidgetTree.h"
 
 void UDiabloHUDWidget::InitForHero(ADiabloHero* InHero)
@@ -15,13 +22,24 @@ void UDiabloHUDWidget::InitForHero(ADiabloHero* InHero)
 		CachedHero->OnStatsChanged.Remove(StatsChangedHandle);
 		StatsChangedHandle.Reset();
 	}
+	if (CachedInventory && InventoryChangedHandle.IsValid())
+	{
+		CachedInventory->OnInventoryChanged.Remove(InventoryChangedHandle);
+		InventoryChangedHandle.Reset();
+	}
 
 	CachedHero = InHero;
+	CachedInventory = InHero ? InHero->Inventory : nullptr;
 
 	if (CachedHero)
 	{
 		StatsChangedHandle = CachedHero->OnStatsChanged.AddUObject(this, &UDiabloHUDWidget::OnStatsChanged);
 		RefreshBars();
+	}
+	if (CachedInventory)
+	{
+		InventoryChangedHandle = CachedInventory->OnInventoryChanged.AddUObject(this, &UDiabloHUDWidget::OnInventoryChanged);
+		RefreshBelt();
 	}
 }
 
@@ -29,6 +47,7 @@ void UDiabloHUDWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
 	RefreshBars();
+	RefreshBelt();
 }
 
 void UDiabloHUDWidget::NativeDestruct()
@@ -38,6 +57,11 @@ void UDiabloHUDWidget::NativeDestruct()
 		CachedHero->OnStatsChanged.Remove(StatsChangedHandle);
 		StatsChangedHandle.Reset();
 	}
+	if (CachedInventory && InventoryChangedHandle.IsValid())
+	{
+		CachedInventory->OnInventoryChanged.Remove(InventoryChangedHandle);
+		InventoryChangedHandle.Reset();
+	}
 
 	Super::NativeDestruct();
 }
@@ -45,6 +69,50 @@ void UDiabloHUDWidget::NativeDestruct()
 void UDiabloHUDWidget::OnStatsChanged()
 {
 	RefreshBars();
+}
+
+void UDiabloHUDWidget::OnInventoryChanged()
+{
+	RefreshBelt();
+}
+
+void UDiabloHUDWidget::RefreshBelt()
+{
+	if (!CachedInventory) return;
+
+	const FLinearColor EmptyColor(0.08f, 0.08f, 0.1f, 0.7f);
+	const FLinearColor FilledColor(0.2f, 0.18f, 0.1f, 0.85f);
+
+	for (int32 i = 0; i < BeltSlotWidgets.Num(); ++i)
+	{
+		UBorder* Cell = BeltSlotWidgets[i];
+		if (!Cell) continue;
+
+		const FItemInstance& Item = CachedInventory->GetBeltItem(i);
+		Cell->SetBrushColor(Item.IsValid() ? FilledColor : EmptyColor);
+		Cell->ClearChildren();
+
+		if (Item.IsValid() && Item.Definition)
+		{
+			if (Item.Definition->Icon)
+			{
+				UImage* IconImg = NewObject<UImage>(Cell);
+				IconImg->SetBrushFromTexture(Item.Definition->Icon);
+				IconImg->SetDesiredSizeOverride(FVector2D(28.f, 28.f));
+				Cell->AddChild(IconImg);
+			}
+			else
+			{
+				UTextBlock* Label = NewObject<UTextBlock>(Cell);
+				Label->SetText(FText::FromString(Item.Definition->DisplayName.ToString().Left(3)));
+				FSlateFontInfo Font = Label->GetFont();
+				Font.Size = 8;
+				Label->SetFont(Font);
+				Label->SetColorAndOpacity(FSlateColor(FLinearColor::White));
+				Cell->AddChild(Label);
+			}
+		}
+	}
 }
 
 void UDiabloHUDWidget::RefreshBars()
@@ -174,7 +242,56 @@ TSharedRef<SWidget> UDiabloHUDWidget::RebuildWidget()
 			XPSlot->SetOffsets(FMargin(XPInset, -Margin - BarHeight, XPInset, Margin));
 		}
 
-		// --- Level Text (above XP bar, centered) ---
+		// --- Belt Slots (above XP bar, centered) ---
+		{
+			const float BeltCellSize = 32.f;
+			const float BeltPadding = 2.f;
+			const int32 NumBeltSlots = 8;
+
+			UHorizontalBox* BeltRow = WidgetTree->ConstructWidget<UHorizontalBox>(
+				UHorizontalBox::StaticClass(), TEXT("BeltRow"));
+
+			BeltSlotWidgets.Empty();
+			for (int32 i = 0; i < NumBeltSlots; ++i)
+			{
+				USizeBox* Box = WidgetTree->ConstructWidget<USizeBox>(
+					USizeBox::StaticClass(),
+					FName(*FString::Printf(TEXT("BeltBox_%d"), i)));
+				Box->SetWidthOverride(BeltCellSize);
+				Box->SetHeightOverride(BeltCellSize);
+
+				UBorder* Cell = WidgetTree->ConstructWidget<UBorder>(
+					UBorder::StaticClass(),
+					FName(*FString::Printf(TEXT("BeltCell_%d"), i)));
+				Cell->SetBrushColor(FLinearColor(0.08f, 0.08f, 0.1f, 0.7f));
+				Cell->SetHorizontalAlignment(HAlign_Center);
+				Cell->SetVerticalAlignment(VAlign_Center);
+
+				UTextBlock* NumLabel = WidgetTree->ConstructWidget<UTextBlock>(
+					UTextBlock::StaticClass(),
+					FName(*FString::Printf(TEXT("BeltNum_%d"), i)));
+				NumLabel->SetText(FText::FromString(FString::Printf(TEXT("%d"), i + 1)));
+				FSlateFontInfo NumFont = NumLabel->GetFont();
+				NumFont.Size = 7;
+				NumLabel->SetFont(NumFont);
+				NumLabel->SetColorAndOpacity(FSlateColor(FLinearColor(0.4f, 0.4f, 0.4f, 0.5f)));
+				Cell->AddChild(NumLabel);
+
+				Box->AddChild(Cell);
+				BeltSlotWidgets.Add(Cell);
+
+				UHorizontalBoxSlot* HSlot = BeltRow->AddChildToHorizontalBox(Box);
+				HSlot->SetPadding(FMargin(BeltPadding));
+			}
+
+			UCanvasPanelSlot* BeltSlot = Root->AddChildToCanvas(BeltRow);
+			BeltSlot->SetAnchors(FAnchors(0.5f, 1.f, 0.5f, 1.f));
+			BeltSlot->SetAlignment(FVector2D(0.5f, 1.f));
+			BeltSlot->SetPosition(FVector2D(0.f, -Margin - BarHeight - 6.f));
+			BeltSlot->SetAutoSize(true);
+		}
+
+		// --- Level Text (above belt, centered) ---
 		{
 			LevelText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("LevelText"));
 			LevelText->SetText(FText::FromString(TEXT("Lv 1")));
@@ -188,7 +305,7 @@ TSharedRef<SWidget> UDiabloHUDWidget::RebuildWidget()
 			UCanvasPanelSlot* LvSlot = Root->AddChildToCanvas(LevelText);
 			LvSlot->SetAnchors(FAnchors(0.5f, 1.f, 0.5f, 1.f));
 			LvSlot->SetAlignment(FVector2D(0.5f, 1.f));
-			LvSlot->SetPosition(FVector2D(0.f, -Margin - BarHeight - 4.f));
+			LvSlot->SetPosition(FVector2D(0.f, -Margin - BarHeight - 6.f - 36.f));
 			LvSlot->SetAutoSize(true);
 		}
 	}

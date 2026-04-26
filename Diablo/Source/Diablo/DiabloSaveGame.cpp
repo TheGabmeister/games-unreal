@@ -14,6 +14,7 @@ void UDiabloSaveGame::PopulateFromGameInstance(const UDiabloGameInstance* GI)
 	SavedOccupancyGrid = GI->SavedOccupancyGrid;
 	SavedEquippedItems = GI->SavedEquippedItems;
 	SavedGold = GI->SavedGold;
+	SavedBeltItems = GI->SavedBeltItems;
 	SavedKnownSpells = GI->SavedKnownSpells;
 	SavedActiveSpell = GI->SavedActiveSpell;
 }
@@ -29,6 +30,7 @@ void UDiabloSaveGame::ApplyToGameInstance(UDiabloGameInstance* GI) const
 	GI->SavedOccupancyGrid = SavedOccupancyGrid;
 	GI->SavedEquippedItems = SavedEquippedItems;
 	GI->SavedGold = SavedGold;
+	GI->SavedBeltItems = SavedBeltItems;
 	GI->SavedKnownSpells = SavedKnownSpells;
 	GI->SavedActiveSpell = SavedActiveSpell;
 }

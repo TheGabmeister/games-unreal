@@ -32,6 +32,16 @@ enum class EItemCategory : uint8
 	Gold
 };
 
+UENUM(BlueprintType)
+enum class EItemUseEffect : uint8
+{
+	None,
+	RestoreHP,
+	RestoreMana,
+	RestoreBoth,
+	CastSpell
+};
+
 UCLASS(BlueprintType)
 class DIABLO_API UItemDefinition : public UPrimaryDataAsset
 {
@@ -94,6 +104,15 @@ public:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Item")
 	float HealAmount = 0.f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Item")
+	float ManaRestoreAmount = 0.f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Item|Use")
+	EItemUseEffect UseEffect = EItemUseEffect::None;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Item|Use")
+	TObjectPtr<class USpellDefinition> ScrollSpell;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Item")
 	int32 QualityLevel = 1;

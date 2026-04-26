@@ -46,6 +46,7 @@ void UDiabloInventoryPanel::NativeConstruct()
 	RefreshGrid();
 	RefreshEquipment();
 	RefreshGold();
+	RefreshBelt();
 }
 
 void UDiabloInventoryPanel::NativeDestruct()
@@ -63,6 +64,7 @@ void UDiabloInventoryPanel::OnInventoryChanged()
 	RefreshGrid();
 	RefreshEquipment();
 	RefreshGold();
+	RefreshBelt();
 }
 
 // ---------------------------------------------------------------------------
@@ -116,6 +118,20 @@ bool UDiabloInventoryPanel::HitTestEquip(const FGeometry& InGeometry, const FVec
 	return false;
 }
 
+bool UDiabloInventoryPanel::HitTestBelt(const FGeometry& InGeometry, const FVector2D& ScreenPos,
+	int32& OutSlot) const
+{
+	for (int32 i = 0; i < BeltCellWidgets.Num(); ++i)
+	{
+		if (IsScreenPosInsideWidget(BeltCellWidgets[i], ScreenPos))
+		{
+			OutSlot = i;
+			return true;
+		}
+	}
+	return false;
+}
+
 FReply UDiabloInventoryPanel::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
 {
 	if (!CachedInventory) return FReply::Unhandled();
@@ -127,7 +143,30 @@ FReply UDiabloInventoryPanel::NativeOnMouseButtonDown(const FGeometry& InGeometr
 		int32 GridX, GridY;
 		if (HitTestGrid(InGeometry, ScreenPos, GridX, GridY))
 		{
-			CachedInventory->UseItem(GridX, GridY);
+			if (const FItemInstance* Item = CachedInventory->GetItemAt(GridX, GridY))
+			{
+				if (UInventoryComponent::IsBeltCompatible(Item->Definition))
+				{
+					CachedInventory->MoveGridToBelt(GridX, GridY);
+				}
+				else
+				{
+					CachedInventory->UseItem(GridX, GridY);
+				}
+			}
+			return FReply::Handled();
+		}
+
+		int32 BeltSlot;
+		if (HitTestBelt(InGeometry, ScreenPos, BeltSlot))
+		{
+			const FItemInstance& BeltItem = CachedInventory->GetBeltItem(BeltSlot);
+			if (BeltItem.IsValid())
+			{
+				FItemInstance Copy = BeltItem;
+				CachedInventory->RemoveBeltSlot(BeltSlot);
+				CachedInventory->TryAddItem(Copy);
+			}
 			return FReply::Handled();
 		}
 
@@ -263,6 +302,17 @@ FReply UDiabloInventoryPanel::NativeOnMouseMove(const FGeometry& InGeometry, con
 		}
 	}
 
+	int32 BeltSlot;
+	if (ItemName.IsEmpty() && HitTestBelt(InGeometry, ScreenPos, BeltSlot))
+	{
+		const FItemInstance& BeltItem = CachedInventory->GetBeltItem(BeltSlot);
+		if (BeltItem.IsValid())
+		{
+			ItemName = BuildHoverText(BeltItem);
+			bIsMagic = BeltItem.Affixes.Num() > 0;
+		}
+	}
+
 	EEquipSlot HitSlot;
 	if (ItemName.IsEmpty() && HitTestEquip(InGeometry, ScreenPos, HitSlot))
 	{
@@ -388,6 +438,46 @@ void UDiabloInventoryPanel::RefreshGold()
 	GoldText->SetText(FText::FromString(FString::Printf(TEXT("Gold: %d"), CachedInventory->GetGold())));
 }
 
+void UDiabloInventoryPanel::RefreshBelt()
+{
+	if (!CachedInventory) return;
+
+	const FLinearColor EmptyColor(0.08f, 0.08f, 0.12f, 0.9f);
+	const FLinearColor FilledColor(0.2f, 0.18f, 0.1f, 0.9f);
+
+	for (int32 i = 0; i < BeltCellWidgets.Num(); ++i)
+	{
+		UBorder* Cell = BeltCellWidgets[i];
+		if (!Cell) continue;
+
+		const FItemInstance& Item = CachedInventory->GetBeltItem(i);
+		Cell->SetBrushColor(Item.IsValid() ? FilledColor : EmptyColor);
+		Cell->ClearChildren();
+
+		if (Item.IsValid() && Item.Definition)
+		{
+			if (Item.Definition->Icon)
+			{
+				UImage* IconImg = NewObject<UImage>(Cell);
+				IconImg->SetBrushFromTexture(Item.Definition->Icon);
+				IconImg->SetDesiredSizeOverride(FVector2D(CellSize - 4.f, CellSize - 4.f));
+				Cell->AddChild(IconImg);
+			}
+			else
+			{
+				UTextBlock* NameLabel = NewObject<UTextBlock>(Cell);
+				FString Short = Item.Definition->DisplayName.ToString().Left(3);
+				NameLabel->SetText(FText::FromString(Short));
+				FSlateFontInfo Font = NameLabel->GetFont();
+				Font.Size = 8;
+				NameLabel->SetFont(Font);
+				NameLabel->SetColorAndOpacity(FSlateColor(FLinearColor::White));
+				Cell->AddChild(NameLabel);
+			}
+		}
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Widget tree construction
 // ---------------------------------------------------------------------------
@@ -418,7 +508,7 @@ TSharedRef<SWidget> UDiabloInventoryPanel::RebuildWidget()
 
 		const float GridW = UInventoryComponent::GridWidth * (CellSize + CellPadding);
 		const float TotalWidth = GridW + 20.f;
-		const float TotalHeight = 360.f;
+		const float TotalHeight = 420.f;
 
 		UCanvasPanelSlot* BGSlot = Root->AddChildToCanvas(BG);
 		BGSlot->SetAnchors(FAnchors(1.f, 0.f, 1.f, 0.f));
@@ -533,6 +623,63 @@ TSharedRef<SWidget> UDiabloInventoryPanel::RebuildWidget()
 
 				GridVBox->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, CellPadding));
 			}
+		}
+
+		// Belt separator
+		{
+			UBorder* BeltSep = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("BeltSeparator"));
+			BeltSep->SetBrushColor(FLinearColor(0.3f, 0.3f, 0.3f, 0.5f));
+			USizeBox* BeltSepBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("BeltSepBox"));
+			BeltSepBox->SetHeightOverride(2.f);
+			BeltSepBox->AddChild(BeltSep);
+			VBox->AddChildToVerticalBox(BeltSepBox)->SetPadding(FMargin(0.f, 4.f, 0.f, 2.f));
+		}
+
+		// Belt label
+		{
+			UTextBlock* BeltLabel = MakeInvLabel(WidgetTree, TEXT("BeltLabel"), TEXT("Belt (1-8)"), 10);
+			VBox->AddChildToVerticalBox(BeltLabel)->SetPadding(FMargin(0.f, 0.f, 0.f, 2.f));
+		}
+
+		// Belt slots
+		BeltCellWidgets.Empty();
+		{
+			UHorizontalBox* BeltRow = WidgetTree->ConstructWidget<UHorizontalBox>(
+				UHorizontalBox::StaticClass(), TEXT("BeltRow"));
+
+			for (int32 i = 0; i < UInventoryComponent::BeltSlots; ++i)
+			{
+				USizeBox* Box = WidgetTree->ConstructWidget<USizeBox>(
+					USizeBox::StaticClass(),
+					FName(*FString::Printf(TEXT("BeltBox_%d"), i)));
+				Box->SetWidthOverride(CellSize);
+				Box->SetHeightOverride(CellSize);
+
+				UBorder* Cell = WidgetTree->ConstructWidget<UBorder>(
+					UBorder::StaticClass(),
+					FName(*FString::Printf(TEXT("BeltCell_%d"), i)));
+				Cell->SetBrushColor(FLinearColor(0.08f, 0.08f, 0.12f, 0.9f));
+				Cell->SetHorizontalAlignment(HAlign_Center);
+				Cell->SetVerticalAlignment(VAlign_Center);
+
+				UTextBlock* NumLabel = WidgetTree->ConstructWidget<UTextBlock>(
+					UTextBlock::StaticClass(),
+					FName(*FString::Printf(TEXT("BeltNum_%d"), i)));
+				NumLabel->SetText(FText::FromString(FString::Printf(TEXT("%d"), i + 1)));
+				FSlateFontInfo Font = NumLabel->GetFont();
+				Font.Size = 7;
+				NumLabel->SetFont(Font);
+				NumLabel->SetColorAndOpacity(FSlateColor(FLinearColor(0.4f, 0.4f, 0.4f, 0.5f)));
+				Cell->AddChild(NumLabel);
+
+				Box->AddChild(Cell);
+				BeltCellWidgets.Add(Cell);
+
+				UHorizontalBoxSlot* HSlot = BeltRow->AddChildToHorizontalBox(Box);
+				HSlot->SetPadding(FMargin(CellPadding));
+			}
+
+			VBox->AddChildToVerticalBox(BeltRow)->SetPadding(FMargin(0.f, 0.f, 0.f, 2.f));
 		}
 
 		// Gold display

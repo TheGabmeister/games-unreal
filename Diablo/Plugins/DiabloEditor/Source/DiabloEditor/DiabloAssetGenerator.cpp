@@ -491,6 +491,14 @@ void FDiabloAssetGenerator::GenerateInputAssets()
 		{ TEXT("IA_Cast"),      EInputActionValueType::Boolean, EKeys::RightMouseButton },
 		{ TEXT("IA_Spellbook"), EInputActionValueType::Boolean, EKeys::S },
 		{ TEXT("IA_Menu"),      EInputActionValueType::Boolean, EKeys::Escape },
+		{ TEXT("IA_Belt1"),     EInputActionValueType::Boolean, EKeys::One },
+		{ TEXT("IA_Belt2"),     EInputActionValueType::Boolean, EKeys::Two },
+		{ TEXT("IA_Belt3"),     EInputActionValueType::Boolean, EKeys::Three },
+		{ TEXT("IA_Belt4"),     EInputActionValueType::Boolean, EKeys::Four },
+		{ TEXT("IA_Belt5"),     EInputActionValueType::Boolean, EKeys::Five },
+		{ TEXT("IA_Belt6"),     EInputActionValueType::Boolean, EKeys::Six },
+		{ TEXT("IA_Belt7"),     EInputActionValueType::Boolean, EKeys::Seven },
+		{ TEXT("IA_Belt8"),     EInputActionValueType::Boolean, EKeys::Eight },
 	};
 
 	const FString InputBasePath = TEXT("/Game/Input/Actions");
@@ -1129,6 +1137,28 @@ void FDiabloAssetGenerator::SetupController()
 				}
 			}
 		}
+
+		if (FProperty* BeltProp = ControllerBP->GeneratedClass->FindPropertyByName(TEXT("BeltActions")))
+		{
+			if (FArrayProperty* ArrayProp = CastField<FArrayProperty>(BeltProp))
+			{
+				FScriptArrayHelper ArrayHelper(ArrayProp, ArrayProp->ContainerPtrToValuePtr<void>(CDO));
+				ArrayHelper.Resize(8);
+				for (int32 i = 0; i < 8; ++i)
+				{
+					FString ActionPath = FString::Printf(TEXT("/Game/Input/Actions/IA_Belt%d.IA_Belt%d"), i + 1, i + 1);
+					UInputAction* BeltAction = LoadObject<UInputAction>(nullptr, *ActionPath);
+					if (BeltAction)
+					{
+						if (FObjectProperty* InnerProp = CastField<FObjectProperty>(ArrayProp->Inner))
+						{
+							InnerProp->SetObjectPropertyValue(ArrayHelper.GetRawPtr(i), BeltAction);
+						}
+					}
+				}
+				UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_DiabloPlayerController: set BeltActions[8]"));
+			}
+		}
 	}
 
 	FKismetEditorUtilities::CompileBlueprint(ControllerBP);
@@ -1721,6 +1751,9 @@ void FDiabloAssetGenerator::SetupInventory()
 		float Str, Mag, Dex, Vit;
 		int32 Durability, GoldValue;
 		float HealAmount;
+		float ManaRestoreAmount;
+		EItemUseEffect UseEffect;
+		FString ScrollSpellAsset;
 		bool bStackable;
 		int32 MaxStack;
 		FString IconAsset;
@@ -1728,23 +1761,45 @@ void FDiabloAssetGenerator::SetupInventory()
 
 	TArray<FItemDef> Items = {
 		{ TEXT("Short Sword"), EItemCategory::Weapon, EEquipSlot::RightHand, 1, 3,
-		  2.f, 6.f, 0.f, 0.f, 0.f, 0.f, 0.f, 24, 50, 0.f, false, 1,
+		  2.f, 6.f, 0.f, 0.f, 0.f, 0.f, 0.f, 24, 50, 0.f, 0.f,
+		  EItemUseEffect::None, TEXT(""), false, 1,
 		  TEXT("/Game/Items/Icons/T_ShortSword.T_ShortSword") },
 		{ TEXT("Buckler"), EItemCategory::Shield, EEquipSlot::LeftHand, 1, 2,
-		  0.f, 0.f, 5.f, 0.f, 0.f, 0.f, 0.f, 16, 30, 0.f, false, 1,
+		  0.f, 0.f, 5.f, 0.f, 0.f, 0.f, 0.f, 16, 30, 0.f, 0.f,
+		  EItemUseEffect::None, TEXT(""), false, 1,
 		  TEXT("/Game/Items/Icons/T_Buckler.T_Buckler") },
 		{ TEXT("Skull Cap"), EItemCategory::Helm, EEquipSlot::Head, 2, 2,
-		  0.f, 0.f, 3.f, 0.f, 0.f, 0.f, 0.f, 15, 25, 0.f, false, 1,
+		  0.f, 0.f, 3.f, 0.f, 0.f, 0.f, 0.f, 15, 25, 0.f, 0.f,
+		  EItemUseEffect::None, TEXT(""), false, 1,
 		  TEXT("/Game/Items/Icons/T_SkullCap.T_SkullCap") },
 		{ TEXT("Rags"), EItemCategory::Armor, EEquipSlot::Chest, 2, 3,
-		  0.f, 0.f, 2.f, 0.f, 0.f, 0.f, 0.f, 12, 15, 0.f, false, 1,
+		  0.f, 0.f, 2.f, 0.f, 0.f, 0.f, 0.f, 12, 15, 0.f, 0.f,
+		  EItemUseEffect::None, TEXT(""), false, 1,
 		  TEXT("/Game/Items/Icons/T_Rags.T_Rags") },
 		{ TEXT("Ring of Strength"), EItemCategory::Ring, EEquipSlot::LeftRing, 1, 1,
-		  0.f, 0.f, 0.f, 5.f, 0.f, 0.f, 0.f, 0, 100, 0.f, false, 1,
+		  0.f, 0.f, 0.f, 5.f, 0.f, 0.f, 0.f, 0, 100, 0.f, 0.f,
+		  EItemUseEffect::None, TEXT(""), false, 1,
 		  TEXT("/Game/Items/Icons/T_Ring.T_Ring") },
 		{ TEXT("Healing Potion"), EItemCategory::Potion, EEquipSlot::None, 1, 1,
-		  0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0, 50, 50.f, true, 20,
+		  0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0, 50, 50.f, 0.f,
+		  EItemUseEffect::RestoreHP, TEXT(""), true, 20,
 		  TEXT("/Game/Items/Potions/T_HealingPotion.T_HealingPotion") },
+		{ TEXT("Mana Potion"), EItemCategory::Potion, EEquipSlot::None, 1, 1,
+		  0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0, 50, 0.f, 50.f,
+		  EItemUseEffect::RestoreMana, TEXT(""), true, 20,
+		  TEXT("/Game/Items/Potions/T_HealingPotion.T_HealingPotion") },
+		{ TEXT("Rejuvenation Potion"), EItemCategory::Potion, EEquipSlot::None, 1, 1,
+		  0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0, 100, 35.f, 35.f,
+		  EItemUseEffect::RestoreBoth, TEXT(""), true, 20,
+		  TEXT("/Game/Items/Potions/T_HealingPotion.T_HealingPotion") },
+		{ TEXT("Scroll of Firebolt"), EItemCategory::Scroll, EEquipSlot::None, 1, 1,
+		  0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0, 75, 0.f, 0.f,
+		  EItemUseEffect::CastSpell, TEXT("/Game/Spells/Definitions/SD_Firebolt.SD_Firebolt"), true, 20,
+		  TEXT("") },
+		{ TEXT("Scroll of Healing"), EItemCategory::Scroll, EEquipSlot::None, 1, 1,
+		  0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0, 75, 0.f, 0.f,
+		  EItemUseEffect::CastSpell, TEXT("/Game/Spells/Definitions/SD_Healing.SD_Healing"), true, 20,
+		  TEXT("") },
 	};
 
 	const FString BasePath = TEXT("/Game/Items/Definitions");
@@ -1756,18 +1811,17 @@ void FDiabloAssetGenerator::SetupInventory()
 		const FString FullPath = BasePath / (TEXT("ID_") + SafeName);
 		const FString ObjPath = FullPath + TEXT(".ID_") + SafeName;
 
-		UItemDefinition* Existing = LoadObject<UItemDefinition>(nullptr, *ObjPath);
-		if (Existing)
+		UItemDefinition* ItemDef = LoadObject<UItemDefinition>(nullptr, *ObjPath);
+		bool bIsNew = false;
+
+		if (!ItemDef)
 		{
-			UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Item definition already exists: %s"), *Def.Name);
-			continue;
+			UPackage* Package = CreatePackage(*FullPath);
+			Package->FullyLoad();
+			ItemDef = NewObject<UItemDefinition>(
+				Package, *(TEXT("ID_") + SafeName), RF_Public | RF_Standalone);
+			bIsNew = true;
 		}
-
-		UPackage* Package = CreatePackage(*FullPath);
-		Package->FullyLoad();
-
-		UItemDefinition* ItemDef = NewObject<UItemDefinition>(
-			Package, *(TEXT("ID_") + SafeName), RF_Public | RF_Standalone);
 
 		ItemDef->DisplayName = FText::FromString(Def.Name);
 		ItemDef->Category = Def.Category;
@@ -1784,8 +1838,19 @@ void FDiabloAssetGenerator::SetupInventory()
 		ItemDef->MaxDurability = Def.Durability;
 		ItemDef->GoldValue = Def.GoldValue;
 		ItemDef->HealAmount = Def.HealAmount;
+		ItemDef->ManaRestoreAmount = Def.ManaRestoreAmount;
+		ItemDef->UseEffect = Def.UseEffect;
 		ItemDef->bStackable = Def.bStackable;
 		ItemDef->MaxStack = Def.MaxStack;
+
+		if (!Def.ScrollSpellAsset.IsEmpty())
+		{
+			USpellDefinition* SpellDef = LoadObject<USpellDefinition>(nullptr, *Def.ScrollSpellAsset);
+			if (SpellDef)
+			{
+				ItemDef->ScrollSpell = SpellDef;
+			}
+		}
 
 		if (!Def.IconAsset.IsEmpty())
 		{
@@ -1796,10 +1861,18 @@ void FDiabloAssetGenerator::SetupInventory()
 			}
 		}
 
-		if (SaveAsset(ItemDef, Package, FullPath))
+		if (bIsNew)
 		{
-			NotifyAssetCreated(ItemDef);
-			UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Created item definition: %s"), *Def.Name);
+			if (SaveAsset(ItemDef, ItemDef->GetOutermost(), FullPath))
+			{
+				NotifyAssetCreated(ItemDef);
+				UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Created item definition: %s"), *Def.Name);
+			}
+		}
+		else
+		{
+			SaveAsset(ItemDef, ItemDef->GetOutermost(), FullPath);
+			UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Updated item definition: %s"), *Def.Name);
 		}
 	}
 }
