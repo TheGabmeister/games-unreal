@@ -5,12 +5,13 @@
 #include "DiabloInventoryPanel.h"
 #include "DiabloSpellbookPanel.h"
 #include "DiabloMainMenu.h"
+#include "DiabloDialogWidget.h"
 #include "DiabloSaveGame.h"
 #include "DiabloGameInstance.h"
+#include "Interactable.h"
 #include "InventoryComponent.h"
 #include "DiabloEnemy.h"
 #include "DroppedItem.h"
-#include "DungeonStairs.h"
 #include "Diablo.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
@@ -138,6 +139,17 @@ void ADiabloPlayerController::CreateHUD()
 			MainMenu->Init(this);
 		}
 	}
+
+	if (DialogWidgetClass)
+	{
+		DialogWidget = CreateWidget<UDiabloDialogWidget>(this, DialogWidgetClass);
+		if (DialogWidget)
+		{
+			DialogWidget->AddToViewport(50);
+			DialogWidget->SetVisibility(ESlateVisibility::Collapsed);
+			DialogWidget->Init(this);
+		}
+	}
 }
 
 void ADiabloPlayerController::SetupInputComponent()
@@ -244,6 +256,11 @@ void ADiabloPlayerController::OnToggleSpellbook()
 
 void ADiabloPlayerController::OnClickStarted()
 {
+	if (DialogWidget && DialogWidget->GetVisibility() == ESlateVisibility::Visible)
+	{
+		CloseDialog();
+	}
+
 	ADiabloHero* Hero = Cast<ADiabloHero>(GetPawn());
 	if (!Hero || Hero->IsDead())
 	{
@@ -267,6 +284,7 @@ void ADiabloPlayerController::OnClickStarted()
 		{
 			TargetEnemy = Enemy;
 			TargetItem = nullptr;
+			TargetInteractable = nullptr;
 			UE_LOG(LogDiablo, Display, TEXT("Targeting enemy: %s"), *Enemy->GetName());
 			UAIBlueprintHelperLibrary::SimpleMoveToActor(this, TargetEnemy);
 			return;
@@ -277,25 +295,25 @@ void ADiabloPlayerController::OnClickStarted()
 	{
 		TargetItem = Item;
 		TargetEnemy = nullptr;
-		TargetStairs = nullptr;
+		TargetInteractable = nullptr;
 		UE_LOG(LogDiablo, Display, TEXT("Targeting item: %s"), *Item->GetName());
 		UAIBlueprintHelperLibrary::SimpleMoveToActor(this, Item);
 		return;
 	}
 
-	if (ADungeonStairs* Stairs = Cast<ADungeonStairs>(HitActor))
+	if (HitActor && HitActor->Implements<UInteractable>())
 	{
-		TargetStairs = Stairs;
+		TargetInteractable = HitActor;
 		TargetEnemy = nullptr;
 		TargetItem = nullptr;
-		UE_LOG(LogDiablo, Display, TEXT("Targeting stairs: %s"), *Stairs->GetName());
-		UAIBlueprintHelperLibrary::SimpleMoveToActor(this, Stairs);
+		UE_LOG(LogDiablo, Display, TEXT("Targeting interactable: %s"), *HitActor->GetName());
+		UAIBlueprintHelperLibrary::SimpleMoveToActor(this, HitActor);
 		return;
 	}
 
 	TargetEnemy = nullptr;
 	TargetItem = nullptr;
-	TargetStairs = nullptr;
+	TargetInteractable = nullptr;
 	UAIBlueprintHelperLibrary::SimpleMoveToLocation(this, HitResult.ImpactPoint);
 }
 
@@ -315,7 +333,7 @@ void ADiabloPlayerController::OnCastStarted()
 
 	TargetEnemy = nullptr;
 	TargetItem = nullptr;
-	TargetStairs = nullptr;
+	TargetInteractable = nullptr;
 
 	Hero->CastSpell(HitResult.ImpactPoint);
 }
@@ -324,7 +342,12 @@ void ADiabloPlayerController::OnHeroDeath()
 {
 	TargetEnemy = nullptr;
 	TargetItem = nullptr;
-	TargetStairs = nullptr;
+	TargetInteractable = nullptr;
+
+	if (DialogWidget && DialogWidget->GetVisibility() == ESlateVisibility::Visible)
+	{
+		CloseDialog();
+	}
 
 	if (HUDWidget)
 	{
@@ -377,6 +400,10 @@ void ADiabloPlayerController::OnToggleMainMenu()
 		if (SpellbookPanel && SpellbookPanel->GetVisibility() != ESlateVisibility::Collapsed)
 		{
 			SpellbookPanel->SetVisibility(ESlateVisibility::Collapsed);
+		}
+		if (DialogWidget && DialogWidget->GetVisibility() != ESlateVisibility::Collapsed)
+		{
+			DialogWidget->SetVisibility(ESlateVisibility::Collapsed);
 		}
 
 		const FString LevelName = UGameplayStatics::GetCurrentLevelName(this, true);
@@ -455,6 +482,32 @@ void ADiabloPlayerController::LoadGame()
 	UGameplayStatics::OpenLevel(this, FName(TEXT("Lvl_Diablo")));
 }
 
+void ADiabloPlayerController::ShowDialog(const FText& Name, const FText& Text)
+{
+	if (!DialogWidget)
+	{
+		return;
+	}
+
+	DialogWidget->SetDialog(Name, Text);
+	DialogWidget->SetVisibility(ESlateVisibility::Visible);
+	bShowMouseCursor = true;
+	FInputModeGameAndUI Mode;
+	Mode.SetWidgetToFocus(DialogWidget->TakeWidget());
+	SetInputMode(Mode);
+}
+
+void ADiabloPlayerController::CloseDialog()
+{
+	if (DialogWidget)
+	{
+		DialogWidget->SetVisibility(ESlateVisibility::Collapsed);
+	}
+	FInputModeGameAndUI Mode;
+	Mode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+	SetInputMode(Mode);
+}
+
 void ADiabloPlayerController::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
@@ -464,25 +517,28 @@ void ADiabloPlayerController::Tick(float DeltaTime)
 	{
 		TargetEnemy = nullptr;
 		TargetItem = nullptr;
-		TargetStairs = nullptr;
+		TargetInteractable = nullptr;
 		return;
 	}
 
-	if (TargetStairs && IsValid(TargetStairs))
+	if (TargetInteractable && IsValid(TargetInteractable))
 	{
-		const float StairsDist = FVector::Dist(Hero->GetActorLocation(), TargetStairs->GetActorLocation());
-		if (StairsDist <= InteractRange)
+		const float Dist = FVector::Dist(Hero->GetActorLocation(), TargetInteractable->GetActorLocation());
+		if (Dist <= InteractRange)
 		{
 			StopMovement();
 			Hero->GetCharacterMovement()->StopActiveMovement();
-			TargetStairs->OnInteract();
-			TargetStairs = nullptr;
+			if (IInteractable* Interactable = Cast<IInteractable>(TargetInteractable))
+			{
+				Interactable->Interact(Hero);
+			}
+			TargetInteractable = nullptr;
 		}
 		return;
 	}
 	else
 	{
-		TargetStairs = nullptr;
+		TargetInteractable = nullptr;
 	}
 
 	if (TargetItem && !IsValid(TargetItem))

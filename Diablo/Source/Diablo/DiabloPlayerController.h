@@ -8,12 +8,12 @@ class UInputAction;
 class UInputMappingContext;
 class ADiabloEnemy;
 class ADroppedItem;
-class ADungeonStairs;
 class UDiabloHUDWidget;
 class UDiabloCharacterPanel;
 class UDiabloInventoryPanel;
 class UDiabloSpellbookPanel;
 class UDiabloMainMenu;
+class UDiabloDialogWidget;
 
 UCLASS(Abstract)
 class DIABLO_API ADiabloPlayerController : public APlayerController
@@ -67,6 +67,9 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "HUD")
 	TSubclassOf<UDiabloMainMenu> MainMenuClass;
 
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "HUD")
+	TSubclassOf<UDiabloDialogWidget> DialogWidgetClass;
+
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Combat")
 	float AttackRange = 200.f;
 
@@ -93,7 +96,7 @@ private:
 	TObjectPtr<ADroppedItem> TargetItem;
 
 	UPROPERTY()
-	TObjectPtr<ADungeonStairs> TargetStairs;
+	TObjectPtr<AActor> TargetInteractable;
 
 	UPROPERTY()
 	TObjectPtr<UDiabloHUDWidget> HUDWidget;
@@ -110,10 +113,15 @@ private:
 	UPROPERTY()
 	TObjectPtr<UDiabloMainMenu> MainMenu;
 
+	UPROPERTY()
+	TObjectPtr<UDiabloDialogWidget> DialogWidget;
+
 	FTimerHandle RespawnTimerHandle;
 
 public:
 	void SaveGame();
 	void LoadGame();
 	void CloseMainMenu();
+	void ShowDialog(const FText& Name, const FText& Text);
+	void CloseDialog();
 };

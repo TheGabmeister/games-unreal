@@ -51,6 +51,8 @@
 #include "LightningBolt.h"
 #include "DiabloSpellbookPanel.h"
 #include "DiabloMainMenu.h"
+#include "DiabloDialogWidget.h"
+#include "DiabloNPC.h"
 #include "DungeonStairs.h"
 #include "NavigationSystem.h"
 
@@ -141,6 +143,30 @@ void FDiabloAssetGenerator::GenerateDefaultMap()
 		DownStairs->SetActorScale3D(FVector(1.5f, 1.5f, 0.5f));
 		DownStairs->SetActorLabel(TEXT("Stairs_Down"));
 		UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Spawned stairs to Cathedral"));
+	}
+
+	// Spawn Tristram NPCs
+	struct FNPCDef { FVector Pos; FString Name; FString Dialog; };
+	TArray<FNPCDef> NPCs = {
+		{ FVector(600.f, -300.f, 50.f),  TEXT("Griswold"), TEXT("I can offer you weapons and armor, good for the fight ahead.") },
+		{ FVector(800.f, 500.f, 50.f),   TEXT("Adria"),    TEXT("I sense a darkness in you, hero. Perhaps I can help.") },
+		{ FVector(-300.f, 300.f, 50.f),  TEXT("Pepin"),    TEXT("I have a feeling that your wounds are not of a natural origin.") },
+		{ FVector(0.f, -400.f, 50.f),    TEXT("Cain"),     TEXT("Stay a while and listen.") },
+		{ FVector(-600.f, 400.f, 50.f),  TEXT("Wirt"),     TEXT("Psst... over here. I got something special for ya.") },
+		{ FVector(-200.f, -200.f, 50.f), TEXT("Ogden"),    TEXT("Welcome, traveler. Rest your weary bones.") },
+	};
+
+	for (const FNPCDef& Def : NPCs)
+	{
+		ADiabloNPC* NPC = NewWorld->SpawnActor<ADiabloNPC>(
+			ADiabloNPC::StaticClass(), FTransform(Def.Pos), SpawnParams);
+		if (NPC)
+		{
+			NPC->NPCName = FText::FromString(Def.Name);
+			NPC->DialogText = FText::FromString(Def.Dialog);
+			NPC->SetActorLabel(*Def.Name);
+			UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Spawned NPC: %s"), *Def.Name);
+		}
 	}
 
 	// Build NavMesh so it's baked into the saved map
@@ -1333,7 +1359,38 @@ void FDiabloAssetGenerator::SetupHUD()
 		}
 	}
 
-	// --- Set HUDWidgetClass, CharPanelClass, InventoryPanelClass, SpellbookPanelClass, MainMenuClass on BP_DiabloPlayerController ---
+	// --- Create BP_DiabloDialog ---
+	const FString DlgPath = TEXT("/Game/Blueprints/BP_DiabloDialog");
+	const FString DlgObjPath = DlgPath + TEXT(".BP_DiabloDialog");
+
+	UWidgetBlueprint* DialogBP = LoadObject<UWidgetBlueprint>(nullptr, *DlgObjPath);
+	if (!DialogBP)
+	{
+		UPackage* DlgPackage = CreatePackage(*DlgPath);
+		DlgPackage->FullyLoad();
+
+		UWidgetBlueprintFactory* DlgFactory = NewObject<UWidgetBlueprintFactory>();
+		DlgFactory->ParentClass = UDiabloDialogWidget::StaticClass();
+
+		DialogBP = Cast<UWidgetBlueprint>(DlgFactory->FactoryCreateNew(
+			UWidgetBlueprint::StaticClass(),
+			DlgPackage,
+			TEXT("BP_DiabloDialog"),
+			RF_Public | RF_Standalone,
+			nullptr,
+			GWarn
+		));
+
+		if (DialogBP)
+		{
+			FKismetEditorUtilities::CompileBlueprint(DialogBP);
+			SaveAsset(DialogBP, DlgPackage, DlgPath);
+			NotifyAssetCreated(DialogBP);
+			UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Created BP_DiabloDialog"));
+		}
+	}
+
+	// --- Set HUDWidgetClass, CharPanelClass, InventoryPanelClass, SpellbookPanelClass, MainMenuClass, DialogWidgetClass on BP_DiabloPlayerController ---
 	UBlueprint* ControllerBP = LoadObject<UBlueprint>(nullptr,
 		TEXT("/Game/Blueprints/BP_DiabloPlayerController.BP_DiabloPlayerController"));
 
@@ -1399,6 +1456,18 @@ void FDiabloAssetGenerator::SetupHUD()
 				{
 					ObjProp->SetObjectPropertyValue(ObjProp->ContainerPtrToValuePtr<void>(CDO), MainMenuBP->GeneratedClass);
 					UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_DiabloPlayerController: set MainMenuClass -> BP_DiabloMainMenu"));
+				}
+			}
+		}
+
+		if (DialogBP && DialogBP->GeneratedClass)
+		{
+			if (FProperty* Prop = ControllerBP->GeneratedClass->FindPropertyByName(TEXT("DialogWidgetClass")))
+			{
+				if (FObjectProperty* ObjProp = CastField<FObjectProperty>(Prop))
+				{
+					ObjProp->SetObjectPropertyValue(ObjProp->ContainerPtrToValuePtr<void>(CDO), DialogBP->GeneratedClass);
+					UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_DiabloPlayerController: set DialogWidgetClass -> BP_DiabloDialog"));
 				}
 			}
 		}

@@ -20,6 +20,11 @@ ADungeonStairs::ADungeonStairs()
 	}
 }
 
+void ADungeonStairs::Interact(AActor* Interactor)
+{
+	OnInteract();
+}
+
 void ADungeonStairs::OnInteract()
 {
 	if (TargetLevelName.IsNone())

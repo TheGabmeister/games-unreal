@@ -161,6 +161,15 @@ IntelliSense errors like `cannot open source file "X.h"` are usually false posit
 - **Load flow:** `LoadGameFromSlot` → `UDiabloSaveGame::ApplyToGameInstance(GI)` → close menu → `OpenLevel("Lvl_Diablo")` → hero restores from GameInstance in `BeginPlay`.
 - `TObjectPtr<UItemDefinition>` and `TObjectPtr<USpellDefinition>` serialize as asset paths via UE's `FObjectAndNameAsStringProxyArchive` — data assets at fixed paths resolve correctly on load.
 
+### Tristram NPCs + IInteractable (M15)
+
+- `IInteractable` ([Interactable.h](Source/Diablo/Interactable.h)) — UInterface with `Interact(AActor* Interactor)`. Implemented by `ADungeonStairs` and `ADiabloNPC`. Controller uses `Implements<UInteractable>()` check and `Cast<IInteractable>()` to call.
+- `ADiabloNPC : AActor, IInteractable` ([DiabloNPC.h](Source/Diablo/DiabloNPC.h)) — static NPC with `NPCName` (FText) and `DialogText` (FText). Cube mesh blocking `ECC_Visibility`. `Interact()` calls `ADiabloPlayerController::ShowDialog()`.
+- `UDiabloDialogWidget : UUserWidget` ([DiabloDialogWidget.h](Source/Diablo/DiabloDialogWidget.h)) (Abstract) — C++ widget tree: dark overlay anchored bottom-center, NPC name (gold) + dialog text (white, auto-wrap) + Close button. `SetDialog(Name, Text)` populates. `BP_DiabloDialog` is the thin BP subclass.
+- `ADiabloPlayerController` refactored: `TargetStairs` replaced by `TargetInteractable` (`TObjectPtr<AActor>`) — both stairs and NPCs use the same click→walk→interact flow via `IInteractable`. `ShowDialog()` / `CloseDialog()` manage the dialog widget. Clicking anywhere while dialog is open closes it.
+- 6 NPCs placed in `Lvl_Diablo` by `GenerateDefaultMap`: Griswold, Adria, Pepin, Cain, Wirt, Ogden — each with a generic dialog line.
+- `ADungeonStairs` now implements `IInteractable`; `Interact()` delegates to existing `OnInteract()`.
+
 ### Input
 
 **Enhanced Input only.** No legacy `InputComponent` axis bindings.
@@ -193,7 +202,7 @@ IntelliSense errors like `cannot open source file "X.h"` are usually false posit
 | `SetupGameMode` | `BP_DiabloGameMode` | DefaultPawnClass, PlayerControllerClass |
 | `SetupEnemy` | `BP_DiabloEnemy` | Skeletal mesh, anim class, attack montage, death montage, drop table |
 | `SetupPotion` | `BP_HealingPotion` | Plane mesh with sprite material (upright, facing isometric camera) |
-| `SetupHUD` | `BP_DiabloHUD` + `BP_DiabloCharPanel` + `BP_DiabloInventoryPanel` + `BP_DiabloSpellbookPanel` + `BP_DiabloMainMenu` (WidgetBlueprints) | Creates WBPs parented to C++ widget classes, sets `HUDWidgetClass`, `CharPanelClass`, `InventoryPanelClass`, `SpellbookPanelClass`, `MainMenuClass` on `BP_DiabloPlayerController` |
+| `SetupHUD` | `BP_DiabloHUD` + `BP_DiabloCharPanel` + `BP_DiabloInventoryPanel` + `BP_DiabloSpellbookPanel` + `BP_DiabloMainMenu` + `BP_DiabloDialog` (WidgetBlueprints) | Creates WBPs parented to C++ widget classes, sets `HUDWidgetClass`, `CharPanelClass`, `InventoryPanelClass`, `SpellbookPanelClass`, `MainMenuClass`, `DialogWidgetClass` on `BP_DiabloPlayerController` |
 | `SetupInventory` | Starter `UItemDefinition` data assets | Creates ID_Short_Sword, ID_Buckler, ID_Skull_Cap, ID_Rags, ID_Ring_of_Strength, ID_Healing_Potion under `/Game/Items/Definitions/` |
 | `SetupDropMaterial` | `M_ItemDrop` material | Unlit translucent material with `TextureSampleParameter2D` for runtime dropped item sprites |
 | `SetupSpells` | `USpellDefinition` data assets | Creates SD_Firebolt, SD_Fireball, SD_Lightning, SD_Nova, SD_Healing under `/Game/Spells/Definitions/` |
