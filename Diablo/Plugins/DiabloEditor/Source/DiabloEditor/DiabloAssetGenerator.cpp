@@ -52,7 +52,9 @@
 #include "DiabloSpellbookPanel.h"
 #include "DiabloMainMenu.h"
 #include "DiabloDialogWidget.h"
+#include "DiabloShopPanel.h"
 #include "DiabloNPC.h"
+#include "NPCShopData.h"
 #include "DungeonStairs.h"
 #include "NavigationSystem.h"
 
@@ -68,6 +70,66 @@ void FDiabloAssetGenerator::GenerateAllAssets()
 	UE_LOG(LogTemp, Display, TEXT("[DiabloTools] All assets generated."));
 }
 
+void FDiabloAssetGenerator::SetupShopData()
+{
+	struct FShopDef
+	{
+		FString Name;
+		TArray<FString> ItemPaths;
+	};
+
+	TArray<FShopDef> Shops = {
+		{ TEXT("SD_Griswold"), {
+			TEXT("/Game/Items/Definitions/ID_Short_Sword.ID_Short_Sword"),
+			TEXT("/Game/Items/Definitions/ID_Buckler.ID_Buckler"),
+			TEXT("/Game/Items/Definitions/ID_Skull_Cap.ID_Skull_Cap"),
+			TEXT("/Game/Items/Definitions/ID_Rags.ID_Rags"),
+		}},
+		{ TEXT("SD_Adria"), {
+			TEXT("/Game/Items/Definitions/ID_Healing_Potion.ID_Healing_Potion"),
+		}},
+	};
+
+	const FString BasePath = TEXT("/Game/NPCs/ShopData");
+
+	for (const FShopDef& Def : Shops)
+	{
+		const FString FullPath = BasePath / Def.Name;
+		const FString ObjPath = FullPath + TEXT(".") + Def.Name;
+
+		UNPCShopData* Existing = LoadObject<UNPCShopData>(nullptr, *ObjPath);
+		if (Existing)
+		{
+			Existing->StockItems.Empty();
+			for (const FString& ItemPath : Def.ItemPaths)
+			{
+				UItemDefinition* ItemDef = LoadObject<UItemDefinition>(nullptr, *ItemPath);
+				if (ItemDef) Existing->StockItems.Add(ItemDef);
+			}
+			SaveAsset(Existing, Existing->GetOutermost(), FullPath);
+			UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Updated shop data: %s"), *Def.Name);
+			continue;
+		}
+
+		UPackage* Package = CreatePackage(*FullPath);
+		Package->FullyLoad();
+
+		UNPCShopData* ShopData = NewObject<UNPCShopData>(Package, *Def.Name, RF_Public | RF_Standalone);
+		for (const FString& ItemPath : Def.ItemPaths)
+		{
+			UItemDefinition* ItemDef = LoadObject<UItemDefinition>(nullptr, *ItemPath);
+			if (ItemDef) ShopData->StockItems.Add(ItemDef);
+		}
+
+		if (SaveAsset(ShopData, Package, FullPath))
+		{
+			NotifyAssetCreated(ShopData);
+			UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Created shop data: %s (%d items)"),
+				*Def.Name, ShopData->StockItems.Num());
+		}
+	}
+}
+
 void FDiabloAssetGenerator::SetupAllBlueprints()
 {
 	SetupGameMode();
@@ -79,6 +141,7 @@ void FDiabloAssetGenerator::SetupAllBlueprints()
 	SetupInventory();
 	SetupDropMaterial();
 	SetupSpells();
+	SetupShopData();
 }
 
 void FDiabloAssetGenerator::GenerateDefaultMap()
@@ -146,14 +209,17 @@ void FDiabloAssetGenerator::GenerateDefaultMap()
 	}
 
 	// Spawn Tristram NPCs
-	struct FNPCDef { FVector Pos; FString Name; FString Dialog; };
+	UNPCShopData* GriswoldShop = LoadObject<UNPCShopData>(nullptr, TEXT("/Game/NPCs/ShopData/SD_Griswold.SD_Griswold"));
+	UNPCShopData* AdriaShop = LoadObject<UNPCShopData>(nullptr, TEXT("/Game/NPCs/ShopData/SD_Adria.SD_Adria"));
+
+	struct FNPCDef { FVector Pos; FString Name; FString Dialog; ENPCType Type; UNPCShopData* Shop; };
 	TArray<FNPCDef> NPCs = {
-		{ FVector(600.f, -300.f, 50.f),  TEXT("Griswold"), TEXT("I can offer you weapons and armor, good for the fight ahead.") },
-		{ FVector(800.f, 500.f, 50.f),   TEXT("Adria"),    TEXT("I sense a darkness in you, hero. Perhaps I can help.") },
-		{ FVector(-300.f, 300.f, 50.f),  TEXT("Pepin"),    TEXT("I have a feeling that your wounds are not of a natural origin.") },
-		{ FVector(0.f, -400.f, 50.f),    TEXT("Cain"),     TEXT("Stay a while and listen.") },
-		{ FVector(-600.f, 400.f, 50.f),  TEXT("Wirt"),     TEXT("Psst... over here. I got something special for ya.") },
-		{ FVector(-200.f, -200.f, 50.f), TEXT("Ogden"),    TEXT("Welcome, traveler. Rest your weary bones.") },
+		{ FVector(600.f, -300.f, 50.f),  TEXT("Griswold"), TEXT("I can offer you weapons and armor."), ENPCType::Merchant,    GriswoldShop },
+		{ FVector(800.f, 500.f, 50.f),   TEXT("Adria"),    TEXT("I sense a darkness in you, hero."),   ENPCType::Merchant,    AdriaShop },
+		{ FVector(-300.f, 300.f, 50.f),  TEXT("Pepin"),    TEXT("Let me tend to your wounds."),        ENPCType::Healer,      nullptr },
+		{ FVector(0.f, -400.f, 50.f),    TEXT("Cain"),     TEXT("Stay a while and listen."),           ENPCType::Identifier,  nullptr },
+		{ FVector(-600.f, 400.f, 50.f),  TEXT("Wirt"),     TEXT("Psst... over here. I got something special for ya."), ENPCType::None, nullptr },
+		{ FVector(-200.f, -200.f, 50.f), TEXT("Ogden"),    TEXT("Welcome, traveler. Rest your weary bones."),          ENPCType::None, nullptr },
 	};
 
 	for (const FNPCDef& Def : NPCs)
@@ -164,8 +230,10 @@ void FDiabloAssetGenerator::GenerateDefaultMap()
 		{
 			NPC->NPCName = FText::FromString(Def.Name);
 			NPC->DialogText = FText::FromString(Def.Dialog);
+			NPC->NPCType = Def.Type;
+			NPC->ShopData = Def.Shop;
 			NPC->SetActorLabel(*Def.Name);
-			UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Spawned NPC: %s"), *Def.Name);
+			UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Spawned NPC: %s (Type: %d)"), *Def.Name, (int32)Def.Type);
 		}
 	}
 
@@ -1390,7 +1458,38 @@ void FDiabloAssetGenerator::SetupHUD()
 		}
 	}
 
-	// --- Set HUDWidgetClass, CharPanelClass, InventoryPanelClass, SpellbookPanelClass, MainMenuClass, DialogWidgetClass on BP_DiabloPlayerController ---
+	// --- Create BP_DiabloShopPanel ---
+	const FString ShopPath = TEXT("/Game/Blueprints/BP_DiabloShopPanel");
+	const FString ShopObjPath = ShopPath + TEXT(".BP_DiabloShopPanel");
+
+	UWidgetBlueprint* ShopPanelBP = LoadObject<UWidgetBlueprint>(nullptr, *ShopObjPath);
+	if (!ShopPanelBP)
+	{
+		UPackage* ShopPackage = CreatePackage(*ShopPath);
+		ShopPackage->FullyLoad();
+
+		UWidgetBlueprintFactory* ShopFactory = NewObject<UWidgetBlueprintFactory>();
+		ShopFactory->ParentClass = UDiabloShopPanel::StaticClass();
+
+		ShopPanelBP = Cast<UWidgetBlueprint>(ShopFactory->FactoryCreateNew(
+			UWidgetBlueprint::StaticClass(),
+			ShopPackage,
+			TEXT("BP_DiabloShopPanel"),
+			RF_Public | RF_Standalone,
+			nullptr,
+			GWarn
+		));
+
+		if (ShopPanelBP)
+		{
+			FKismetEditorUtilities::CompileBlueprint(ShopPanelBP);
+			SaveAsset(ShopPanelBP, ShopPackage, ShopPath);
+			NotifyAssetCreated(ShopPanelBP);
+			UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Created BP_DiabloShopPanel"));
+		}
+	}
+
+	// --- Set widget classes on BP_DiabloPlayerController ---
 	UBlueprint* ControllerBP = LoadObject<UBlueprint>(nullptr,
 		TEXT("/Game/Blueprints/BP_DiabloPlayerController.BP_DiabloPlayerController"));
 
@@ -1468,6 +1567,18 @@ void FDiabloAssetGenerator::SetupHUD()
 				{
 					ObjProp->SetObjectPropertyValue(ObjProp->ContainerPtrToValuePtr<void>(CDO), DialogBP->GeneratedClass);
 					UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_DiabloPlayerController: set DialogWidgetClass -> BP_DiabloDialog"));
+				}
+			}
+		}
+
+		if (ShopPanelBP && ShopPanelBP->GeneratedClass)
+		{
+			if (FProperty* Prop = ControllerBP->GeneratedClass->FindPropertyByName(TEXT("ShopPanelClass")))
+			{
+				if (FObjectProperty* ObjProp = CastField<FObjectProperty>(Prop))
+				{
+					ObjProp->SetObjectPropertyValue(ObjProp->ContainerPtrToValuePtr<void>(CDO), ShopPanelBP->GeneratedClass);
+					UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_DiabloPlayerController: set ShopPanelClass -> BP_DiabloShopPanel"));
 				}
 			}
 		}

@@ -6,6 +6,8 @@
 #include "DiabloSpellbookPanel.h"
 #include "DiabloMainMenu.h"
 #include "DiabloDialogWidget.h"
+#include "DiabloShopPanel.h"
+#include "DiabloNPC.h"
 #include "DiabloSaveGame.h"
 #include "DiabloGameInstance.h"
 #include "Interactable.h"
@@ -150,6 +152,16 @@ void ADiabloPlayerController::CreateHUD()
 			DialogWidget->Init(this);
 		}
 	}
+
+	if (ShopPanelClass)
+	{
+		ShopPanel = CreateWidget<UDiabloShopPanel>(this, ShopPanelClass);
+		if (ShopPanel)
+		{
+			ShopPanel->AddToViewport(60);
+			ShopPanel->SetVisibility(ESlateVisibility::Collapsed);
+		}
+	}
 }
 
 void ADiabloPlayerController::SetupInputComponent()
@@ -256,6 +268,10 @@ void ADiabloPlayerController::OnToggleSpellbook()
 
 void ADiabloPlayerController::OnClickStarted()
 {
+	if (ShopPanel && ShopPanel->GetVisibility() == ESlateVisibility::Visible)
+	{
+		return;
+	}
 	if (DialogWidget && DialogWidget->GetVisibility() == ESlateVisibility::Visible)
 	{
 		CloseDialog();
@@ -405,6 +421,10 @@ void ADiabloPlayerController::OnToggleMainMenu()
 		{
 			DialogWidget->SetVisibility(ESlateVisibility::Collapsed);
 		}
+		if (ShopPanel && ShopPanel->GetVisibility() != ESlateVisibility::Collapsed)
+		{
+			ShopPanel->SetVisibility(ESlateVisibility::Collapsed);
+		}
 
 		const FString LevelName = UGameplayStatics::GetCurrentLevelName(this, true);
 		const bool bInTown = LevelName == TEXT("Lvl_Diablo");
@@ -502,6 +522,32 @@ void ADiabloPlayerController::CloseDialog()
 	if (DialogWidget)
 	{
 		DialogWidget->SetVisibility(ESlateVisibility::Collapsed);
+	}
+	FInputModeGameAndUI Mode;
+	Mode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+	SetInputMode(Mode);
+}
+
+void ADiabloPlayerController::OpenShop(ADiabloNPC* NPC)
+{
+	if (!ShopPanel || !NPC)
+	{
+		return;
+	}
+
+	ShopPanel->Init(this, NPC);
+	ShopPanel->SetVisibility(ESlateVisibility::Visible);
+	bShowMouseCursor = true;
+	FInputModeGameAndUI Mode;
+	Mode.SetWidgetToFocus(ShopPanel->TakeWidget());
+	SetInputMode(Mode);
+}
+
+void ADiabloPlayerController::CloseShop()
+{
+	if (ShopPanel)
+	{
+		ShopPanel->SetVisibility(ESlateVisibility::Collapsed);
 	}
 	FInputModeGameAndUI Mode;
 	Mode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);

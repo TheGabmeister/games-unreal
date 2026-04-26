@@ -60,5 +60,5 @@ private:
 	TMap<EEquipSlot, FItemInstance> EquippedItems;
 
 	UPROPERTY()
-	int32 Gold = 0;
+	int32 Gold = 200;
 };

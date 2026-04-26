@@ -167,8 +167,17 @@ IntelliSense errors like `cannot open source file "X.h"` are usually false posit
 - `ADiabloNPC : AActor, IInteractable` ([DiabloNPC.h](Source/Diablo/DiabloNPC.h)) — static NPC with `NPCName` (FText) and `DialogText` (FText). Cube mesh blocking `ECC_Visibility`. `Interact()` calls `ADiabloPlayerController::ShowDialog()`.
 - `UDiabloDialogWidget : UUserWidget` ([DiabloDialogWidget.h](Source/Diablo/DiabloDialogWidget.h)) (Abstract) — C++ widget tree: dark overlay anchored bottom-center, NPC name (gold) + dialog text (white, auto-wrap) + Close button. `SetDialog(Name, Text)` populates. `BP_DiabloDialog` is the thin BP subclass.
 - `ADiabloPlayerController` refactored: `TargetStairs` replaced by `TargetInteractable` (`TObjectPtr<AActor>`) — both stairs and NPCs use the same click→walk→interact flow via `IInteractable`. `ShowDialog()` / `CloseDialog()` manage the dialog widget. Clicking anywhere while dialog is open closes it.
-- 6 NPCs placed in `Lvl_Diablo` by `GenerateDefaultMap`: Griswold, Adria, Pepin, Cain, Wirt, Ogden — each with a generic dialog line.
+- 6 NPCs placed in `Lvl_Diablo` by `GenerateDefaultMap`: Griswold, Adria, Pepin, Cain, Wirt, Ogden — each with `ENPCType` and optional `ShopData`.
 - `ADungeonStairs` now implements `IInteractable`; `Interact()` delegates to existing `OnInteract()`.
+
+### Shop UI (M16)
+
+- `ENPCType` enum ([DiabloNPC.h](Source/Diablo/DiabloNPC.h)) — `None` (dialog only), `Merchant` (opens shop), `Healer` (instant full heal), `Identifier` (placeholder for M17 affixes).
+- `UNPCShopData : UPrimaryDataAsset` ([NPCShopData.h](Source/Diablo/NPCShopData.h)) — `TArray<TObjectPtr<UItemDefinition>> StockItems`. Data assets `SD_Griswold` (weapons/armor), `SD_Adria` (potions) under `Content/NPCs/ShopData/`.
+- `UDiabloShopPanel : UUserWidget` ([DiabloShopPanel.h](Source/Diablo/DiabloShopPanel.h)) (Abstract) — two-panel trade window. Left column: NPC stock (buy at `GoldValue`). Right column: player items (sell at `GoldValue/4`). Click item rows to buy/sell. `NativeOnMouseButtonDown` hit-tests rows via `GetTickSpaceGeometry()`. `RefreshShop()` rebuilds dynamic item rows. Subscribes to `FOnInventoryChanged`.
+- `ADiabloNPC::Interact()` switches on `NPCType`: Merchant → `PC->OpenShop(this)`, Healer → `Hero->Heal(MaxHP)` + dialog, Identifier → "nothing to identify" dialog, None → regular dialog.
+- `ADiabloPlayerController` owns the shop: `ShopPanelClass` UPROPERTY (set via `SetupHUD` → `BP_DiabloShopPanel`). `OpenShop(NPC)` inits and shows panel. `CloseShop()` hides panel. Clicking outside or ESC menu closes shop.
+- `SetupShopData` creates `UNPCShopData` assets referencing existing `UItemDefinition` assets. Button in DiabloTools panel.
 
 ### Input
 
@@ -202,10 +211,11 @@ IntelliSense errors like `cannot open source file "X.h"` are usually false posit
 | `SetupGameMode` | `BP_DiabloGameMode` | DefaultPawnClass, PlayerControllerClass |
 | `SetupEnemy` | `BP_DiabloEnemy` | Skeletal mesh, anim class, attack montage, death montage, drop table |
 | `SetupPotion` | `BP_HealingPotion` | Plane mesh with sprite material (upright, facing isometric camera) |
-| `SetupHUD` | `BP_DiabloHUD` + `BP_DiabloCharPanel` + `BP_DiabloInventoryPanel` + `BP_DiabloSpellbookPanel` + `BP_DiabloMainMenu` + `BP_DiabloDialog` (WidgetBlueprints) | Creates WBPs parented to C++ widget classes, sets `HUDWidgetClass`, `CharPanelClass`, `InventoryPanelClass`, `SpellbookPanelClass`, `MainMenuClass`, `DialogWidgetClass` on `BP_DiabloPlayerController` |
+| `SetupHUD` | `BP_DiabloHUD` + `BP_DiabloCharPanel` + `BP_DiabloInventoryPanel` + `BP_DiabloSpellbookPanel` + `BP_DiabloMainMenu` + `BP_DiabloDialog` + `BP_DiabloShopPanel` (WidgetBlueprints) | Creates WBPs parented to C++ widget classes, sets `HUDWidgetClass`, `CharPanelClass`, `InventoryPanelClass`, `SpellbookPanelClass`, `MainMenuClass`, `DialogWidgetClass`, `ShopPanelClass` on `BP_DiabloPlayerController` |
 | `SetupInventory` | Starter `UItemDefinition` data assets | Creates ID_Short_Sword, ID_Buckler, ID_Skull_Cap, ID_Rags, ID_Ring_of_Strength, ID_Healing_Potion under `/Game/Items/Definitions/` |
 | `SetupDropMaterial` | `M_ItemDrop` material | Unlit translucent material with `TextureSampleParameter2D` for runtime dropped item sprites |
 | `SetupSpells` | `USpellDefinition` data assets | Creates SD_Firebolt, SD_Fireball, SD_Lightning, SD_Nova, SD_Healing under `/Game/Spells/Definitions/` |
+| `SetupShopData` | `UNPCShopData` data assets | Creates SD_Griswold, SD_Adria under `/Game/NPCs/ShopData/` referencing existing item definitions |
 | `SetupAllBlueprints` | All of the above | All of the above |
 
 **World:**

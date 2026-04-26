@@ -14,6 +14,8 @@ class UDiabloInventoryPanel;
 class UDiabloSpellbookPanel;
 class UDiabloMainMenu;
 class UDiabloDialogWidget;
+class UDiabloShopPanel;
+class ADiabloNPC;
 
 UCLASS(Abstract)
 class DIABLO_API ADiabloPlayerController : public APlayerController
@@ -70,6 +72,9 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "HUD")
 	TSubclassOf<UDiabloDialogWidget> DialogWidgetClass;
 
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "HUD")
+	TSubclassOf<UDiabloShopPanel> ShopPanelClass;
+
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Combat")
 	float AttackRange = 200.f;
 
@@ -116,6 +121,9 @@ private:
 	UPROPERTY()
 	TObjectPtr<UDiabloDialogWidget> DialogWidget;
 
+	UPROPERTY()
+	TObjectPtr<UDiabloShopPanel> ShopPanel;
+
 	FTimerHandle RespawnTimerHandle;
 
 public:
@@ -124,4 +132,6 @@ public:
 	void CloseMainMenu();
 	void ShowDialog(const FText& Name, const FText& Text);
 	void CloseDialog();
+	void OpenShop(ADiabloNPC* NPC);
+	void CloseShop();
 };
