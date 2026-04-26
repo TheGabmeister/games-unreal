@@ -189,6 +189,15 @@ void SDiabloEditorToolPanel::Construct(const FArguments& InArgs)
 				.OnClicked(this, &SDiabloEditorToolPanel::OnSetupShopData)
 			]
 
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(0.f, 4.f)
+			[
+				SNew(SButton)
+				.Text(FText::FromString(TEXT("Setup Affixes")))
+				.OnClicked(this, &SDiabloEditorToolPanel::OnSetupAffixes)
+			]
+
 			// --- World ---
 
 			+ SVerticalBox::Slot()
@@ -341,5 +350,11 @@ FReply SDiabloEditorToolPanel::OnSetupSpells()
 FReply SDiabloEditorToolPanel::OnSetupShopData()
 {
 	FDiabloAssetGenerator::SetupShopData();
+	return FReply::Handled();
+}
+
+FReply SDiabloEditorToolPanel::OnSetupAffixes()
+{
+	FDiabloAssetGenerator::SetupAffixes();
 	return FReply::Handled();
 }

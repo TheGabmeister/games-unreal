@@ -3,6 +3,7 @@
 #include "DiabloAIController.h"
 #include "DroppedItem.h"
 #include "ItemDefinition.h"
+#include "AffixGenerator.h"
 #include "Diablo.h"
 #include "Components/CapsuleComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -131,6 +132,7 @@ void ADiabloEnemy::SpawnDrops()
 			Item.Definition = Entry.ItemDef;
 			Item.CurrentDurability = Entry.ItemDef->MaxDurability;
 			Item.StackCount = 1;
+			FAffixGenerator::TryMakeMagic(Item, MonsterLevel);
 			Drop->InitFromItem(Item);
 
 			UE_LOG(LogDiablo, Display, TEXT("%s dropped %s"),

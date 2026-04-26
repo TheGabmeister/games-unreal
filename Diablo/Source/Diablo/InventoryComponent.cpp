@@ -324,6 +324,50 @@ bool UInventoryComponent::SpendGold(int32 Amount)
 	return true;
 }
 
+int32 UInventoryComponent::IdentifyAll()
+{
+	const int32 CostPerItem = 100;
+	int32 Count = 0;
+
+	for (FItemInstance& Item : GridItems)
+	{
+		if (!Item.IsValid() || Item.bIdentified || Item.Affixes.Num() == 0)
+		{
+			continue;
+		}
+		if (Gold < CostPerItem)
+		{
+			break;
+		}
+		Gold -= CostPerItem;
+		Item.bIdentified = true;
+		++Count;
+	}
+
+	for (auto& Pair : EquippedItems)
+	{
+		FItemInstance& Item = Pair.Value;
+		if (!Item.IsValid() || Item.bIdentified || Item.Affixes.Num() == 0)
+		{
+			continue;
+		}
+		if (Gold < CostPerItem)
+		{
+			break;
+		}
+		Gold -= CostPerItem;
+		Item.bIdentified = true;
+		++Count;
+	}
+
+	if (Count > 0)
+	{
+		OnInventoryChanged.Broadcast();
+	}
+
+	return Count;
+}
+
 void UInventoryComponent::RestoreState(const TArray<FItemInstance>& InGridItems, const TArray<int32>& InOccupancy,
 	const TMap<EEquipSlot, FItemInstance>& InEquipped, int32 InGold)
 {

@@ -87,6 +87,9 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat")
 	float ArmorFromEquipment = 0.f;
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat")
+	float ToHitFromEquipment = 0.f;
+
 	void SaveToGameInstance();
 	void LoadFromGameInstance();
 

@@ -179,6 +179,24 @@ IntelliSense errors like `cannot open source file "X.h"` are usually false posit
 - `ADiabloPlayerController` owns the shop: `ShopPanelClass` UPROPERTY (set via `SetupHUD` → `BP_DiabloShopPanel`). `OpenShop(NPC)` inits and shows panel. `CloseShop()` hides panel. Clicking outside or ESC menu closes shop.
 - `SetupShopData` creates `UNPCShopData` assets referencing existing `UItemDefinition` assets. Button in DiabloTools panel.
 
+### Item Affixes — Magic Items (M17)
+
+- `EAffixType` enum ([ItemInstance.h](Source/Diablo/ItemInstance.h)) — `BonusStr, BonusMag, BonusDex, BonusVit, BonusDamage, BonusArmor, BonusHP, BonusMana, BonusToHit`.
+- `FItemAffix` struct ([ItemInstance.h](Source/Diablo/ItemInstance.h)) — AffixName (FName), Type (EAffixType), Value (rolled float), bIsPrefix, GoldValueBonus. Stored in `FItemInstance::Affixes`.
+- `FItemInstance::bIdentified` — default `true` so existing normal items work. Magic items drop with `bIdentified = false`.
+- `FAffixDefinition` struct + `UAffixTable : UPrimaryDataAsset` ([AffixTable.h](Source/Diablo/AffixTable.h)) — each entry has AffixName, Type, MinValue, MaxValue, QualityLevel (qlvl gate), GoldValueBonus. Two data assets: `AT_Prefixes` and `AT_Suffixes` under `/Game/Items/Affixes/`.
+- `FAffixGenerator` ([AffixGenerator.h](Source/Diablo/AffixGenerator.h)) — static utility struct. `TryMakeMagic(Item, MonsterLevel, MagicChance=0.25)` rolls magic chance, picks 0–1 prefix + 0–1 suffix (at least 1 if magic) from qlvl-appropriate pool, sets `bIdentified = false`. `GetDisplayName(Item)` builds "Prefix BaseName of Suffix" (or plain base name if unidentified/normal). `GetTotalGoldValue(Item)` = base GoldValue + sum of affix GoldValueBonuses.
+- Tables loaded via `LoadObject` with static `TWeakObjectPtr` cache in `GetPrefixTable()`/`GetSuffixTable()`.
+- `ADiabloEnemy::SpawnDrops()` calls `FAffixGenerator::TryMakeMagic(Item, MonsterLevel)` after creating `FItemInstance`, before `InitFromItem`.
+- `RecomputeDerivedStats()` reads `Equipped.Affixes` in an inner loop — BonusStr/Mag/Dex/Vit add to stat accumulators, BonusDamage adds to EquipMinDamage+EquipMaxDamage, BonusArmor adds to ArmorFromEquipment, BonusHP/BonusMana add flat to MaxHP/MaxMana after the base formula, BonusToHit adds to `ToHitFromEquipment`.
+- `UInventoryComponent::IdentifyAll()` — iterates grid + equipped items, charges 100g per unidentified item, sets `bIdentified = true`, broadcasts `OnInventoryChanged`.
+- Cain (`ENPCType::Identifier`) calls `IdentifyAll()`, shows count or "nothing to identify" dialog. Also calls `RecomputeDerivedStats` + `OnStatsChanged` after identification.
+- **UI:** Magic items shown in blue `(0.3, 0.3, 1.0)` in inventory grid, equipment slots, hover text, and shop sell list. Hover shows affix stat lines if identified, "[Unidentified]" if not. Sell price uses `FAffixGenerator::GetTotalGoldValue() / 4`.
+- `UItemDefinition::QualityLevel` — qlvl field for future per-item gating (currently monster level is used).
+- `SetupAffixes` creates `AT_Prefixes` (10 entries) and `AT_Suffixes` (10 entries) via DiabloEditor toolbar button.
+- Affixes apply when equipped even if unidentified (D1 behavior) — stats work, names/bonuses just hidden in UI.
+- No polymorphic dispatch — `EAffixType` enum + switch, consistent with M9's `EItemCategory` approach.
+
 ### Input
 
 **Enhanced Input only.** No legacy `InputComponent` axis bindings.
@@ -217,6 +235,7 @@ IntelliSense errors like `cannot open source file "X.h"` are usually false posit
 | `SetupDropMaterial` | `M_ItemDrop` material | Unlit translucent material with `TextureSampleParameter2D` for runtime dropped item sprites |
 | `SetupSpells` | `USpellDefinition` data assets | Creates SD_Firebolt, SD_Fireball, SD_Lightning, SD_Nova, SD_Healing under `/Game/Spells/Definitions/` |
 | `SetupShopData` | `UNPCShopData` data assets | Creates SD_Griswold, SD_Adria under `/Game/NPCs/ShopData/` referencing existing item definitions |
+| `SetupAffixes` | `UAffixTable` data assets | Creates AT_Prefixes (10 entries), AT_Suffixes (10 entries) under `/Game/Items/Affixes/` |
 | `SetupAllBlueprints` | All of the above | All of the above |
 
 **World:**

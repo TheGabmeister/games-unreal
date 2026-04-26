@@ -55,6 +55,7 @@
 #include "DiabloShopPanel.h"
 #include "DiabloNPC.h"
 #include "NPCShopData.h"
+#include "AffixTable.h"
 #include "DungeonStairs.h"
 #include "NavigationSystem.h"
 
@@ -142,6 +143,7 @@ void FDiabloAssetGenerator::SetupAllBlueprints()
 	SetupDropMaterial();
 	SetupSpells();
 	SetupShopData();
+	SetupAffixes();
 }
 
 void FDiabloAssetGenerator::GenerateDefaultMap()
@@ -1859,4 +1861,97 @@ bool FDiabloAssetGenerator::SaveAsset(UObject* Asset, UPackage* Package, const F
 void FDiabloAssetGenerator::NotifyAssetCreated(UObject* Asset)
 {
 	FAssetRegistryModule::AssetCreated(Asset);
+}
+
+void FDiabloAssetGenerator::SetupAffixes()
+{
+	struct FAffixDef
+	{
+		FName Name;
+		EAffixType Type;
+		float Min;
+		float Max;
+		int32 QLvl;
+		int32 GoldBonus;
+	};
+
+	TArray<FAffixDef> Prefixes = {
+		{ FName("Sharp"),    EAffixType::BonusDamage, 1.f,  3.f,  1, 50 },
+		{ FName("Fine"),     EAffixType::BonusDamage, 3.f,  6.f,  4, 100 },
+		{ FName("Jagged"),   EAffixType::BonusDamage, 4.f,  8.f,  7, 200 },
+		{ FName("Strong"),   EAffixType::BonusStr,    1.f,  5.f,  1, 75 },
+		{ FName("Mighty"),   EAffixType::BonusStr,    6.f,  10.f, 5, 150 },
+		{ FName("Sturdy"),   EAffixType::BonusVit,    1.f,  5.f,  1, 75 },
+		{ FName("Blessed"),  EAffixType::BonusArmor,  1.f,  3.f,  1, 50 },
+		{ FName("Holy"),     EAffixType::BonusArmor,  3.f,  6.f,  4, 100 },
+		{ FName("Weird"),    EAffixType::BonusMag,    1.f,  5.f,  1, 75 },
+		{ FName("Strange"),  EAffixType::BonusMag,    6.f,  10.f, 5, 150 },
+	};
+
+	TArray<FAffixDef> Suffixes = {
+		{ FName("of Strength"),  EAffixType::BonusStr,   1.f,  5.f,  1, 75 },
+		{ FName("of the Bear"),  EAffixType::BonusVit,   5.f,  10.f, 5, 150 },
+		{ FName("of Precision"), EAffixType::BonusDex,   1.f,  5.f,  1, 75 },
+		{ FName("of Skill"),     EAffixType::BonusToHit, 5.f,  10.f, 3, 100 },
+		{ FName("of the Moon"),  EAffixType::BonusMag,   1.f,  5.f,  1, 75 },
+		{ FName("of the Stars"), EAffixType::BonusMag,   6.f,  10.f, 7, 200 },
+		{ FName("of Health"),    EAffixType::BonusHP,    5.f,  15.f, 1, 100 },
+		{ FName("of Vitality"),  EAffixType::BonusHP,    15.f, 30.f, 6, 200 },
+		{ FName("of Sorcery"),   EAffixType::BonusMana,  5.f,  15.f, 1, 100 },
+		{ FName("of Wizardry"),  EAffixType::BonusMana,  15.f, 30.f, 6, 200 },
+	};
+
+	auto CreateTable = [](const FString& AssetName, const TArray<FAffixDef>& Defs)
+	{
+		const FString BasePath = TEXT("/Game/Items/Affixes");
+		const FString FullPath = BasePath / AssetName;
+		const FString ObjPath = FullPath + TEXT(".") + AssetName;
+
+		UAffixTable* Existing = LoadObject<UAffixTable>(nullptr, *ObjPath);
+		if (Existing)
+		{
+			Existing->Entries.Empty();
+			for (const FAffixDef& D : Defs)
+			{
+				FAffixDefinition Entry;
+				Entry.AffixName = D.Name;
+				Entry.Type = D.Type;
+				Entry.MinValue = D.Min;
+				Entry.MaxValue = D.Max;
+				Entry.QualityLevel = D.QLvl;
+				Entry.GoldValueBonus = D.GoldBonus;
+				Existing->Entries.Add(Entry);
+			}
+			SaveAsset(Existing, Existing->GetOutermost(), FullPath);
+			UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Updated affix table: %s (%d entries)"),
+				*AssetName, Existing->Entries.Num());
+			return;
+		}
+
+		UPackage* Package = CreatePackage(*FullPath);
+		Package->FullyLoad();
+
+		UAffixTable* Table = NewObject<UAffixTable>(Package, *AssetName, RF_Public | RF_Standalone);
+		for (const FAffixDef& D : Defs)
+		{
+			FAffixDefinition Entry;
+			Entry.AffixName = D.Name;
+			Entry.Type = D.Type;
+			Entry.MinValue = D.Min;
+			Entry.MaxValue = D.Max;
+			Entry.QualityLevel = D.QLvl;
+			Entry.GoldValueBonus = D.GoldBonus;
+			Table->Entries.Add(Entry);
+		}
+
+		if (SaveAsset(Table, Package, FullPath))
+		{
+			NotifyAssetCreated(Table);
+			UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Created affix table: %s (%d entries)"),
+				*AssetName, Table->Entries.Num());
+		}
+	};
+
+	CreateTable(TEXT("AT_Prefixes"), Prefixes);
+	CreateTable(TEXT("AT_Suffixes"), Suffixes);
 }

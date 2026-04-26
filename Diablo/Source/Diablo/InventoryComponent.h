@@ -36,6 +36,8 @@ public:
 	void AddGold(int32 Amount);
 	bool SpendGold(int32 Amount);
 
+	int32 IdentifyAll();
+
 	FOnInventoryChanged OnInventoryChanged;
 
 	const TArray<FItemInstance>& GetGridItems() const { return GridItems; }

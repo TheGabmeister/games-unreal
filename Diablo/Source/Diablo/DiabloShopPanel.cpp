@@ -4,6 +4,7 @@
 #include "NPCShopData.h"
 #include "InventoryComponent.h"
 #include "ItemDefinition.h"
+#include "AffixGenerator.h"
 #include "DiabloHero.h"
 #include "Diablo.h"
 #include "Components/CanvasPanel.h"
@@ -56,7 +57,8 @@ void UDiabloShopPanel::OnInventoryChanged()
 	RefreshShop();
 }
 
-static UBorder* MakeItemRow(UObject* Outer, const FString& ItemName, int32 Price, bool bCanAfford)
+static UBorder* MakeItemRow(UObject* Outer, const FString& ItemName, int32 Price, bool bCanAfford,
+	const FLinearColor& NameColor = FLinearColor(0.9f, 0.85f, 0.6f, 1.f))
 {
 	UBorder* Row = NewObject<UBorder>(Outer);
 	Row->SetBrushColor(FLinearColor(0.08f, 0.08f, 0.1f, 0.6f));
@@ -67,7 +69,7 @@ static UBorder* MakeItemRow(UObject* Outer, const FString& ItemName, int32 Price
 
 	UTextBlock* NameLabel = NewObject<UTextBlock>(Outer);
 	NameLabel->SetText(FText::FromString(ItemName));
-	NameLabel->SetColorAndOpacity(FSlateColor(FLinearColor(0.9f, 0.85f, 0.6f, 1.f)));
+	NameLabel->SetColorAndOpacity(FSlateColor(NameColor));
 	FSlateFontInfo NameFont = NameLabel->GetFont();
 	NameFont.Size = 11;
 	NameLabel->SetFont(NameFont);
@@ -138,9 +140,14 @@ void UDiabloShopPanel::RefreshShop()
 
 			const int32 GridX = i % UInventoryComponent::GridWidth;
 			const int32 GridY = i / UInventoryComponent::GridWidth;
-			const int32 SellPrice = FMath::Max(1, Items[i].Definition->GoldValue / 4);
+			const int32 SellPrice = FMath::Max(1, FAffixGenerator::GetTotalGoldValue(Items[i]) / 4);
 
-			UBorder* Row = MakeItemRow(this, Items[i].Definition->DisplayName.ToString(), SellPrice, true);
+			const FLinearColor NameColor = Items[i].Affixes.Num() > 0
+				? FLinearColor(0.3f, 0.3f, 1.f, 1.f)
+				: FLinearColor(0.9f, 0.85f, 0.6f, 1.f);
+
+			const FString DisplayName = FAffixGenerator::GetDisplayName(Items[i]);
+			UBorder* Row = MakeItemRow(this, DisplayName, SellPrice, true, NameColor);
 			SellListBox->AddChildToVerticalBox(Row)->SetPadding(FMargin(0.f, 1.f));
 			SellRows.Add(Row);
 			SellEntries.Add({ GridX, GridY });
@@ -180,7 +187,7 @@ void UDiabloShopPanel::SellItem(int32 SellIndex)
 	const FItemInstance* Item = PlayerInventory->GetItemAt(Entry.GridX, Entry.GridY);
 	if (!Item || !Item->IsValid()) return;
 
-	const int32 SellPrice = FMath::Max(1, Item->Definition->GoldValue / 4);
+	const int32 SellPrice = FMath::Max(1, FAffixGenerator::GetTotalGoldValue(*Item) / 4);
 	PlayerInventory->RemoveItemAt(Entry.GridX, Entry.GridY);
 	PlayerInventory->AddGold(SellPrice);
 }

@@ -31,4 +31,5 @@ private:
 	FReply OnSetupDropMaterial();
 	FReply OnSetupSpells();
 	FReply OnSetupShopData();
+	FReply OnSetupAffixes();
 };

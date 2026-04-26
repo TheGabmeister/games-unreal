@@ -418,9 +418,11 @@ bool ADiabloHero::SpendStatPoint(FName StatName)
 void ADiabloHero::RecomputeDerivedStats()
 {
 	float BonusStr = 0.f, BonusMag = 0.f, BonusDex = 0.f, BonusVit = 0.f;
+	float BonusHP = 0.f, BonusMana = 0.f;
 	EquipMinDamage = 0.f;
 	EquipMaxDamage = 0.f;
 	ArmorFromEquipment = 0.f;
+	ToHitFromEquipment = 0.f;
 
 	if (Inventory)
 	{
@@ -452,6 +454,25 @@ void ADiabloHero::RecomputeDerivedStats()
 			default:
 				break;
 			}
+
+			for (const FItemAffix& Affix : Equipped.Affixes)
+			{
+				switch (Affix.Type)
+				{
+				case EAffixType::BonusStr:    BonusStr += Affix.Value; break;
+				case EAffixType::BonusMag:    BonusMag += Affix.Value; break;
+				case EAffixType::BonusDex:    BonusDex += Affix.Value; break;
+				case EAffixType::BonusVit:    BonusVit += Affix.Value; break;
+				case EAffixType::BonusDamage:
+					EquipMinDamage += Affix.Value;
+					EquipMaxDamage += Affix.Value;
+					break;
+				case EAffixType::BonusArmor:  ArmorFromEquipment += Affix.Value; break;
+				case EAffixType::BonusHP:     BonusHP += Affix.Value; break;
+				case EAffixType::BonusMana:   BonusMana += Affix.Value; break;
+				case EAffixType::BonusToHit:  ToHitFromEquipment += Affix.Value; break;
+				}
+			}
 		}
 	}
 
@@ -460,8 +481,8 @@ void ADiabloHero::RecomputeDerivedStats()
 	const float TotalDex = Stats.Dex + BonusDex;
 	const float TotalVit = Stats.Vit + BonusVit;
 
-	Stats.MaxHP = 70.f + (TotalVit - 25.f) * 2.f + static_cast<float>(CharLevel - 1) * 2.f;
-	Stats.MaxMana = 10.f + (TotalMag - 10.f) * 1.f + static_cast<float>(CharLevel - 1) * 1.f;
+	Stats.MaxHP = 70.f + (TotalVit - 25.f) * 2.f + static_cast<float>(CharLevel - 1) * 2.f + BonusHP;
+	Stats.MaxMana = 10.f + (TotalMag - 10.f) * 1.f + static_cast<float>(CharLevel - 1) * 1.f + BonusMana;
 
 	Stats.HP = FMath::Min(Stats.HP, Stats.MaxHP);
 	Stats.Mana = FMath::Min(Stats.Mana, Stats.MaxMana);

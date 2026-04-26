@@ -2,6 +2,7 @@
 #include "InventoryComponent.h"
 #include "InventoryDragDrop.h"
 #include "ItemInstance.h"
+#include "AffixGenerator.h"
 #include "Diablo.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
@@ -222,19 +223,43 @@ bool UDiabloInventoryPanel::NativeOnDrop(const FGeometry& InGeometry, const FDra
 	return false;
 }
 
+static FString BuildHoverText(const FItemInstance& Item)
+{
+	FString Text = FAffixGenerator::GetDisplayName(Item);
+
+	if (Item.Affixes.Num() > 0)
+	{
+		if (Item.bIdentified)
+		{
+			for (const FItemAffix& Affix : Item.Affixes)
+			{
+				Text += FString::Printf(TEXT("\n  %s: +%.0f"), *Affix.AffixName.ToString(), Affix.Value);
+			}
+		}
+		else
+		{
+			Text += TEXT("\n  [Unidentified]");
+		}
+	}
+
+	return Text;
+}
+
 FReply UDiabloInventoryPanel::NativeOnMouseMove(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
 {
 	if (!CachedInventory || !HoverText) return FReply::Unhandled();
 
 	const FVector2D ScreenPos = InMouseEvent.GetScreenSpacePosition();
 	FString ItemName;
+	bool bIsMagic = false;
 
 	int32 GridX, GridY;
 	if (HitTestGrid(InGeometry, ScreenPos, GridX, GridY))
 	{
 		if (const FItemInstance* Item = CachedInventory->GetItemAt(GridX, GridY))
 		{
-			ItemName = Item->Definition->DisplayName.ToString();
+			ItemName = BuildHoverText(*Item);
+			bIsMagic = Item->Affixes.Num() > 0;
 		}
 	}
 
@@ -244,11 +269,15 @@ FReply UDiabloInventoryPanel::NativeOnMouseMove(const FGeometry& InGeometry, con
 		const FItemInstance& Equipped = CachedInventory->GetEquipped(HitSlot);
 		if (Equipped.IsValid())
 		{
-			ItemName = Equipped.Definition->DisplayName.ToString();
+			ItemName = BuildHoverText(Equipped);
+			bIsMagic = Equipped.Affixes.Num() > 0;
 		}
 	}
 
 	HoverText->SetText(FText::FromString(ItemName));
+	HoverText->SetColorAndOpacity(FSlateColor(bIsMagic
+		? FLinearColor(0.3f, 0.3f, 1.f, 1.f)
+		: FLinearColor(1.f, 0.85f, 0.3f, 1.f)));
 
 	return FReply::Unhandled();
 }
@@ -302,7 +331,9 @@ void UDiabloInventoryPanel::RefreshGrid()
 				FSlateFontInfo Font = NameLabel->GetFont();
 				Font.Size = 8;
 				NameLabel->SetFont(Font);
-				NameLabel->SetColorAndOpacity(FSlateColor(FLinearColor::White));
+				NameLabel->SetColorAndOpacity(FSlateColor(Item->Affixes.Num() > 0
+					? FLinearColor(0.3f, 0.3f, 1.f, 1.f)
+					: FLinearColor::White));
 				Cell->AddChild(NameLabel);
 			}
 		}
@@ -342,7 +373,9 @@ void UDiabloInventoryPanel::RefreshEquipment()
 				FSlateFontInfo Font = NameLabel->GetFont();
 				Font.Size = 8;
 				NameLabel->SetFont(Font);
-				NameLabel->SetColorAndOpacity(FSlateColor(FLinearColor::White));
+				NameLabel->SetColorAndOpacity(FSlateColor(Equipped.Affixes.Num() > 0
+					? FLinearColor(0.3f, 0.3f, 1.f, 1.f)
+					: FLinearColor::White));
 				Cell->AddChild(NameLabel);
 			}
 		}
