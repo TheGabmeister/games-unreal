@@ -99,7 +99,7 @@ IntelliSense errors like `cannot open source file "X.h"` are usually false posit
 - `EEquipSlot` — Head, Chest, LeftHand, RightHand, LeftRing, RightRing, Amulet (7 slots).
 - `EItemCategory` — Misc, Weapon, Armor, Shield, Helm, Ring, Amulet, Potion, Scroll, Gold.
 - `UInventoryComponent : UActorComponent` ([InventoryComponent.h](Source/Diablo/InventoryComponent.h)) — 10×4 grid, 7 equipment slots (`TMap<EEquipSlot, FItemInstance>`), gold. Occupancy grid tracks multi-cell items. API: `TryAddItem`, `TryAddItemAt`, `MoveItem`, `RemoveItemAt`, `Equip`, `Unequip`, `UseItem`, `AddGold`, `SpendGold`. `UseItem` consumes potions (heal + decrement stack) or falls back to `Equip` for equippable items. Broadcasts `FOnInventoryChanged` delegate.
-- `ADiabloHero` has `UInventoryComponent* Inventory` (created in constructor via `CreateDefaultSubobject`).
+- `ADiabloHero` has `UInventoryComponent* Inventory` (created in constructor via `CreateDefaultSubobject`). Starting gold: 200.
 - `ADroppedItem` has `FItemInstance ItemData` — if valid, `OnPickedUp` adds to inventory via `TryAddItem`; if invalid, falls back to legacy `HealAmount` heal-and-destroy.
 - `UDiabloInventoryPanel : UUserWidget` ([DiabloInventoryPanel.h](Source/Diablo/DiabloInventoryPanel.h)) (Abstract) — C++ widget tree (hover item name, equipment slots row, 10×4 grid, gold display). Toggle via **I key** (`IA_Inventory`). Drag-drop via panel-level `NativeOnMouseButtonDown`/`NativeOnDragDetected`/`NativeOnDrop` with `UInventoryDragDrop` operation. Right-click uses items (potions consume, equippables equip) or unequips (equipment slot). `NativeOnMouseMove` updates gold hover text with item name. Hit-testing uses `GetTickSpaceGeometry().AbsoluteToLocal()` (not `GetPaintSpaceGeometry` — coordinate space mismatch). Event-driven via `FOnInventoryChanged`.
 - `ADiabloPlayerController` owns the inventory panel: `InventoryPanelClass` UPROPERTY (set via `SetupHUD` → `BP_DiabloInventoryPanel`), `InventoryAction` (set via `SetupController` → `IA_Inventory`). Toggle in `OnToggleInventory()`.
@@ -138,7 +138,7 @@ IntelliSense errors like `cannot open source file "X.h"` are usually false posit
 ### Dungeon + Level Transitions (M12)
 
 - `ADungeonStairs : AActor` ([DungeonStairs.h](Source/Diablo/DungeonStairs.h)) — cube mesh that blocks `ECC_Visibility` for cursor click detection. `TargetLevelName` (FName) set per-instance. `OnInteract()` calls `UGameplayStatics::OpenLevel`. Click-to-interact uses the same walk-into-range pattern as enemies/items; `InteractRange = 200`.
-- `ADiabloPlayerController` has `TargetStairs` — click stairs → walk into range → `OnInteract()` triggers level transition. Checked in `Tick` before items/enemies.
+- `ADiabloPlayerController` has `TargetInteractable` (`TObjectPtr<AActor>`) — click any `IInteractable` actor (stairs, NPCs) → walk into range → `Interact()` via interface. Checked in `Tick` before items/enemies.
 - `Lvl_Diablo` (town) has `Stairs_Down` pointing to `Lvl_Cathedral_L1`. Cathedral has `Stairs_Up` pointing back to `Lvl_Diablo`.
 - `GenerateCathedralMap` creates `Lvl_Cathedral_L1` with dim lighting, cube-wall corridors, 3 enemies, a healing potion, NavMesh, and return stairs.
 - Both map generators call `UNavigationSystemV1::Build()` before saving so NavMesh is baked — without this, `SimpleMoveToLocation` fails after `OpenLevel` transitions.
@@ -187,6 +187,7 @@ IntelliSense errors like `cannot open source file "X.h"` are usually false posit
 - **Don't create IA/IMC at runtime via `NewObject<>`** — assign the editor assets to BP UPROPERTY slots.
 - `ADiabloPlayerController` holds `TObjectPtr<UInputAction>` and `TObjectPtr<UInputMappingContext>` slots, binds in `SetupInputComponent`.
 - No touch controls — desktop-only (Diablo 1 is mouse+keyboard).
+- **Input mode convention:** When closing panels, use `FInputModeGameAndUI` with `SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock)` — never `FInputModeGameOnly()`, which captures the mouse and breaks click-to-move. Modal panels (shop) suppress game input by returning early from `OnClickStarted()` while visible.
 
 ### Asset Generator (DiabloEditor Plugin)
 
@@ -222,7 +223,7 @@ IntelliSense errors like `cannot open source file "X.h"` are usually false posit
 
 | Method | Behavior |
 |---|---|
-| `GenerateDefaultMap` | Creates `Lvl_Diablo` with PlayerStart, DirectionalLight, floor plane, NavMeshBoundsVolume, test enemy, healing potion, stairs to cathedral — **always recreates** |
+| `GenerateDefaultMap` | Creates `Lvl_Diablo` with PlayerStart, DirectionalLight, floor plane, NavMeshBoundsVolume, test enemy, healing potion, stairs to cathedral, 6 Tristram NPCs (Griswold, Adria, Pepin, Cain, Wirt, Ogden) with types and shop data — **always recreates** |
 | `GenerateCathedralMap` | Creates `Lvl_Cathedral_L1` with dim lighting, cube-wall corridors, 3 enemies, healing potion, NavMesh, return stairs — **always recreates** |
 | `GenerateInputAssets` | Creates/updates IA_Click/Cast/CharPanel/Inventory/Spellbook/Menu/Move/Look and IMC_Diablo — **updates in place** |
 
