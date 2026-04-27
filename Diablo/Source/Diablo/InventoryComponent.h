@@ -47,6 +47,11 @@ public:
 	bool SpendGold(int32 Amount);
 
 	int32 IdentifyAll();
+	void DegradeRandomArmor();
+	void DegradeWeapon();
+	int32 RepairAllEquipment();
+	int32 GetRepairCost() const;
+	bool IsItemBroken(const FItemInstance& Item) const;
 
 	FOnInventoryChanged OnInventoryChanged;
 

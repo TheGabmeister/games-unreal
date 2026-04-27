@@ -39,6 +39,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC")
 	TObjectPtr<UNPCShopData> ShopData;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC")
+	bool bCanRepair = false;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "NPC")
 	TObjectPtr<UStaticMeshComponent> MeshComponent;
 };

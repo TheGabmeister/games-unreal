@@ -107,6 +107,7 @@ private:
 	virtual void BeginPlay() override;
 	void Die();
 	void LevelUp();
+	void SpawnPortalIfActive();
 
 	static const TArray<int64>& GetXPTable();
 

@@ -323,6 +323,16 @@ static FString BuildHoverText(const FItemInstance& Item)
 {
 	FString Text = FAffixGenerator::GetDisplayName(Item);
 
+	if (Item.Definition && Item.Definition->MaxDurability > 0)
+	{
+		Text += FString::Printf(TEXT("\n  Durability: %d/%d"),
+			Item.CurrentDurability, Item.Definition->MaxDurability);
+		if (Item.CurrentDurability <= 0)
+		{
+			Text += TEXT(" [BROKEN]");
+		}
+	}
+
 	if (Item.Affixes.Num() > 0)
 	{
 		if (Item.bIdentified)
@@ -453,6 +463,7 @@ void UDiabloInventoryPanel::RefreshEquipment()
 
 	const FLinearColor EmptyColor(0.1f, 0.1f, 0.18f, 0.9f);
 	const FLinearColor EquippedColor(0.15f, 0.25f, 0.15f, 0.9f);
+	const FLinearColor BrokenColor(0.3f, 0.1f, 0.1f, 0.9f);
 
 	for (auto& Pair : EquipSlotWidgets)
 	{
@@ -460,7 +471,8 @@ void UDiabloInventoryPanel::RefreshEquipment()
 		if (!Cell) continue;
 
 		const FItemInstance& Equipped = CachedInventory->GetEquipped(Pair.Key);
-		Cell->SetBrushColor(Equipped.IsValid() ? EquippedColor : EmptyColor);
+		const bool bBroken = CachedInventory->IsItemBroken(Equipped);
+		Cell->SetBrushColor(!Equipped.IsValid() ? EmptyColor : (bBroken ? BrokenColor : EquippedColor));
 		Cell->ClearChildren();
 
 		if (Equipped.IsValid() && Equipped.Definition)
@@ -480,9 +492,11 @@ void UDiabloInventoryPanel::RefreshEquipment()
 				FSlateFontInfo Font = NameLabel->GetFont();
 				Font.Size = 8;
 				NameLabel->SetFont(Font);
-				NameLabel->SetColorAndOpacity(FSlateColor(Equipped.Affixes.Num() > 0
-					? FLinearColor(0.3f, 0.3f, 1.f, 1.f)
-					: FLinearColor::White));
+				NameLabel->SetColorAndOpacity(FSlateColor(bBroken
+					? FLinearColor(0.9f, 0.2f, 0.2f, 1.f)
+					: (Equipped.Affixes.Num() > 0
+						? FLinearColor(0.3f, 0.3f, 1.f, 1.f)
+						: FLinearColor::White)));
 				Cell->AddChild(NameLabel);
 			}
 		}

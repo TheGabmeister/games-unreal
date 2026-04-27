@@ -387,7 +387,8 @@ int32 ADiabloDungeonGenerator::BiomeLocalFloor(int32 Floor)
 void ADiabloDungeonGenerator::ResolveFloorSettings()
 {
 	FloorIndex = 1;
-	if (UDiabloGameInstance* GI = Cast<UDiabloGameInstance>(GetGameInstance()))
+	UDiabloGameInstance* GI = Cast<UDiabloGameInstance>(GetGameInstance());
+	if (GI)
 	{
 		FloorIndex = FMath::Clamp(GI->CurrentFloorIndex, 1, MAX_FLOOR);
 	}
@@ -396,6 +397,16 @@ void ADiabloDungeonGenerator::ResolveFloorSettings()
 	const int32 LocalFloor = BiomeLocalFloor(FloorIndex);
 
 	DungeonFloorName = *FString::Printf(TEXT("%s_L%d"), *BiomeName.ToString(), LocalFloor);
+
+	if (GI && GI->bPortalActive && GI->PortalFloorIndex == FloorIndex && GI->PortalDungeonSeed != 0)
+	{
+		if (ADiabloGameMode* GM = GetWorld()->GetAuthGameMode<ADiabloGameMode>())
+		{
+			GM->DungeonFloorSeeds.Add(DungeonFloorName, GI->PortalDungeonSeed);
+			UE_LOG(LogDiablo, Display, TEXT("Restored portal seed %d for %s"),
+				GI->PortalDungeonSeed, *DungeonFloorName.ToString());
+		}
+	}
 
 	const FString PalettePath = FString::Printf(TEXT("/Game/Dungeons/TP_%s.TP_%s"),
 		*BiomeName.ToString(), *BiomeName.ToString());

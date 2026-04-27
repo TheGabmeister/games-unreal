@@ -17,6 +17,10 @@ void UDiabloSaveGame::PopulateFromGameInstance(const UDiabloGameInstance* GI)
 	SavedBeltItems = GI->SavedBeltItems;
 	SavedKnownSpells = GI->SavedKnownSpells;
 	SavedActiveSpell = GI->SavedActiveSpell;
+	bPortalActive = GI->bPortalActive;
+	PortalFloorIndex = GI->PortalFloorIndex;
+	PortalDungeonLocation = GI->PortalDungeonLocation;
+	PortalDungeonSeed = GI->PortalDungeonSeed;
 }
 
 void UDiabloSaveGame::ApplyToGameInstance(UDiabloGameInstance* GI) const
@@ -33,4 +37,8 @@ void UDiabloSaveGame::ApplyToGameInstance(UDiabloGameInstance* GI) const
 	GI->SavedBeltItems = SavedBeltItems;
 	GI->SavedKnownSpells = SavedKnownSpells;
 	GI->SavedActiveSpell = SavedActiveSpell;
+	GI->bPortalActive = bPortalActive;
+	GI->PortalFloorIndex = PortalFloorIndex;
+	GI->PortalDungeonLocation = PortalDungeonLocation;
+	GI->PortalDungeonSeed = PortalDungeonSeed;
 }

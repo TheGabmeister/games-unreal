@@ -526,6 +526,89 @@ bool UInventoryComponent::MoveGridToBelt(int32 GridX, int32 GridY)
 	return false;
 }
 
+bool UInventoryComponent::IsItemBroken(const FItemInstance& Item) const
+{
+	return Item.IsValid() && Item.Definition->MaxDurability > 0 && Item.CurrentDurability <= 0;
+}
+
+void UInventoryComponent::DegradeRandomArmor()
+{
+	TArray<EEquipSlot> ArmorSlots;
+	for (const auto& Pair : EquippedItems)
+	{
+		if (!Pair.Value.IsValid()) continue;
+		const EItemCategory Cat = Pair.Value.Definition->Category;
+		if (Cat == EItemCategory::Armor || Cat == EItemCategory::Shield || Cat == EItemCategory::Helm)
+		{
+			if (Pair.Value.Definition->MaxDurability > 0 && Pair.Value.CurrentDurability > 0)
+			{
+				ArmorSlots.Add(Pair.Key);
+			}
+		}
+	}
+
+	if (ArmorSlots.Num() == 0) return;
+
+	const EEquipSlot Slot = ArmorSlots[FMath::RandRange(0, ArmorSlots.Num() - 1)];
+	EquippedItems[Slot].CurrentDurability--;
+	OnInventoryChanged.Broadcast();
+}
+
+void UInventoryComponent::DegradeWeapon()
+{
+	for (EEquipSlot Slot : { EEquipSlot::LeftHand, EEquipSlot::RightHand })
+	{
+		if (!EquippedItems.Contains(Slot)) continue;
+		FItemInstance& Item = EquippedItems[Slot];
+		if (!Item.IsValid()) continue;
+		if (Item.Definition->Category != EItemCategory::Weapon) continue;
+		if (Item.Definition->MaxDurability > 0 && Item.CurrentDurability > 0)
+		{
+			Item.CurrentDurability--;
+			OnInventoryChanged.Broadcast();
+			return;
+		}
+	}
+}
+
+int32 UInventoryComponent::GetRepairCost() const
+{
+	int32 Cost = 0;
+	for (const auto& Pair : EquippedItems)
+	{
+		if (!Pair.Value.IsValid()) continue;
+		if (Pair.Value.Definition->MaxDurability <= 0) continue;
+		const int32 Missing = Pair.Value.Definition->MaxDurability - Pair.Value.CurrentDurability;
+		Cost += Missing * 5;
+	}
+	return Cost;
+}
+
+int32 UInventoryComponent::RepairAllEquipment()
+{
+	const int32 Cost = GetRepairCost();
+	if (Cost <= 0 || Gold < Cost) return 0;
+
+	Gold -= Cost;
+	int32 Repaired = 0;
+	for (auto& Pair : EquippedItems)
+	{
+		if (!Pair.Value.IsValid()) continue;
+		if (Pair.Value.Definition->MaxDurability <= 0) continue;
+		if (Pair.Value.CurrentDurability < Pair.Value.Definition->MaxDurability)
+		{
+			Pair.Value.CurrentDurability = Pair.Value.Definition->MaxDurability;
+			++Repaired;
+		}
+	}
+
+	if (Repaired > 0)
+	{
+		OnInventoryChanged.Broadcast();
+	}
+	return Cost;
+}
+
 void UInventoryComponent::RestoreState(const TArray<FItemInstance>& InGridItems, const TArray<int32>& InOccupancy,
 	const TMap<EEquipSlot, FItemInstance>& InEquipped, int32 InGold,
 	const TArray<FItemInstance>& InBeltItems)

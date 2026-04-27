@@ -1,7 +1,10 @@
 #include "DiabloHero.h"
 #include "DiabloPlayerController.h"
 #include "DiabloGameInstance.h"
+#include "DiabloGameMode.h"
 #include "InventoryComponent.h"
+#include "PortalActor.h"
+#include "DiabloDungeonGenerator.h"
 #include "SpellDefinition.h"
 #include "SpellProjectile.h"
 #include "DiabloEnemy.h"
@@ -59,6 +62,47 @@ void ADiabloHero::BeginPlay()
 {
 	Super::BeginPlay();
 	LoadFromGameInstance();
+	SpawnPortalIfActive();
+}
+
+void ADiabloHero::SpawnPortalIfActive()
+{
+	UDiabloGameInstance* GI = Cast<UDiabloGameInstance>(GetGameInstance());
+	if (!GI || !GI->bPortalActive) return;
+
+	const FString LevelName = UGameplayStatics::GetCurrentLevelName(this, true);
+	const bool bInTown = LevelName == TEXT("Lvl_Diablo");
+	const bool bInDungeon = LevelName == TEXT("Lvl_Dungeon");
+
+	FVector SpawnLoc = FVector::ZeroVector;
+	bool bReturnsToDungeon = false;
+
+	if (bInTown)
+	{
+		SpawnLoc = FVector(-200.f, 200.f, 50.f);
+		bReturnsToDungeon = true;
+	}
+	else if (bInDungeon && GI->CurrentFloorIndex == GI->PortalFloorIndex)
+	{
+		SpawnLoc = GI->PortalDungeonLocation;
+		bReturnsToDungeon = false;
+	}
+	else
+	{
+		return;
+	}
+
+	FActorSpawnParameters Params;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+	APortalActor* Portal = GetWorld()->SpawnActor<APortalActor>(
+		APortalActor::StaticClass(), FTransform(SpawnLoc), Params);
+	if (Portal)
+	{
+		Portal->bReturnsToDungeon = bReturnsToDungeon;
+		Portal->SetActorScale3D(FVector(0.8f, 0.8f, 1.5f));
+		UE_LOG(LogDiablo, Display, TEXT("Spawned %s portal at %s"),
+			bReturnsToDungeon ? TEXT("return") : TEXT("town"), *SpawnLoc.ToString());
+	}
 }
 
 void ADiabloHero::SaveToGameInstance()
@@ -129,6 +173,12 @@ float ADiabloHero::TakeDamage(float DamageAmount, FDamageEvent const& DamageEven
 	Stats.HP = FMath::Max(0.f, Stats.HP - ActualDamage);
 	UE_LOG(LogDiablo, Display, TEXT("%s took %.0f damage (HP: %.0f/%.0f)"),
 		*GetName(), ActualDamage, Stats.HP, Stats.MaxHP);
+
+	if (Inventory)
+	{
+		Inventory->DegradeRandomArmor();
+		RecomputeDerivedStats();
+	}
 
 	OnStatsChanged.Broadcast();
 
@@ -292,6 +342,42 @@ bool ADiabloHero::CastSpell(const FVector& TargetLocation)
 
 	Stats.Mana -= ActiveSpell->ManaCost;
 	SpellCooldownRemaining = ActiveSpell->Cooldown;
+
+	if (ActiveSpell->bIsTownPortal)
+	{
+		UDiabloGameInstance* GI = Cast<UDiabloGameInstance>(GetGameInstance());
+		if (GI && GI->CurrentFloorIndex > 0)
+		{
+			GI->bPortalActive = true;
+			GI->PortalFloorIndex = GI->CurrentFloorIndex;
+			GI->PortalDungeonLocation = GetActorLocation();
+
+			if (ADiabloGameMode* GM = GetWorld()->GetAuthGameMode<ADiabloGameMode>())
+			{
+				const FName FloorName = *FString::Printf(TEXT("%s_L%d"),
+					*ADiabloDungeonGenerator::BiomeNameForFloor(GI->CurrentFloorIndex).ToString(),
+					ADiabloDungeonGenerator::BiomeLocalFloor(GI->CurrentFloorIndex));
+				if (const int32* Seed = GM->DungeonFloorSeeds.Find(FloorName))
+				{
+					GI->PortalDungeonSeed = *Seed;
+				}
+			}
+
+			FActorSpawnParameters Params;
+			Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+			APortalActor* Portal = GetWorld()->SpawnActor<APortalActor>(
+				APortalActor::StaticClass(), FTransform(GetActorLocation()), Params);
+			if (Portal)
+			{
+				Portal->SetActorScale3D(FVector(0.8f, 0.8f, 1.5f));
+			}
+
+			UE_LOG(LogDiablo, Display, TEXT("Town Portal opened on floor %d"), GI->PortalFloorIndex);
+		}
+
+		OnStatsChanged.Broadcast();
+		return true;
+	}
 
 	FVector Direction = (TargetLocation - GetActorLocation()).GetSafeNormal2D();
 	if (Direction.IsNearlyZero())
@@ -499,6 +585,7 @@ void ADiabloHero::RecomputeDerivedStats()
 			const FItemInstance& Equipped = Inventory->GetEquipped(Slot);
 			const UItemDefinition* Def = Equipped.Definition;
 			if (!Def) continue;
+			if (Inventory->IsItemBroken(Equipped)) continue;
 
 			BonusStr += Def->BonusStr;
 			BonusMag += Def->BonusMag;

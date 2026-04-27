@@ -437,14 +437,14 @@ void FDiabloAssetGenerator::GenerateDefaultMap()
 	UNPCShopData* GriswoldShop = LoadObject<UNPCShopData>(nullptr, TEXT("/Game/NPCs/ShopData/SD_Griswold.SD_Griswold"));
 	UNPCShopData* AdriaShop = LoadObject<UNPCShopData>(nullptr, TEXT("/Game/NPCs/ShopData/SD_Adria.SD_Adria"));
 
-	struct FNPCDef { FVector Pos; FString Name; FString Dialog; ENPCType Type; UNPCShopData* Shop; };
+	struct FNPCDef { FVector Pos; FString Name; FString Dialog; ENPCType Type; UNPCShopData* Shop; bool bRepair; };
 	TArray<FNPCDef> NPCs = {
-		{ FVector(600.f, -300.f, 50.f),  TEXT("Griswold"), TEXT("I can offer you weapons and armor."), ENPCType::Merchant,    GriswoldShop },
-		{ FVector(800.f, 500.f, 50.f),   TEXT("Adria"),    TEXT("I sense a darkness in you, hero."),   ENPCType::Merchant,    AdriaShop },
-		{ FVector(-300.f, 300.f, 50.f),  TEXT("Pepin"),    TEXT("Let me tend to your wounds."),        ENPCType::Healer,      nullptr },
-		{ FVector(0.f, -400.f, 50.f),    TEXT("Cain"),     TEXT("Stay a while and listen."),           ENPCType::Identifier,  nullptr },
-		{ FVector(-600.f, 400.f, 50.f),  TEXT("Wirt"),     TEXT("Psst... over here. I got something special for ya."), ENPCType::None, nullptr },
-		{ FVector(-200.f, -200.f, 50.f), TEXT("Ogden"),    TEXT("Welcome, traveler. Rest your weary bones."),          ENPCType::None, nullptr },
+		{ FVector(600.f, -300.f, 50.f),  TEXT("Griswold"), TEXT("I can offer you weapons and armor."), ENPCType::Merchant,    GriswoldShop, true },
+		{ FVector(800.f, 500.f, 50.f),   TEXT("Adria"),    TEXT("I sense a darkness in you, hero."),   ENPCType::Merchant,    AdriaShop,    false },
+		{ FVector(-300.f, 300.f, 50.f),  TEXT("Pepin"),    TEXT("Let me tend to your wounds."),        ENPCType::Healer,      nullptr,      false },
+		{ FVector(0.f, -400.f, 50.f),    TEXT("Cain"),     TEXT("Stay a while and listen."),           ENPCType::Identifier,  nullptr,      false },
+		{ FVector(-600.f, 400.f, 50.f),  TEXT("Wirt"),     TEXT("Psst... over here. I got something special for ya."), ENPCType::None, nullptr, false },
+		{ FVector(-200.f, -200.f, 50.f), TEXT("Ogden"),    TEXT("Welcome, traveler. Rest your weary bones."),          ENPCType::None, nullptr, false },
 	};
 
 	for (const FNPCDef& Def : NPCs)
@@ -457,6 +457,7 @@ void FDiabloAssetGenerator::GenerateDefaultMap()
 			NPC->DialogText = FText::FromString(Def.Dialog);
 			NPC->NPCType = Def.Type;
 			NPC->ShopData = Def.Shop;
+			NPC->bCanRepair = Def.bRepair;
 			NPC->SetActorLabel(*Def.Name);
 			UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Spawned NPC: %s (Type: %d)"), *Def.Name, (int32)Def.Type);
 		}
@@ -1858,14 +1859,16 @@ void FDiabloAssetGenerator::SetupSpells()
 		TSubclassOf<ASpellProjectile> ProjectileClass;
 		bool bIsProjectile;
 		float HealAmount;
+		bool bIsTownPortal;
 	};
 
 	TArray<FSpellDef> Spells = {
-		{ TEXT("SD_Firebolt"),  FText::FromString(TEXT("Firebolt")),  6.f,  0.8f, 20.f, AFirebolt::StaticClass(),      true,  0.f },
-		{ TEXT("SD_Fireball"),  FText::FromString(TEXT("Fireball")),  12.f, 1.2f, 40.f, AFireball::StaticClass(),      true,  0.f },
-		{ TEXT("SD_Lightning"), FText::FromString(TEXT("Lightning")), 8.f,  0.5f, 15.f, ALightningBolt::StaticClass(), true,  0.f },
-		{ TEXT("SD_Nova"),      FText::FromString(TEXT("Nova")),      10.f, 2.0f, 30.f, nullptr,                       false, 0.f },
-		{ TEXT("SD_Healing"),   FText::FromString(TEXT("Healing")),   15.f, 3.0f, 0.f,  nullptr,                       false, 50.f },
+		{ TEXT("SD_Firebolt"),     FText::FromString(TEXT("Firebolt")),     6.f,  0.8f, 20.f, AFirebolt::StaticClass(),      true,  0.f,  false },
+		{ TEXT("SD_Fireball"),     FText::FromString(TEXT("Fireball")),     12.f, 1.2f, 40.f, AFireball::StaticClass(),      true,  0.f,  false },
+		{ TEXT("SD_Lightning"),    FText::FromString(TEXT("Lightning")),    8.f,  0.5f, 15.f, ALightningBolt::StaticClass(), true,  0.f,  false },
+		{ TEXT("SD_Nova"),         FText::FromString(TEXT("Nova")),         10.f, 2.0f, 30.f, nullptr,                       false, 0.f,  false },
+		{ TEXT("SD_Healing"),      FText::FromString(TEXT("Healing")),      15.f, 3.0f, 0.f,  nullptr,                       false, 50.f, false },
+		{ TEXT("SD_TownPortal"),   FText::FromString(TEXT("Town Portal")),  25.f, 5.0f, 0.f,  nullptr,                       false, 0.f,  true  },
 	};
 
 	const FString BasePath = TEXT("/Game/Spells/Definitions");
@@ -1885,6 +1888,7 @@ void FDiabloAssetGenerator::SetupSpells()
 			Existing->ProjectileClass = Def.ProjectileClass;
 			Existing->bIsProjectile = Def.bIsProjectile;
 			Existing->HealAmount = Def.HealAmount;
+			Existing->bIsTownPortal = Def.bIsTownPortal;
 			SaveAsset(Existing, Existing->GetOutermost(), FullPath);
 			UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Updated spell definition: %s"), *Def.Name);
 			continue;
@@ -1902,6 +1906,7 @@ void FDiabloAssetGenerator::SetupSpells()
 		SpellDef->ProjectileClass = Def.ProjectileClass;
 		SpellDef->bIsProjectile = Def.bIsProjectile;
 		SpellDef->HealAmount = Def.HealAmount;
+		SpellDef->bIsTownPortal = Def.bIsTownPortal;
 
 		if (SaveAsset(SpellDef, Package, FullPath))
 		{

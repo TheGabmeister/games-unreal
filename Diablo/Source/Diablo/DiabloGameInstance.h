@@ -52,4 +52,16 @@ public:
 
 	UPROPERTY()
 	int32 CurrentFloorIndex = 0;
+
+	UPROPERTY()
+	bool bPortalActive = false;
+
+	UPROPERTY()
+	int32 PortalFloorIndex = 0;
+
+	UPROPERTY()
+	FVector PortalDungeonLocation = FVector::ZeroVector;
+
+	UPROPERTY()
+	int32 PortalDungeonSeed = 0;
 };

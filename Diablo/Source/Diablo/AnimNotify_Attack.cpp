@@ -1,6 +1,7 @@
 #include "AnimNotify_Attack.h"
 #include "DiabloHero.h"
 #include "DiabloEnemy.h"
+#include "InventoryComponent.h"
 #include "Diablo.h"
 #include "Engine/DamageEvents.h"
 
@@ -77,6 +78,12 @@ void UAnimNotify_Attack::Notify(USkeletalMeshComponent* MeshComp, UAnimSequenceB
 
 			FDamageEvent DamageEvent;
 			Target->TakeDamage(FinalDamage, DamageEvent, Instigator, Owner);
+			if (Hero->Inventory)
+			{
+				Hero->Inventory->DegradeWeapon();
+				Hero->RecomputeDerivedStats();
+				Hero->OnStatsChanged.Broadcast();
+			}
 			return;
 		}
 	}

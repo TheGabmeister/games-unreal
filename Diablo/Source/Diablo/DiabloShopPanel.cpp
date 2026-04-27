@@ -117,6 +117,24 @@ void UDiabloShopPanel::RefreshShop()
 		GoldText->SetText(FText::FromString(FString::Printf(TEXT("Gold: %d"), PlayerGold)));
 	}
 
+	if (RepairButton && RepairCostText)
+	{
+		if (ShopNPC && ShopNPC->bCanRepair && PlayerInventory)
+		{
+			const int32 RepairCost = PlayerInventory->GetRepairCost();
+			RepairButton->SetVisibility(RepairCost > 0 ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+			const bool bCanAfford = PlayerGold >= RepairCost;
+			RepairCostText->SetText(FText::FromString(FString::Printf(TEXT("Repair (%dg)"), RepairCost)));
+			RepairCostText->SetColorAndOpacity(FSlateColor(bCanAfford
+				? FLinearColor(0.4f, 0.9f, 0.4f, 1.f)
+				: FLinearColor(0.9f, 0.3f, 0.3f, 1.f)));
+		}
+		else
+		{
+			RepairButton->SetVisibility(ESlateVisibility::Collapsed);
+		}
+	}
+
 	if (BuyListBox && ShopNPC && ShopNPC->ShopData)
 	{
 		for (int32 i = 0; i < ShopNPC->ShopData->StockItems.Num(); i++)
@@ -273,6 +291,27 @@ TSharedRef<SWidget> UDiabloShopPanel::RebuildWidget()
 		GoldSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 		GoldSlot->SetVerticalAlignment(VAlign_Center);
 
+		RepairButton = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("ShopRepairBtn"));
+		FButtonStyle RepairStyle = RepairButton->GetStyle();
+		RepairStyle.Normal.TintColor = FSlateColor(FLinearColor(0.08f, 0.15f, 0.08f, 0.9f));
+		RepairStyle.Hovered.TintColor = FSlateColor(FLinearColor(0.15f, 0.3f, 0.15f, 0.9f));
+		RepairStyle.Pressed.TintColor = FSlateColor(FLinearColor(0.05f, 0.1f, 0.05f, 0.9f));
+		RepairButton->SetStyle(RepairStyle);
+
+		RepairCostText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("RepairCostLabel"));
+		RepairCostText->SetText(FText::FromString(TEXT("Repair (0g)")));
+		RepairCostText->SetColorAndOpacity(FSlateColor(FLinearColor(0.4f, 0.9f, 0.4f, 1.f)));
+		RepairCostText->SetJustification(ETextJustify::Center);
+		FSlateFontInfo RepairFont = RepairCostText->GetFont();
+		RepairFont.Size = 11;
+		RepairCostText->SetFont(RepairFont);
+		RepairButton->AddChild(RepairCostText);
+
+		UHorizontalBoxSlot* RepairSlot = BottomRow->AddChildToHorizontalBox(RepairButton);
+		RepairSlot->SetPadding(FMargin(0.f, 0.f, 6.f, 0.f));
+		RepairButton->OnClicked.AddDynamic(this, &UDiabloShopPanel::OnRepairClicked);
+		RepairButton->SetVisibility(ESlateVisibility::Collapsed);
+
 		CloseButton = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("ShopCloseBtn"));
 		FButtonStyle Style = CloseButton->GetStyle();
 		Style.Normal.TintColor = FSlateColor(FLinearColor(0.15f, 0.12f, 0.08f, 0.9f));
@@ -330,6 +369,22 @@ FReply UDiabloShopPanel::NativeOnMouseButtonDown(const FGeometry& InGeometry, co
 	}
 
 	return Super::NativeOnMouseButtonDown(InGeometry, InMouseEvent);
+}
+
+void UDiabloShopPanel::OnRepairClicked()
+{
+	if (!PlayerInventory) return;
+
+	const int32 Cost = PlayerInventory->RepairAllEquipment();
+	if (Cost > 0)
+	{
+		if (ADiabloHero* Hero = Cast<ADiabloHero>(PlayerInventory->GetOwner()))
+		{
+			Hero->RecomputeDerivedStats();
+			Hero->OnStatsChanged.Broadcast();
+		}
+		UE_LOG(LogDiablo, Display, TEXT("Repaired all equipment for %d gold"), Cost);
+	}
 }
 
 void UDiabloShopPanel::OnCloseClicked()

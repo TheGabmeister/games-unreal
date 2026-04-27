@@ -34,6 +34,9 @@ private:
 	UFUNCTION()
 	void OnCloseClicked();
 
+	UFUNCTION()
+	void OnRepairClicked();
+
 	UPROPERTY()
 	TObjectPtr<ADiabloPlayerController> OwnerController;
 
@@ -57,6 +60,12 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<UButton> CloseButton;
+
+	UPROPERTY()
+	TObjectPtr<UButton> RepairButton;
+
+	UPROPERTY()
+	TObjectPtr<UTextBlock> RepairCostText;
 
 	UPROPERTY()
 	TArray<TObjectPtr<UBorder>> BuyRows;
