@@ -50,6 +50,7 @@
 #include "Firebolt.h"
 #include "Fireball.h"
 #include "LightningBolt.h"
+#include "ChainLightning.h"
 #include "DiabloSpellbookPanel.h"
 #include "DiabloMainMenu.h"
 #include "DiabloDialogWidget.h"
@@ -1190,8 +1191,14 @@ void FDiabloAssetGenerator::SetupHero()
 			TEXT("/Game/Spells/Definitions/SD_Firebolt.SD_Firebolt"),
 			TEXT("/Game/Spells/Definitions/SD_Fireball.SD_Fireball"),
 			TEXT("/Game/Spells/Definitions/SD_Lightning.SD_Lightning"),
+			TEXT("/Game/Spells/Definitions/SD_ChainLightning.SD_ChainLightning"),
 			TEXT("/Game/Spells/Definitions/SD_Nova.SD_Nova"),
+			TEXT("/Game/Spells/Definitions/SD_Apocalypse.SD_Apocalypse"),
 			TEXT("/Game/Spells/Definitions/SD_Healing.SD_Healing"),
+			TEXT("/Game/Spells/Definitions/SD_TownPortal.SD_TownPortal"),
+			TEXT("/Game/Spells/Definitions/SD_Teleport.SD_Teleport"),
+			TEXT("/Game/Spells/Definitions/SD_StoneCurse.SD_StoneCurse"),
+			TEXT("/Game/Spells/Definitions/SD_ManaShield.SD_ManaShield"),
 		};
 
 		for (const TCHAR* Path : SpellPaths)
@@ -1859,15 +1866,23 @@ void FDiabloAssetGenerator::SetupSpells()
 		TSubclassOf<ASpellProjectile> ProjectileClass;
 		ESpellEffect Effect;
 		float HealAmount;
+		float AoERadius;
+		float Duration;
+		int32 MaxBounces;
 	};
 
 	TArray<FSpellDef> Spells = {
-		{ TEXT("SD_Firebolt"),     FText::FromString(TEXT("Firebolt")),     6.f,  0.8f, 20.f, AFirebolt::StaticClass(),      ESpellEffect::Projectile,  0.f  },
-		{ TEXT("SD_Fireball"),     FText::FromString(TEXT("Fireball")),     12.f, 1.2f, 40.f, AFireball::StaticClass(),      ESpellEffect::Projectile,  0.f  },
-		{ TEXT("SD_Lightning"),    FText::FromString(TEXT("Lightning")),    8.f,  0.5f, 15.f, ALightningBolt::StaticClass(), ESpellEffect::Projectile,  0.f  },
-		{ TEXT("SD_Nova"),         FText::FromString(TEXT("Nova")),         10.f, 2.0f, 30.f, nullptr,                       ESpellEffect::AoE,         0.f  },
-		{ TEXT("SD_Healing"),      FText::FromString(TEXT("Healing")),      15.f, 3.0f, 0.f,  nullptr,                       ESpellEffect::Heal,        50.f },
-		{ TEXT("SD_TownPortal"),   FText::FromString(TEXT("Town Portal")),  25.f, 5.0f, 0.f,  nullptr,                       ESpellEffect::TownPortal,  0.f  },
+		{ TEXT("SD_Firebolt"),        FText::FromString(TEXT("Firebolt")),        6.f,  0.8f, 20.f, AFirebolt::StaticClass(),        ESpellEffect::Projectile,  0.f,  500.f, 0.f, 0 },
+		{ TEXT("SD_Fireball"),        FText::FromString(TEXT("Fireball")),        12.f, 1.2f, 40.f, AFireball::StaticClass(),        ESpellEffect::Projectile,  0.f,  500.f, 0.f, 0 },
+		{ TEXT("SD_Lightning"),       FText::FromString(TEXT("Lightning")),       8.f,  0.5f, 15.f, ALightningBolt::StaticClass(),   ESpellEffect::Projectile,  0.f,  500.f, 0.f, 0 },
+		{ TEXT("SD_ChainLightning"),  FText::FromString(TEXT("Chain Lightning")), 15.f, 1.0f, 25.f, AChainLightning::StaticClass(),  ESpellEffect::Projectile,  0.f,  500.f, 0.f, 3 },
+		{ TEXT("SD_Nova"),            FText::FromString(TEXT("Nova")),            10.f, 2.0f, 30.f, nullptr,                         ESpellEffect::AoE,         0.f,  500.f, 0.f, 0 },
+		{ TEXT("SD_Apocalypse"),      FText::FromString(TEXT("Apocalypse")),      50.f, 4.0f, 60.f, nullptr,                         ESpellEffect::AoE,         0.f, 2000.f, 0.f, 0 },
+		{ TEXT("SD_Healing"),         FText::FromString(TEXT("Healing")),         15.f, 3.0f, 0.f,  nullptr,                         ESpellEffect::Heal,        50.f, 500.f, 0.f, 0 },
+		{ TEXT("SD_TownPortal"),      FText::FromString(TEXT("Town Portal")),     25.f, 5.0f, 0.f,  nullptr,                         ESpellEffect::TownPortal,  0.f,  500.f, 0.f, 0 },
+		{ TEXT("SD_Teleport"),        FText::FromString(TEXT("Teleport")),        20.f, 1.5f, 0.f,  nullptr,                         ESpellEffect::Teleport,    0.f,  500.f, 0.f, 0 },
+		{ TEXT("SD_StoneCurse"),      FText::FromString(TEXT("Stone Curse")),     40.f, 3.0f, 0.f,  nullptr,                         ESpellEffect::Debuff,      0.f,  500.f, 8.f, 0 },
+		{ TEXT("SD_ManaShield"),      FText::FromString(TEXT("Mana Shield")),     25.f, 0.5f, 0.f,  nullptr,                         ESpellEffect::Buff,        0.f,  500.f, 0.f, 0 },
 	};
 
 	const FString BasePath = TEXT("/Game/Spells/Definitions");
@@ -1887,6 +1902,9 @@ void FDiabloAssetGenerator::SetupSpells()
 			Existing->ProjectileClass = Def.ProjectileClass;
 			Existing->Effect = Def.Effect;
 			Existing->HealAmount = Def.HealAmount;
+			Existing->AoERadius = Def.AoERadius;
+			Existing->Duration = Def.Duration;
+			Existing->MaxBounces = Def.MaxBounces;
 			SaveAsset(Existing, Existing->GetOutermost(), FullPath);
 			UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Updated spell definition: %s"), *Def.Name);
 			continue;
@@ -1904,6 +1922,9 @@ void FDiabloAssetGenerator::SetupSpells()
 		SpellDef->ProjectileClass = Def.ProjectileClass;
 		SpellDef->Effect = Def.Effect;
 		SpellDef->HealAmount = Def.HealAmount;
+		SpellDef->AoERadius = Def.AoERadius;
+		SpellDef->Duration = Def.Duration;
+		SpellDef->MaxBounces = Def.MaxBounces;
 
 		if (SaveAsset(SpellDef, Package, FullPath))
 		{

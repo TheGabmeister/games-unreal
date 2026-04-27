@@ -80,6 +80,9 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Spell")
 	TObjectPtr<USpellDefinition> ActiveSpell;
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Buff")
+	bool bManaShieldActive = false;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat")
 	float EquipMinDamage = 0.f;
 

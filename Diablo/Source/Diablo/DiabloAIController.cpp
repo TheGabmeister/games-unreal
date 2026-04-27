@@ -23,6 +23,20 @@ void ADiabloAIController::Tick(float DeltaTime)
 		return;
 	}
 
+	if (Enemy->bStoneCursed)
+	{
+		if (GetWorld()->GetTimeSeconds() >= Enemy->StoneCurseEndTime)
+		{
+			Enemy->bStoneCursed = false;
+			UE_LOG(LogDiablo, Display, TEXT("%s: Stone Curse expired"), *Enemy->GetName());
+		}
+		else
+		{
+			StopMovement();
+			return;
+		}
+	}
+
 	switch (State)
 	{
 	case EAIState::Idle:   TickIdle(DeltaTime);   break;

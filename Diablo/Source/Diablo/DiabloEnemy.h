@@ -130,6 +130,12 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Loot")
 	TArray<FDropTableEntry> DropTable;
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Debuff")
+	bool bStoneCursed = false;
+
+	UPROPERTY()
+	float StoneCurseEndTime = 0.f;
+
 	UPROPERTY()
 	TObjectPtr<AActor> AttackTarget;
 

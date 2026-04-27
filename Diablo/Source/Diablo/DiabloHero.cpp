@@ -7,6 +7,7 @@
 #include "DiabloDungeonGenerator.h"
 #include "SpellDefinition.h"
 #include "SpellProjectile.h"
+#include "ChainLightning.h"
 #include "DiabloEnemy.h"
 #include "Diablo.h"
 #include "Engine/DamageEvents.h"
@@ -168,7 +169,20 @@ float ADiabloHero::TakeDamage(float DamageAmount, FDamageEvent const& DamageEven
 	Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
 
 	const float AC = Stats.Dex / 5.f + ArmorFromEquipment;
-	const float ActualDamage = FMath::Max(1.f, DamageAmount - AC);
+	float ActualDamage = FMath::Max(1.f, DamageAmount - AC);
+
+	if (bManaShieldActive && Stats.Mana > 0.f)
+	{
+		const float ManaAbsorb = FMath::Min(ActualDamage, Stats.Mana);
+		Stats.Mana -= ManaAbsorb;
+		ActualDamage -= ManaAbsorb;
+
+		if (Stats.Mana <= 0.f)
+		{
+			bManaShieldActive = false;
+			UE_LOG(LogDiablo, Display, TEXT("Mana Shield deactivated (mana depleted)"));
+		}
+	}
 
 	Stats.HP = FMath::Max(0.f, Stats.HP - ActualDamage);
 	UE_LOG(LogDiablo, Display, TEXT("%s took %.0f damage (HP: %.0f/%.0f)"),
@@ -262,9 +276,8 @@ bool ADiabloHero::CastSpellFromScroll(USpellDefinition* SpellDef)
 
 	case ESpellEffect::AoE:
 	{
-		const float AoERadius = 500.f;
 		TArray<FOverlapResult> Overlaps;
-		FCollisionShape Shape = FCollisionShape::MakeSphere(AoERadius);
+		FCollisionShape Shape = FCollisionShape::MakeSphere(SpellDef->AoERadius);
 		GetWorld()->OverlapMultiByChannel(Overlaps, GetActorLocation(), FQuat::Identity,
 			ECC_Pawn, Shape);
 		for (const FOverlapResult& Overlap : Overlaps)
@@ -374,6 +387,10 @@ bool ADiabloHero::CastSpell(const FVector& TargetLocation)
 			if (Proj)
 			{
 				Proj->Damage = ActiveSpell->Damage;
+				if (AChainLightning* CL = Cast<AChainLightning>(Proj))
+				{
+					CL->BouncesRemaining = ActiveSpell->MaxBounces;
+				}
 			}
 		}
 		break;
@@ -385,9 +402,8 @@ bool ADiabloHero::CastSpell(const FVector& TargetLocation)
 
 	case ESpellEffect::AoE:
 	{
-		const float AoERadius = 500.f;
 		TArray<FOverlapResult> Overlaps;
-		FCollisionShape Shape = FCollisionShape::MakeSphere(AoERadius);
+		FCollisionShape Shape = FCollisionShape::MakeSphere(ActiveSpell->AoERadius);
 		GetWorld()->OverlapMultiByChannel(Overlaps, GetActorLocation(), FQuat::Identity,
 			ECC_Pawn, Shape);
 		for (const FOverlapResult& Overlap : Overlaps)
@@ -437,9 +453,52 @@ bool ADiabloHero::CastSpell(const FVector& TargetLocation)
 	}
 
 	case ESpellEffect::Teleport:
-	case ESpellEffect::Debuff:
-	case ESpellEffect::Buff:
+	{
+		SetActorLocation(TargetLocation);
 		break;
+	}
+
+	case ESpellEffect::Debuff:
+	{
+		ADiabloEnemy* BestEnemy = nullptr;
+		float BestDist = 300.f;
+
+		TArray<FOverlapResult> Overlaps;
+		FCollisionShape Shape = FCollisionShape::MakeSphere(300.f);
+		GetWorld()->OverlapMultiByChannel(Overlaps, TargetLocation, FQuat::Identity,
+			ECC_Pawn, Shape);
+
+		for (const FOverlapResult& Overlap : Overlaps)
+		{
+			ADiabloEnemy* Enemy = Cast<ADiabloEnemy>(Overlap.GetActor());
+			if (Enemy && !Enemy->IsDead() && !Enemy->bStoneCursed)
+			{
+				const float Dist = FVector::Dist(TargetLocation, Enemy->GetActorLocation());
+				if (Dist < BestDist)
+				{
+					BestDist = Dist;
+					BestEnemy = Enemy;
+				}
+			}
+		}
+
+		if (BestEnemy)
+		{
+			BestEnemy->bStoneCursed = true;
+			BestEnemy->StoneCurseEndTime = GetWorld()->GetTimeSeconds() + ActiveSpell->Duration;
+			UE_LOG(LogDiablo, Display, TEXT("Stone Curse applied to %s for %.0fs"),
+				*BestEnemy->GetName(), ActiveSpell->Duration);
+		}
+		break;
+	}
+
+	case ESpellEffect::Buff:
+	{
+		bManaShieldActive = !bManaShieldActive;
+		UE_LOG(LogDiablo, Display, TEXT("Mana Shield %s"),
+			bManaShieldActive ? TEXT("activated") : TEXT("deactivated"));
+		break;
+	}
 	}
 
 	OnStatsChanged.Broadcast();

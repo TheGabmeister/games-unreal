@@ -39,13 +39,13 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Spell")
 	TObjectPtr<UProjectileMovementComponent> ProjectileMovement;
 
-protected:
-	virtual void BeginPlay() override;
-
 	UFUNCTION()
 	void OnOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
 		UPrimitiveComponent* OtherComp, int32 OtherBodyIndex,
 		bool bFromSweep, const FHitResult& SweepResult);
+
+protected:
+	virtual void BeginPlay() override;
 
 	UPROPERTY()
 	TObjectPtr<AController> InstigatorController;
