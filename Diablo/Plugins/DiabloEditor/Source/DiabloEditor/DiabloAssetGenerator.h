@@ -31,6 +31,7 @@ struct FDiabloAssetGenerator
 	static void SetupDungeonPalette();
 	static void SetupAllDungeonPalettes();
 	static void GenerateDungeonMap();
+	static void GenerateDebugCombatMap();
 	static void SetupAllBlueprints();
 
 private:

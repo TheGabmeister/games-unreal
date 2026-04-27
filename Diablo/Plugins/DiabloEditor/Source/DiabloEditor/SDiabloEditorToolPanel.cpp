@@ -241,6 +241,15 @@ void SDiabloEditorToolPanel::Construct(const FArguments& InArgs)
 			.Padding(0.f, 4.f)
 			[
 				SNew(SButton)
+				.Text(FText::FromString(TEXT("Generate Debug Combat Map")))
+				.OnClicked(this, &SDiabloEditorToolPanel::OnGenerateDebugCombat)
+			]
+
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(0.f, 4.f)
+			[
+				SNew(SButton)
 				.Text(FText::FromString(TEXT("Generate Input Assets")))
 				.OnClicked(this, &SDiabloEditorToolPanel::OnGenerateInput)
 			]
@@ -383,5 +392,11 @@ FReply SDiabloEditorToolPanel::OnSetupDungeonPalettes()
 FReply SDiabloEditorToolPanel::OnGenerateDungeon()
 {
 	FDiabloAssetGenerator::GenerateDungeonMap();
+	return FReply::Handled();
+}
+
+FReply SDiabloEditorToolPanel::OnGenerateDebugCombat()
+{
+	FDiabloAssetGenerator::GenerateDebugCombatMap();
 	return FReply::Handled();
 }

@@ -16,6 +16,7 @@ private:
 	FReply OnGenerateMap();
 	FReply OnGenerateCathedral();
 	FReply OnGenerateDungeon();
+	FReply OnGenerateDebugCombat();
 	FReply OnGenerateInput();
 	FReply OnImportWarrior();
 	FReply OnImportAttackSFX();

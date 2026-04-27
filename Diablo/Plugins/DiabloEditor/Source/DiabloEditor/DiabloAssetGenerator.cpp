@@ -369,6 +369,119 @@ void FDiabloAssetGenerator::GenerateDungeonMap()
 	UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Created dungeon map: %s"), *MapPackagePath);
 }
 
+void FDiabloAssetGenerator::GenerateDebugCombatMap()
+{
+	const FString MapPackagePath = TEXT("/Game/Maps/Lvl_DebugCombat");
+
+	UWorld* NewWorld = UEditorLoadingAndSavingUtils::NewBlankMap(false);
+	if (!NewWorld)
+	{
+		UE_LOG(LogTemp, Error, TEXT("[DiabloTools] Failed to create debug combat map"));
+		return;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+	UBlueprint* GameModeBP = LoadObject<UBlueprint>(nullptr,
+		TEXT("/Game/Blueprints/BP_DiabloGameMode.BP_DiabloGameMode"));
+	if (GameModeBP && GameModeBP->GeneratedClass)
+	{
+		AWorldSettings* WS = NewWorld->GetWorldSettings();
+		if (WS)
+		{
+			WS->DefaultGameMode = GameModeBP->GeneratedClass;
+		}
+	}
+
+	NewWorld->SpawnActor<APlayerStart>(APlayerStart::StaticClass(),
+		FTransform(FVector(0.f, 0.f, 100.f)), SpawnParams);
+
+	ADirectionalLight* Sun = NewWorld->SpawnActor<ADirectionalLight>(
+		ADirectionalLight::StaticClass(), FTransform::Identity, SpawnParams);
+	if (Sun)
+	{
+		Sun->SetActorRotation(FRotator(-45.f, -45.f, 0.f));
+	}
+
+	SpawnFloorPlane(NewWorld);
+	SpawnNavMeshVolume(NewWorld);
+
+	UBlueprint* EnemyBP = LoadObject<UBlueprint>(nullptr,
+		TEXT("/Game/Blueprints/BP_DiabloEnemy.BP_DiabloEnemy"));
+	if (EnemyBP && EnemyBP->GeneratedClass)
+	{
+		struct FEnemySpawn { FVector Pos; EDiabloEnemyArchetype Archetype; const TCHAR* Label; };
+		TArray<FEnemySpawn> Enemies = {
+			{ FVector( 600.f,    0.f, 100.f), EDiabloEnemyArchetype::MeleeGrunt,    TEXT("Enemy_MeleeGrunt")    },
+			{ FVector( 600.f,  400.f, 100.f), EDiabloEnemyArchetype::FastMelee,     TEXT("Enemy_FastMelee")     },
+			{ FVector( 600.f, -400.f, 100.f), EDiabloEnemyArchetype::RangedArcher,  TEXT("Enemy_RangedArcher")  },
+			{ FVector(1000.f,    0.f, 100.f), EDiabloEnemyArchetype::Spellcaster,   TEXT("Enemy_Spellcaster")   },
+			{ FVector(1000.f,  400.f, 100.f), EDiabloEnemyArchetype::Summoner,      TEXT("Enemy_Summoner")      },
+			{ FVector(1000.f, -400.f, 100.f), EDiabloEnemyArchetype::FallenCoward,  TEXT("Enemy_FallenCoward")  },
+		};
+
+		for (const FEnemySpawn& Def : Enemies)
+		{
+			ADiabloEnemy* Enemy = Cast<ADiabloEnemy>(NewWorld->SpawnActor<AActor>(
+				EnemyBP->GeneratedClass, FTransform(Def.Pos), SpawnParams));
+			if (Enemy)
+			{
+				Enemy->ConfigureArchetype(Def.Archetype);
+				Enemy->SetActorLabel(Def.Label);
+				UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Debug: spawned %s"), Def.Label);
+			}
+		}
+	}
+
+	UBlueprint* PotionBP = LoadObject<UBlueprint>(nullptr,
+		TEXT("/Game/Blueprints/BP_HealingPotion.BP_HealingPotion"));
+	if (PotionBP && PotionBP->GeneratedClass)
+	{
+		FVector PotionPositions[] = {
+			FVector(-200.f,  200.f, 100.f),
+			FVector(-200.f, -200.f, 100.f),
+			FVector(-400.f,    0.f, 100.f),
+			FVector(-200.f,  400.f, 100.f),
+			FVector(-200.f, -400.f, 100.f),
+		};
+		for (const FVector& Pos : PotionPositions)
+		{
+			NewWorld->SpawnActor<AActor>(PotionBP->GeneratedClass, FTransform(Pos), SpawnParams);
+		}
+		UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Debug: spawned 5 healing potions"));
+	}
+
+	UBlueprint* ManaPotionBP = LoadObject<UBlueprint>(nullptr,
+		TEXT("/Game/Blueprints/BP_ManaPotion.BP_ManaPotion"));
+	if (ManaPotionBP && ManaPotionBP->GeneratedClass)
+	{
+		FVector ManaPotionPositions[] = {
+			FVector(-400.f,  200.f, 100.f),
+			FVector(-400.f, -200.f, 100.f),
+			FVector(-600.f,    0.f, 100.f),
+			FVector(-400.f,  400.f, 100.f),
+			FVector(-400.f, -400.f, 100.f),
+		};
+		for (const FVector& Pos : ManaPotionPositions)
+		{
+			NewWorld->SpawnActor<AActor>(ManaPotionBP->GeneratedClass, FTransform(Pos), SpawnParams);
+		}
+		UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Debug: spawned 5 mana potions"));
+	}
+
+	if (UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(NewWorld))
+	{
+		NavSys->Build();
+	}
+
+	const FString FilePath = FPackageName::LongPackageNameToFilename(
+		MapPackagePath, FPackageName::GetMapPackageExtension());
+	FEditorFileUtils::SaveMap(NewWorld, FilePath);
+
+	UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Created debug combat map: %s"), *MapPackagePath);
+}
+
 void FDiabloAssetGenerator::GenerateDefaultMap()
 {
 	const FString MapPackagePath = TEXT("/Game/Maps/Lvl_Diablo");
@@ -1103,6 +1216,45 @@ void FDiabloAssetGenerator::SetupPotion()
 
 	FKismetEditorUtilities::CompileBlueprint(PotionBP);
 	SaveAsset(PotionBP, PotionBP->GetOutermost(), TEXT("/Game/Blueprints/BP_HealingPotion"));
+
+	// --- BP_ManaPotion (same pattern, different item definition) ---
+
+	CreateBlueprintFromClass(ADroppedItem::StaticClass(), TEXT("/Game/Blueprints"), TEXT("BP_ManaPotion"));
+
+	UBlueprint* ManaBP = LoadObject<UBlueprint>(nullptr, TEXT("/Game/Blueprints/BP_ManaPotion.BP_ManaPotion"));
+	if (ManaBP && ManaBP->GeneratedClass)
+	{
+		AActor* ManaCDO = Cast<AActor>(ManaBP->GeneratedClass->GetDefaultObject());
+		if (ManaCDO && PlaneMesh)
+		{
+			if (UStaticMeshComponent* MeshComp = ManaCDO->FindComponentByClass<UStaticMeshComponent>())
+			{
+				MeshComp->SetStaticMesh(PlaneMesh);
+				MeshComp->SetRelativeScale3D(FVector(0.6f, 0.6f, 0.6f));
+				MeshComp->SetRelativeRotation(FRotator(90.f, 45.f, 0.f));
+				if (PotionMat)
+				{
+					MeshComp->SetMaterial(0, PotionMat);
+				}
+			}
+		}
+
+		UItemDefinition* ManaDef = LoadObject<UItemDefinition>(nullptr,
+			TEXT("/Game/Items/Definitions/ID_Mana_Potion.ID_Mana_Potion"));
+		if (ManaDef)
+		{
+			ADroppedItem* ManaItemCDO = Cast<ADroppedItem>(ManaBP->GeneratedClass->GetDefaultObject());
+			if (ManaItemCDO)
+			{
+				ManaItemCDO->ItemData.Definition = ManaDef;
+				ManaItemCDO->ItemData.StackCount = 1;
+			}
+		}
+
+		FKismetEditorUtilities::CompileBlueprint(ManaBP);
+		SaveAsset(ManaBP, ManaBP->GetOutermost(), TEXT("/Game/Blueprints/BP_ManaPotion"));
+		UE_LOG(LogTemp, Display, TEXT("[DiabloTools] BP_ManaPotion: created and configured"));
+	}
 }
 
 // ---------------------------------------------------------------------------
