@@ -54,17 +54,18 @@ All C++ classes are `Abstract` with thin BP subclasses (`BP_` prefix) under `Con
 - `ADiabloEnemy : ACharacter` → `BP_DiabloEnemy` — AI via `ADiabloAIController` (tick-based state machine), archetypes, drop tables, XP rewards
 - `ADiabloAIController` — `EAIState` (Idle/Chase/Flee/Attack/Dead), `EDiabloEnemyArchetype` for behavior tuning
 - `ASpellProjectile` (Abstract) → `AFirebolt`, `AFireball`, `ALightningBolt` — `UProjectileMovementComponent`-based
-- `ADiabloDungeonGenerator` — runtime 40×40 procedural layout via `UTilePalette`, spawns enemies/items/stairs
+- `APortalActor` — `IInteractable`, bidirectional town↔dungeon teleport. `bReturnsToDungeon` determines direction
+- `ADiabloDungeonGenerator` — runtime 40×40 procedural layout via `UTilePalette`, spawns enemies/items/stairs. Single `Lvl_Dungeon` map reused for all 16 floors — floor index on GameInstance drives biome, palette, difficulty, and stair targets
 
 ### Key Data Types
 
 - `FDiabloStats` — HP/MaxHP/Mana/MaxMana/Str/Mag/Dex/Vit (shared by hero and enemies)
 - `UItemDefinition : UPrimaryDataAsset` — item template (stats, category, equip slot, `EItemUseEffect`, `ScrollSpell`)
 - `FItemInstance` — runtime item: `UItemDefinition*` + `TArray<FItemAffix>` + durability + stack count + `bIdentified`
-- `USpellDefinition : UPrimaryDataAsset` — spell template (mana cost, cooldown, damage, projectile class)
+- `USpellDefinition : UPrimaryDataAsset` — spell template (mana cost, cooldown, damage, `ESpellEffect` enum, projectile class). `ESpellEffect`: Projectile, Heal, AoE, TownPortal, Teleport, Debuff, Buff
 - `FAffixGenerator` — static utility, rolls magic items via `UAffixTable` data assets (`AT_Prefixes`/`AT_Suffixes`)
 - `UInventoryComponent` — 10×4 grid + 7 equip slots + 8 belt slots + gold. Broadcasts `FOnInventoryChanged`
-- `UDiabloGameInstance` — persists hero/inventory/spell state across `OpenLevel` transitions
+- `UDiabloGameInstance` — persists hero/inventory/spell state across `OpenLevel` transitions. Also stores `CurrentFloorIndex` (0=town, 1–16=dungeon) and Town Portal state (`bPortalActive`, `PortalFloorIndex`, `PortalDungeonLocation`, `PortalDungeonSeed`)
 - `UDiabloSaveGame` — serializes to disk via `SaveGameToSlot`, single slot `"DiabloSave"`
 
 ### UI Widgets (all Abstract, C++ widget trees via `RebuildWidget()`)
@@ -75,7 +76,7 @@ All C++ classes are `Abstract` with thin BP subclasses (`BP_` prefix) under `Con
 - `UDiabloInventoryPanel` — equipment row, 10×4 grid, belt row, gold. Drag-drop between grid/equip/belt. Hit-testing uses `GetTickSpaceGeometry()` (not `GetPaintSpaceGeometry`)
 - `UDiabloCharacterPanel` — stat display with + buttons for `UnspentStatPoints`
 - `UDiabloSpellbookPanel` — known spells list, RMB to bind active spell
-- `UDiabloShopPanel` — two-panel buy/sell via `UNPCShopData`
+- `UDiabloShopPanel` — two-panel buy/sell via `UNPCShopData`. Shows "Repair" button when NPC has `bCanRepair` (Griswold)
 - `UDiabloMainMenu` — pause menu (Resume/Save/Load). Save only in town
 - `UDiabloDialogWidget` — NPC dialog overlay
 
@@ -89,7 +90,10 @@ All C++ classes are `Abstract` with thin BP subclasses (`BP_` prefix) under `Con
 - **Affixes apply when equipped even if unidentified** (D1 behavior).
 - **`EItemUseEffect`** drives all consumable use: `RestoreHP`, `RestoreMana`, `RestoreBoth`, `CastSpell`.
 - **Belt** — potions/scrolls only (`IsBeltCompatible`). Scroll casting fires in hero's facing direction, no mana cost.
-- **`IInteractable`** UInterface — shared click→walk→interact for stairs and NPCs.
+- **`IInteractable`** UInterface — shared click→walk→interact for stairs, NPCs, and portals.
+- **Single dungeon map** — `Lvl_Dungeon` is one map reused for all 16 floors. `CurrentFloorIndex` on GameInstance drives everything: `ResolveFloorSettings()` selects biome palette (`TP_Cathedral`/`TP_Catacombs`/`TP_Caves`/`TP_Hell`), scales enemy count/difficulty, sets stair targets, and adjusts lighting. Floors are ephemeral (regenerated each visit, matching D1 behavior). Town stairs set floor index to 1 and open `Lvl_Dungeon`; dungeon stairs increment/decrement floor index and reload the same map.
+- **Town Portal seed preservation** — when Town Portal is cast, the current floor's seed is saved to GameInstance. When returning through the portal, `ResolveFloorSettings` pre-populates the GameMode seed map so the layout regenerates identically and the portal location is valid.
+- **Durability** — armor degrades on hit taken (`DegradeRandomArmor`), weapons on hit dealt (`DegradeWeapon`). Items at 0 durability provide no stats (`RecomputeDerivedStats` skips them via `IsItemBroken`). Griswold repairs for gold (5g per durability point missing).
 - **Widget BPs** must be created via `UWidgetBlueprintFactory` (not `FKismetEditorUtilities::CreateBlueprint`).
 - **`RebuildWidget()`** for widget tree setup — `NativeConstruct()` is too late for the Slate layer.
 - **`DefaultEngine.ini`** sets `RuntimeGeneration=Dynamic` for runtime navmesh from dungeon tiles.
@@ -120,14 +124,14 @@ All C++ classes are `Abstract` with thin BP subclasses (`BP_` prefix) under `Con
 
 **Setup** (create BP if needed + configure CDO defaults — one button per blueprint):
 
-`SetupHero`, `SetupController`, `SetupGameMode`, `SetupEnemy`, `SetupPotion`, `SetupHUD` (all 7 widget BPs), `SetupInventory` (10 item definitions with `UseEffect`/`ScrollSpell`), `SetupDropMaterial`, `SetupSpells` (5 spell definitions), `SetupShopData`, `SetupAffixes`, `SetupDungeonPalette`, `SetupAllBlueprints` (runs all). See `DiabloAssetGenerator.cpp` for per-method details.
+`SetupHero`, `SetupController`, `SetupGameMode`, `SetupEnemy`, `SetupPotion`, `SetupHUD` (all 7 widget BPs), `SetupInventory` (10 item definitions with `UseEffect`/`ScrollSpell`), `SetupDropMaterial`, `SetupSpells` (6 spell definitions including Town Portal), `SetupShopData`, `SetupAffixes`, `SetupAllDungeonPalettes` (4 biome palettes + 8 materials), `SetupAllBlueprints` (runs all). See `DiabloAssetGenerator.cpp` for per-method details.
 
 **World:**
 
 | Method | Behavior |
 |---|---|
-| `GenerateDefaultMap` | Creates `Lvl_Diablo` with PlayerStart, DirectionalLight, floor plane, NavMeshBoundsVolume, test enemy, healing potion, stairs to cathedral, 6 Tristram NPCs (Griswold, Adria, Pepin, Cain, Wirt, Ogden) with types and shop data — **always recreates** |
-| `GenerateCathedralMap` | Creates `Lvl_Cathedral_L1` with dim lighting, NavMeshBoundsVolume, and `ADiabloDungeonGenerator`; the generator spawns the seeded 40x40 Cathedral layout, enemies, potion, and return stairs at runtime — **always recreates** |
+| `GenerateDefaultMap` | Creates `Lvl_Diablo` with PlayerStart, DirectionalLight, floor plane, NavMeshBoundsVolume, test enemy, healing potion, stairs to dungeon floor 1, 6 Tristram NPCs (Griswold with `bCanRepair`, Adria, Pepin, Cain, Wirt, Ogden) — **always recreates** |
+| `GenerateDungeonMap` | Creates `Lvl_Dungeon` — single reusable map with dim lighting, NavMeshBoundsVolume, and `ADiabloDungeonGenerator`. The generator reads `CurrentFloorIndex` from GameInstance at runtime to select biome palette, difficulty, and stair targets — **always recreates** |
 | `GenerateInputAssets` | Creates/updates IA_Click/Cast/CharPanel/Inventory/Spellbook/Menu/Belt1..8/Move/Look and IMC_Diablo — **updates in place** |
 
 **Do not attempt programmatic AnimBP generation.** State machine graph construction via K2 nodes is too fragile (wrong pin names, function reference ordering, MinimalAPI exports). AnimBPs are the one asset type authored manually in the editor.
