@@ -37,6 +37,7 @@
 #include "Sound/SoundWave.h"
 #include "Materials/Material.h"
 #include "Materials/MaterialExpressionTextureSample.h"
+#include "Materials/MaterialExpressionConstant3Vector.h"
 #include "Materials/MaterialExpressionTextureSampleParameter2D.h"
 #include "WidgetBlueprint.h"
 #include "WidgetBlueprintFactory.h"
@@ -66,6 +67,7 @@ void FDiabloAssetGenerator::GenerateAllAssets()
 {
 	SetupAllBlueprints();
 	GenerateDefaultMap();
+	GenerateDungeonMap();
 	GenerateInputAssets();
 	ImportWarriorFBX();
 	ImportLevelUpSFX();
@@ -147,7 +149,7 @@ void FDiabloAssetGenerator::SetupAllBlueprints()
 	SetupSpells();
 	SetupShopData();
 	SetupAffixes();
-	SetupDungeonPalette();
+	SetupAllDungeonPalettes();
 }
 
 void FDiabloAssetGenerator::SetupDungeonPalette()
@@ -191,6 +193,179 @@ void FDiabloAssetGenerator::SetupDungeonPalette()
 		NotifyAssetCreated(Palette);
 		UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Created/updated dungeon tile palette: %s"), *FullPath);
 	}
+}
+
+UMaterial* FDiabloAssetGenerator::CreateBiomeMaterial(const FString& PackagePath,
+	const FString& AssetName, const FLinearColor& Color)
+{
+	const FString ObjPath = PackagePath + TEXT(".") + AssetName;
+	UMaterial* Existing = LoadObject<UMaterial>(nullptr, *ObjPath);
+	if (Existing)
+	{
+		return Existing;
+	}
+
+	UPackage* Package = CreatePackage(*PackagePath);
+	Package->FullyLoad();
+	UMaterial* Mat = NewObject<UMaterial>(Package, *AssetName, RF_Public | RF_Standalone);
+	Mat->MaterialDomain = EMaterialDomain::MD_Surface;
+	Mat->BlendMode = EBlendMode::BLEND_Opaque;
+	Mat->SetShadingModel(EMaterialShadingModel::MSM_DefaultLit);
+
+	UMaterialExpressionConstant3Vector* ColorNode =
+		NewObject<UMaterialExpressionConstant3Vector>(Mat);
+	ColorNode->Constant = Color;
+	Mat->GetEditorOnlyData()->ExpressionCollection.Expressions.Add(ColorNode);
+	Mat->GetEditorOnlyData()->BaseColor.Connect(0, ColorNode);
+
+	Mat->PreEditChange(nullptr);
+	Mat->PostEditChange();
+
+	SaveAsset(Mat, Package, PackagePath);
+	NotifyAssetCreated(Mat);
+	return Mat;
+}
+
+void FDiabloAssetGenerator::SetupAllDungeonPalettes()
+{
+	struct FBiomeDef
+	{
+		FString Name;
+		FLinearColor FloorColor;
+		FLinearColor WallColor;
+	};
+
+	const TArray<FBiomeDef> Biomes = {
+		{ TEXT("Cathedral"),  FLinearColor(0.35f, 0.30f, 0.25f), FLinearColor(0.40f, 0.35f, 0.30f) },
+		{ TEXT("Catacombs"),  FLinearColor(0.25f, 0.25f, 0.30f), FLinearColor(0.30f, 0.28f, 0.35f) },
+		{ TEXT("Caves"),      FLinearColor(0.30f, 0.22f, 0.15f), FLinearColor(0.35f, 0.25f, 0.18f) },
+		{ TEXT("Hell"),       FLinearColor(0.50f, 0.10f, 0.05f), FLinearColor(0.60f, 0.12f, 0.08f) },
+	};
+
+	for (const FBiomeDef& Biome : Biomes)
+	{
+		const FString FloorMatPath = FString::Printf(TEXT("/Game/Dungeons/M_Floor_%s"), *Biome.Name);
+		const FString FloorMatName = FString::Printf(TEXT("M_Floor_%s"), *Biome.Name);
+		UMaterial* FloorMat = CreateBiomeMaterial(FloorMatPath, FloorMatName, Biome.FloorColor);
+
+		const FString WallMatPath = FString::Printf(TEXT("/Game/Dungeons/M_Wall_%s"), *Biome.Name);
+		const FString WallMatName = FString::Printf(TEXT("M_Wall_%s"), *Biome.Name);
+		UMaterial* WallMat = CreateBiomeMaterial(WallMatPath, WallMatName, Biome.WallColor);
+
+		const FString PaletteName = FString::Printf(TEXT("TP_%s"), *Biome.Name);
+		const FString PalettePath = FString::Printf(TEXT("/Game/Dungeons/%s"), *PaletteName);
+		const FString PaletteObjPath = PalettePath + TEXT(".") + PaletteName;
+
+		UTilePalette* Palette = LoadObject<UTilePalette>(nullptr, *PaletteObjPath);
+		if (!Palette)
+		{
+			UPackage* Package = CreatePackage(*PalettePath);
+			Package->FullyLoad();
+			Palette = NewObject<UTilePalette>(Package, *PaletteName, RF_Public | RF_Standalone);
+		}
+
+		if (!Palette) continue;
+
+		Palette->TileSize = 300.f;
+		Palette->Entries.Empty();
+
+		FTilePaletteEntry FloorEntry;
+		FloorEntry.TileType = EDungeonTileType::Floor;
+		FloorEntry.ActorClass = ADungeonTile::StaticClass();
+		FloorEntry.Scale = FVector(3.f, 3.f, 0.1f);
+		FloorEntry.LocationOffset = FVector(0.f, 0.f, -5.f);
+		FloorEntry.Material = FloorMat;
+		Palette->Entries.Add(FloorEntry);
+
+		FTilePaletteEntry WallEntry;
+		WallEntry.TileType = EDungeonTileType::Wall;
+		WallEntry.ActorClass = ADungeonTile::StaticClass();
+		WallEntry.Scale = FVector(3.f, 3.f, 2.f);
+		WallEntry.LocationOffset = FVector(0.f, 0.f, 100.f);
+		WallEntry.Material = WallMat;
+		Palette->Entries.Add(WallEntry);
+
+		if (SaveAsset(Palette, Palette->GetOutermost(), PalettePath))
+		{
+			NotifyAssetCreated(Palette);
+			UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Created/updated palette: %s"), *PalettePath);
+		}
+	}
+}
+
+void FDiabloAssetGenerator::GenerateDungeonMap()
+{
+	const FString MapPackagePath = TEXT("/Game/Maps/Lvl_Dungeon");
+
+	UWorld* NewWorld = UEditorLoadingAndSavingUtils::NewBlankMap(false);
+	if (!NewWorld)
+	{
+		UE_LOG(LogTemp, Error, TEXT("[DiabloTools] Failed to create blank dungeon map"));
+		return;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+	UBlueprint* GameModeBP = LoadObject<UBlueprint>(nullptr,
+		TEXT("/Game/Blueprints/BP_DiabloGameMode.BP_DiabloGameMode"));
+	if (GameModeBP && GameModeBP->GeneratedClass)
+	{
+		AWorldSettings* WS = NewWorld->GetWorldSettings();
+		if (WS)
+		{
+			WS->DefaultGameMode = GameModeBP->GeneratedClass;
+		}
+	}
+
+	NewWorld->SpawnActor<APlayerStart>(APlayerStart::StaticClass(),
+		FTransform(FVector(0.f, 0.f, 100.f)), SpawnParams);
+
+	ADirectionalLight* Sun = NewWorld->SpawnActor<ADirectionalLight>(
+		ADirectionalLight::StaticClass(), FTransform::Identity, SpawnParams);
+	if (Sun)
+	{
+		Sun->SetActorRotation(FRotator(-60.f, -45.f, 0.f));
+		if (UDirectionalLightComponent* LC = Sun->FindComponentByClass<UDirectionalLightComponent>())
+		{
+			LC->SetIntensity(2.f);
+		}
+	}
+
+	SpawnNavMeshVolume(NewWorld);
+
+	ADiabloDungeonGenerator* Generator = NewWorld->SpawnActor<ADiabloDungeonGenerator>(
+		ADiabloDungeonGenerator::StaticClass(), FTransform::Identity, SpawnParams);
+	if (Generator)
+	{
+		UBlueprint* EnemyBP = LoadObject<UBlueprint>(nullptr,
+			TEXT("/Game/Blueprints/BP_DiabloEnemy.BP_DiabloEnemy"));
+		if (EnemyBP && EnemyBP->GeneratedClass)
+		{
+			Generator->EnemyClass = EnemyBP->GeneratedClass;
+		}
+
+		UBlueprint* PotionBP = LoadObject<UBlueprint>(nullptr,
+			TEXT("/Game/Blueprints/BP_HealingPotion.BP_HealingPotion"));
+		if (PotionBP && PotionBP->GeneratedClass)
+		{
+			Generator->HealingPotionClass = PotionBP->GeneratedClass;
+		}
+
+		Generator->SetActorLabel(TEXT("Runtime_Dungeon_Generator"));
+		UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Dungeon: placed runtime generator"));
+	}
+
+	if (UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(NewWorld))
+	{
+		NavSys->Build();
+	}
+
+	const FString FilePath = FPackageName::LongPackageNameToFilename(
+		MapPackagePath, FPackageName::GetMapPackageExtension());
+	FEditorFileUtils::SaveMap(NewWorld, FilePath);
+
+	UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Created dungeon map: %s"), *MapPackagePath);
 }
 
 void FDiabloAssetGenerator::GenerateDefaultMap()
@@ -251,10 +426,11 @@ void FDiabloAssetGenerator::GenerateDefaultMap()
 		ADungeonStairs::StaticClass(), FTransform(FVector(-400.f, 0.f, 50.f)), SpawnParams);
 	if (DownStairs)
 	{
-		DownStairs->TargetLevelName = FName("Lvl_Cathedral_L1");
+		DownStairs->TargetLevelName = FName("Lvl_Dungeon");
+		DownStairs->TargetFloorIndex = 1;
 		DownStairs->SetActorScale3D(FVector(1.5f, 1.5f, 0.5f));
 		DownStairs->SetActorLabel(TEXT("Stairs_Down"));
-		UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Spawned stairs to Cathedral"));
+		UE_LOG(LogTemp, Display, TEXT("[DiabloTools] Spawned stairs to dungeon floor 1"));
 	}
 
 	// Spawn Tristram NPCs

@@ -44,186 +44,55 @@ IntelliSense errors like `cannot open source file "X.h"` are usually false posit
 
 ## Architecture
 
-### Core Classes (M1)
+All C++ classes are `Abstract` with thin BP subclasses (`BP_` prefix) under `Content/Blueprints/`. Widget trees are built in C++ via `RebuildWidget()`, not the UMG designer.
 
-- `ADiabloGameMode` (Abstract) — sets `DefaultPawnClass` and `PlayerControllerClass` to C++ bases; BP subclass `BP_DiabloGameMode` overrides to BP versions
-- `ADiabloHero : ACharacter` (Abstract) — isometric camera via `USpringArmComponent` (pitch -45°, yaw 225°, arm 1800, no collision test) + `UCameraComponent` (orthographic, OrthoWidth 2048). Capsule sized to 90 half-height, mesh offset -90 Z to align feet with capsule bottom. Uses `FDiabloStats` (HP 70/70 Warrior defaults). `TakeDamage` override → `Die()` on HP <= 0. `Heal(Amount)` for pickups. `IsDead()` check.
-- `ADiabloPlayerController` (Abstract) — Enhanced Input click-to-move, click-to-attack, click-to-pickup. LMB on ground → `SimpleMoveToLocation`; LMB on enemy → stores `TargetEnemy`, walks into `AttackRange`, then calls `Hero->StartAttack()`; LMB on `ADroppedItem` → walks into `PickupRange`, calls `OnPickedUp`. UPROPERTY slots for `ClickAction` and `DefaultMappingContext` assigned via BP. `OnHeroDeath()` → disable input, 2s timer → `RestartPlayer` at `PlayerStart`.
-- `UDiabloAnimInstance` (Abstract) — exposes `float Speed` from pawn velocity in `NativeUpdateAnimation`. AnimBP `ABP_Warrior` parents to this class (manual editor creation)
+### Class Hierarchy
 
-### Combat (M2)
+- `ADiabloGameMode` → `BP_DiabloGameMode` — sets pawn/controller classes
+- `ADiabloHero : ACharacter` → `BP_DiabloHero` — orthographic isometric camera, `FDiabloStats`, `UInventoryComponent`, spell system, XP/leveling
+- `ADiabloPlayerController` → `BP_DiabloPlayerController` — click-to-move/attack/interact, owns all UI widgets, belt hotkeys 1–8
+- `ADiabloEnemy : ACharacter` → `BP_DiabloEnemy` — AI via `ADiabloAIController` (tick-based state machine), archetypes, drop tables, XP rewards
+- `ADiabloAIController` — `EAIState` (Idle/Chase/Flee/Attack/Dead), `EDiabloEnemyArchetype` for behavior tuning
+- `ASpellProjectile` (Abstract) → `AFirebolt`, `AFireball`, `ALightningBolt` — `UProjectileMovementComponent`-based
+- `ADiabloDungeonGenerator` — runtime 40×40 procedural layout via `UTilePalette`, spawns enemies/items/stairs
 
-- `ADiabloHero::StartAttack()` — plays `AttackMontage` via the DefaultSlot in the AnimBP. Sets `AttackTarget` so the notify knows who to damage. `bIsAttacking` flag prevents re-triggering mid-swing.
-- `UAnimNotify_Attack` (DisplayName "Melee Attack Trace") — fires on a montage keyframe. Reads `AttackTarget` from either `ADiabloHero` or `ADiabloEnemy`. Hero→enemy: computes D1 To-Hit% (`50 + Dex/2 + CharLevel - MonsterAC + (CharLevel - MonsterLevel)`, clamped 5–95%), rolls, then deals `BaseDamage + Str/5`. Enemy→hero: flat `Damage` reduced by hero AC (`Dex/5`, min 1). Guards against dead targets.
-- `ADiabloEnemy : ACharacter` (Abstract) — uses `FDiabloStats` for HP. `TakeDamage` override; on death plays `DeathMontage`, disables collision, delays `Destroy()` by montage duration + 2s. Has `StartAttack(Target)`, `AttackMontage`, `AttackTarget` for AI-driven attacks. Capsule explicitly blocks `ECC_Visibility` for cursor click detection.
-- `AM_Attack` (AnimMontage) — manually authored in editor from `Warrior_Anim_Attack`. Contains Melee Attack Trace notify at the hit frame plus optional PlaySound notifies for SwordSwing/SwordHit.
-- `AM_Death` (AnimMontage) — manually authored in editor from `Warrior_Anim_Death`. `bEnableAutoBlendOut = false` so the death pose holds. Used by both hero and enemy.
+### Key Data Types
 
-### Enemy AI (M3, M19)
+- `FDiabloStats` — HP/MaxHP/Mana/MaxMana/Str/Mag/Dex/Vit (shared by hero and enemies)
+- `UItemDefinition : UPrimaryDataAsset` — item template (stats, category, equip slot, `EItemUseEffect`, `ScrollSpell`)
+- `FItemInstance` — runtime item: `UItemDefinition*` + `TArray<FItemAffix>` + durability + stack count + `bIdentified`
+- `USpellDefinition : UPrimaryDataAsset` — spell template (mana cost, cooldown, damage, projectile class)
+- `FAffixGenerator` — static utility, rolls magic items via `UAffixTable` data assets (`AT_Prefixes`/`AT_Suffixes`)
+- `UInventoryComponent` — 10×4 grid + 7 equip slots + 8 belt slots + gold. Broadcasts `FOnInventoryChanged`
+- `UDiabloGameInstance` — persists hero/inventory/spell state across `OpenLevel` transitions
+- `UDiabloSaveGame` — serializes to disk via `SaveGameToSlot`, single slot `"DiabloSave"`
 
-- `ADiabloAIController : AAIController` — tick-based state machine with `EAIState` enum (Idle / Chase / Flee / Attack / Dead). `FindTarget()` returns the player pawn (returns `nullptr` if hero is dead). Uses per-enemy `AggroRange`, `AttackRange`, `PreferredRange`, and `LeashRange`. Uses `MoveToActor` / `MoveToLocation` for pathfinding (only issued when `GetMoveStatus() != Moving` to prevent stutter).
-- `ADiabloEnemy` sets `AIControllerClass = ADiabloAIController` and `AutoPossessAI = PlacedInWorldOrSpawned` in constructor.
-- `EDiabloEnemyArchetype` on `ADiabloEnemy` drives lightweight behavior tuning: `MeleeGrunt`, `FastMelee`, `RangedArcher`, `Spellcaster`, `Summoner`, `FallenCoward`. `ConfigureArchetype()` calls `ApplyArchetypeDefaults()` to set HP, movement speed, attack range, preferred range, cooldowns, flee threshold, projectile damage/speed, and summon caps.
-- Ranged/caster/summoner enemies use `StartSpecialAttack()` and `FireProjectileAt()`; enemy projectiles set `bDamageEnemies = false` and `bDamageHero = true` on `ASpellProjectile`.
-- Summoners use `TrySummonMinion()` to spawn weak melee minions under `MaxSummons`; minions are marked `bIsSummonedMinion`, grant no XP, and drop no loot.
-- Fallen-style cowards use `ShouldFlee()` at low HP. The controller enters `Flee` once for the low-health retreat, while ranged archetypes can also briefly flee/reposition when the hero gets too close.
-- `ADiabloDungeonGenerator` cycles spawned Cathedral enemies through the archetype list and assigns `SummonClass = EnemyClass` so summoners can spawn minions from the same BP class.
+### UI Widgets (all Abstract, C++ widget trees via `RebuildWidget()`)
 
-### HP + Death + Respawn (M4)
+`ADiabloPlayerController` creates and owns all widgets in `CreateHUD()`. Toggle keys: **I** inventory, **C** character, **S** spellbook, **ESC** menu.
 
-- `FDiabloStats` ([DiabloStats.h](Source/Diablo/DiabloStats.h)) — USTRUCT with HP/MaxHP/Mana/MaxMana/Str/Mag/Dex/Vit. Used by both `ADiabloHero` and `ADiabloEnemy`. All fields active as of M6.
-- **Hero death:** `TakeDamage` → `Die()` → disable movement, play `DeathMontage` → controller `OnHeroDeath()` → `DisableInput`, 2s `FTimerHandle` → `UnPossess` + `Destroy` dead pawn → `AGameModeBase::RestartPlayer` spawns fresh hero at `PlayerStart` with full HP → `EnableInput`.
-- **Enemy death:** `TakeDamage` → HP <= 0 → disable collision + movement, play `DeathMontage` → delayed `Destroy()` after montage + 2s corpse linger.
-- `ADroppedItem : AActor` ([DroppedItem.h](Source/Diablo/DroppedItem.h)) — `UStaticMeshComponent` root (plane mesh with sprite material, rotated to face isometric camera) that blocks `ECC_Visibility` for cursor detection. `HealAmount = 50`. `OnPickedUp(Hero)` adds `ItemData` to inventory if valid, else falls back to heal-and-destroy. `InitFromItem(FItemInstance)` configures mesh + dynamic material for runtime-spawned drops. BP subclass `BP_HealingPotion` uses `T_HealingPotion` sprite from SVG pipeline.
+- `UDiabloHUDWidget` — life/mana globes, XP bar, level text, 8 belt slots. Event-driven via `FOnStatsChanged` + `FOnInventoryChanged`
+- `UDiabloInventoryPanel` — equipment row, 10×4 grid, belt row, gold. Drag-drop between grid/equip/belt. Hit-testing uses `GetTickSpaceGeometry()` (not `GetPaintSpaceGeometry`)
+- `UDiabloCharacterPanel` — stat display with + buttons for `UnspentStatPoints`
+- `UDiabloSpellbookPanel` — known spells list, RMB to bind active spell
+- `UDiabloShopPanel` — two-panel buy/sell via `UNPCShopData`
+- `UDiabloMainMenu` — pause menu (Resume/Save/Load). Save only in town
+- `UDiabloDialogWidget` — NPC dialog overlay
 
-### HUD (M5)
+### Key Design Decisions (non-obvious, not derivable from code)
 
-- `UDiabloHUDWidget : UUserWidget` ([DiabloHUDWidget.h](Source/Diablo/DiabloHUDWidget.h)) (Abstract) — builds widget tree in `RebuildWidget()` override (not `NativeConstruct` — that's too late for the Slate layer). Red life globe (bottom-left, `UProgressBar` BottomToTop fill), blue mana globe (bottom-right), gold XP bar (bottom-center, stretches between globes), level text (centered above XP bar). **Event-driven** via `FOnStatsChanged` delegate — no `NativeTick` polling.
-- `ADiabloPlayerController` owns the HUD: `HUDWidgetClass` UPROPERTY (set via `SetupHUD` editor tool → `BP_DiabloHUD`). `CreateHUD()` in `BeginPlay` → `CreateWidget` + `AddToViewport`. `OnHeroDeath()` collapses widget. `OnPossess()` re-binds to new hero and shows widget after respawn.
-- `BP_DiabloHUD` — Widget Blueprint created via `UWidgetBlueprintFactory` (not `FKismetEditorUtilities::CreateBlueprint` — widget BPs need the proper factory). No event-graph nodes — exists purely as an asset reference for `HUDWidgetClass`.
-
-**Do not generate Widget Blueprints programmatically via the UMG designer graph** — same fragility as AnimBPs. Build widget trees in C++ (UCanvasPanel + UProgressBar + USizeBox), use the BP only as a thin subclass. Use `RebuildWidget()` to populate the widget tree before Slate construction, not `NativeConstruct()`.
-
-### XP + Leveling (M6)
-
-- `FOnStatsChanged` multicast delegate on `ADiabloHero` — broadcast from `TakeDamage`, `Heal`, `AwardXP`. HUD subscribes via `AddUObject` in `InitForHero`, unsubscribes in `NativeDestruct`. No polling.
-- **XP table:** `GetXPTable()` returns a static `TArray<int64>` with 51 entries (indices 0–50). Quartic curve approximation: `Table[L] = Table[L-1] + 2000 * L^3 / 4`. Uses `int64` because L49→50 exceeds `int32` max.
-- **Level-up:** `AwardXP` loops `while (CurrentXP >= GetXPForNextLevel())` → `LevelUp()` grants +5 `UnspentStatPoints`, calls `RecomputeDerivedStats()`, restores HP/Mana to full, plays `LevelUpSound`. Level cap 50.
-- **Derived stats:** `RecomputeDerivedStats()` computes `MaxHP = 70 + (Vit-25)*2 + (Level-1)*2`, `MaxMana = 10 + (Mag-10)*1 + (Level-1)*1` (Warrior formulae). Called on level-up; will also be called from equip/unequip in M9.
-- **Warrior starting stats:** Str 30, Mag 10, Dex 20, Vit 25, HP 70/70, Mana 10/10 (D1 reference). Class caps: Str 250, Mag 50, Dex 60, Vit 100.
-- **Enemy XP:** `ADiabloEnemy` has `XPReward` (default 100) and `MonsterLevel` (default 1). On death, awards XP to player hero if `CharLevel - MonsterLevel < 10` (D1 zeroing rule).
-- `LevelUpSound` — `USoundWave` UPROPERTY on hero, set via `SetupHero`. Generated by `Tools/audio/levelup_sfx.py`, imported via `ImportLevelUpSFX`.
-- **Stat allocation:** `SpendStatPoint(FName)` increments one stat by 1, decrements `UnspentStatPoints`, respects Warrior class caps, calls `RecomputeDerivedStats` + broadcasts `OnStatsChanged`.
-- `UDiabloCharacterPanel : UUserWidget` ([DiabloCharacterPanel.h](Source/Diablo/DiabloCharacterPanel.h)) (Abstract) — C++ widget tree (VerticalBox with stat rows, + buttons, HP/Mana display). Toggle via **C key** (`IA_CharPanel`). + buttons hidden when no unspent points. Event-driven via `FOnStatsChanged`.
-- `ADiabloPlayerController` owns the character panel: `CharPanelClass` UPROPERTY (set via `SetupHUD` → `BP_DiabloCharPanel`). Toggle in `OnToggleCharPanel()` switches between `Collapsed` / `Visible` + `GameAndUI` input mode.
-
-### Inventory (M7)
-
-- `UItemDefinition : UPrimaryDataAsset` ([ItemDefinition.h](Source/Diablo/ItemDefinition.h)) — icon, display name, grid size (w×h), stackable, equip slot, category (`EItemCategory`), base stats (BonusStr/Mag/Dex/Vit, MinDamage/MaxDamage, ArmorClass), durability, gold value, heal amount. Data assets live under `Content/Items/Definitions/` (prefix `ID_`).
-- `FItemInstance` ([ItemInstance.h](Source/Diablo/ItemInstance.h)) — `UItemDefinition*` + `TArray<FItemAffix>` (empty for now, M17) + current durability + stack count.
-- `EEquipSlot` — Head, Chest, LeftHand, RightHand, LeftRing, RightRing, Amulet (7 slots).
-- `EItemCategory` — Misc, Weapon, Armor, Shield, Helm, Ring, Amulet, Potion, Scroll, Gold.
-- `UInventoryComponent : UActorComponent` ([InventoryComponent.h](Source/Diablo/InventoryComponent.h)) — 10×4 grid, 7 equipment slots (`TMap<EEquipSlot, FItemInstance>`), gold. Occupancy grid tracks multi-cell items. API: `TryAddItem`, `TryAddItemAt`, `MoveItem`, `RemoveItemAt`, `Equip`, `Unequip`, `UseItem`, `AddGold`, `SpendGold`. `UseItem` consumes potions (heal + decrement stack) or falls back to `Equip` for equippable items. Broadcasts `FOnInventoryChanged` delegate.
-- `ADiabloHero` has `UInventoryComponent* Inventory` (created in constructor via `CreateDefaultSubobject`). Starting gold: 200.
-- `ADroppedItem` has `FItemInstance ItemData` — if valid, `OnPickedUp` adds to inventory via `TryAddItem`; if invalid, falls back to legacy `HealAmount` heal-and-destroy.
-- `UDiabloInventoryPanel : UUserWidget` ([DiabloInventoryPanel.h](Source/Diablo/DiabloInventoryPanel.h)) (Abstract) — C++ widget tree (hover item name, equipment slots row, 10×4 grid, gold display). Toggle via **I key** (`IA_Inventory`). Drag-drop via panel-level `NativeOnMouseButtonDown`/`NativeOnDragDetected`/`NativeOnDrop` with `UInventoryDragDrop` operation. Right-click uses items (potions consume, equippables equip) or unequips (equipment slot). `NativeOnMouseMove` updates gold hover text with item name. Hit-testing uses `GetTickSpaceGeometry().AbsoluteToLocal()` (not `GetPaintSpaceGeometry` — coordinate space mismatch). Event-driven via `FOnInventoryChanged`.
-- `ADiabloPlayerController` owns the inventory panel: `InventoryPanelClass` UPROPERTY (set via `SetupHUD` → `BP_DiabloInventoryPanel`), `InventoryAction` (set via `SetupController` → `IA_Inventory`). Toggle in `OnToggleInventory()`.
-- Icon sprites generated via SVG pipeline (`Tools/svg/`) → Inkscape CLI conversion → imported via `ImportItemIcons`.
-- `SetupInventory` creates starter `UItemDefinition` data assets (Short Sword, Buckler, Skull Cap, Rags, Ring of Strength, Healing Potion) with icon texture references.
-
-### Loot Drops (M8)
-
-- `FDropTableEntry` struct ([DiabloEnemy.h](Source/Diablo/DiabloEnemy.h)) — `UItemDefinition*` + `DropChance` (0–1 roll) + `Weight` (for future weighted selection).
-- `ADiabloEnemy` has `TArray<FDropTableEntry> DropTable`. On death, `SpawnDrops()` iterates entries, rolls `DropChance`, and spawns `ADroppedItem` at the enemy's location with a random XY offset.
-- `ADroppedItem::InitFromItem(FItemInstance)` — sets `ItemData` and configures the mesh component (plane mesh with `M_ItemDrop` dynamic material instance using the item's icon texture).
-- `M_ItemDrop` — unlit translucent material with a `TextureSampleParameter2D` named "Texture", created by `SetupDropMaterial`. Used at runtime via `UMaterialInstanceDynamic::SetTextureParameterValue`.
-- `ADroppedItem` is no longer `Abstract` — can be spawned directly at runtime for loot drops. `BP_HealingPotion` still exists as a hand-placed subclass.
-- `SetupEnemy` configures `BP_DiabloEnemy` drop table: Healing Potion (50%), Short Sword (25%), Ring of Strength (15%).
-
-### Equipment Stats (M9)
-
-- `Equip` / `Unequip` in `UInventoryComponent` call `ADiabloHero::RecomputeDerivedStats()` + broadcast `OnStatsChanged` so the HUD updates immediately.
-- `RecomputeDerivedStats()` iterates all equipped `FItemInstance`s, sums `BonusStr/Mag/Dex/Vit` (applied to MaxHP/MaxMana formulae), and populates `EquipMinDamage`/`EquipMaxDamage`/`ArmorFromEquipment` via `switch` on `EItemCategory` (Weapon → damage range, Armor/Shield/Helm → AC, Ring/Amulet → flat bonuses only).
-- **Hero attack damage:** `UAnimNotify_Attack` checks `EquipMaxDamage > 0` — if a weapon is equipped, rolls `FRandRange(EquipMinDamage, EquipMaxDamage) + Str/5`; unarmed falls back to the notify's flat `Damage + Str/5`.
-- **Hero AC:** `TakeDamage` uses `Dex/5 + ArmorFromEquipment` to reduce incoming damage (min 1).
-- No polymorphic dispatch — item categories are an enum, stat contributions are fields on `UItemDefinition`.
-
-### Spells (M10–M11)
-
-- `USpellDefinition : UPrimaryDataAsset` ([SpellDefinition.h](Source/Diablo/SpellDefinition.h)) — data-driven spell: `DisplayName`, `ManaCost`, `Cooldown`, `Damage`, `ProjectileClass` (`TSubclassOf<ASpellProjectile>`), `bIsProjectile`, `HealAmount`. Data assets live under `Content/Spells/Definitions/` (prefix `SD_`).
-- `ASpellProjectile : AActor` ([SpellProjectile.h](Source/Diablo/SpellProjectile.h)) (Abstract) — base projectile with `USphereComponent` (overlap-all-dynamic), `UProjectileMovementComponent` (zero gravity, rotation follows velocity). `OnOverlap` damages enemies and destroys self. `InitialLifeSpan = 5s`.
-- **Projectile subclasses:** `AFirebolt` (small sphere, fast), `AFireball` (large sphere, slow, high damage), `ALightningBolt` (narrow cube, very fast). Each sets its own mesh placeholder in constructor.
-- **Instant spells:** Nova (AoE `OverlapMultiByChannel` within 500 units, damages all enemies), Healing (calls `Heal()` on self). Dispatched via `bIsProjectile` / `HealAmount` in `CastSpell`.
-- `ADiabloHero::KnownSpells` — `TArray<USpellDefinition*>`, set via `SetupHero` from spell definitions. `ActiveSpell` is the currently bound RMB spell. `SetActiveSpell()` changes it.
-- `ADiabloHero::CastSpell(TargetLocation)` — reads `ManaCost`/`Cooldown` from `ActiveSpell`. Checks mana, checks cooldown, deducts mana. For projectiles: spawns from `ProjectileClass`, overrides `Damage` from the definition. For instant: heals or does AoE. `SpellCooldownRemaining` decremented in `Tick`.
-- **RMB cast:** `IA_Cast` mapped to RMB. `ADiabloPlayerController::OnCastStarted()` traces cursor, calls `CastSpell(ImpactPoint)`.
-- `UDiabloSpellbookPanel : UUserWidget` ([DiabloSpellbookPanel.h](Source/Diablo/DiabloSpellbookPanel.h)) (Abstract) — C++ widget tree listing known spells. Toggle via **S key** (`IA_Spellbook`). RMB-click a spell to bind it to the active (RMB) slot. Active spell highlighted in gold. Anchored top-right.
-- `SetupSpells` creates 5 `USpellDefinition` data assets: Firebolt, Fireball, Lightning, Nova, Healing.
-
-### Dungeon + Level Transitions (M12)
-
-- `ADungeonStairs : AActor` ([DungeonStairs.h](Source/Diablo/DungeonStairs.h)) — cube mesh that blocks `ECC_Visibility` for cursor click detection. `TargetLevelName` (FName) set per-instance. `OnInteract()` calls `UGameplayStatics::OpenLevel`. Click-to-interact uses the same walk-into-range pattern as enemies/items; `InteractRange = 200`.
-- `ADiabloPlayerController` has `TargetInteractable` (`TObjectPtr<AActor>`) — click any `IInteractable` actor (stairs, NPCs) → walk into range → `Interact()` via interface. Checked in `Tick` before items/enemies.
-- `Lvl_Diablo` (town) has `Stairs_Down` pointing to `Lvl_Cathedral_L1`. Cathedral has `Stairs_Up` pointing back to `Lvl_Diablo`.
-- `GenerateCathedralMap` creates `Lvl_Cathedral_L1` with dim lighting, NavMeshBoundsVolume, and a runtime `ADiabloDungeonGenerator`. The generator now spawns the Cathedral floor/walls, enemies, potion, and return stairs in `BeginPlay()`.
-- `GenerateDefaultMap` calls `UNavigationSystemV1::Build()` before saving. Cathedral navigation is dynamic because the dungeon geometry is spawned at runtime.
-
-### Persistent State (M13)
-
-- `UDiabloGameInstance : UGameInstance` ([DiabloGameInstance.h](Source/Diablo/DiabloGameInstance.h)) — persists across `OpenLevel` transitions. Holds `bHasSavedState` flag, `SavedStats`, `SavedCharLevel`, `SavedCurrentXP`, `SavedUnspentStatPoints`, full inventory state (grid items, occupancy, equipped items, gold), `SavedKnownSpells`, `SavedActiveSpell`.
-- `ADiabloHero::SaveToGameInstance()` — copies all hero + inventory state into the `UDiabloGameInstance`. Called by `ADungeonStairs::OnInteract()` just before `OpenLevel`.
-- `ADiabloHero::BeginPlay()` → `LoadFromGameInstance()` — if `bHasSavedState` is true, restores stats, inventory, and spells from the GameInstance. Called automatically when the hero spawns in a new level.
-- `UInventoryComponent::RestoreState()` — bulk-replaces grid items, occupancy, equipped items, and gold.
-- `GameInstanceClass` set in `DefaultEngine.ini` → `/Script/Diablo.DiabloGameInstance`.
-
-### Save / Load (M14)
-
-- `UDiabloSaveGame : USaveGame` ([DiabloSaveGame.h](Source/Diablo/DiabloSaveGame.h)) — serializes all hero state to disk via `SaveGameToSlot`. Mirrors `UDiabloGameInstance` fields (stats, level, XP, inventory, spells). Single save slot `"DiabloSave"` at user index 0.
-- `PopulateFromGameInstance()` copies GameInstance → save. `ApplyToGameInstance()` copies save → GameInstance (sets `bHasSavedState = true`).
-- `UDiabloMainMenu : UUserWidget` ([DiabloMainMenu.h](Source/Diablo/DiabloMainMenu.h)) (Abstract) — pause menu toggled via **ESC key** (`IA_Menu`). C++ widget tree: dark overlay, centered box with Resume / Save / Load buttons. Save enabled only in town (`Lvl_Diablo`). Load enabled only when a save exists on disk.
-- `ADiabloPlayerController` owns the menu: `MainMenuClass` UPROPERTY (set via `SetupHUD` → `BP_DiabloMainMenu`). `OnToggleMainMenu()` closes other panels, pauses game, shows menu. `CloseMainMenu()` hides menu, unpauses.
-- **Save flow:** `Hero->SaveToGameInstance()` → `UDiabloSaveGame::PopulateFromGameInstance(GI)` → `SaveGameToSlot` → close menu.
-- **Load flow:** `LoadGameFromSlot` → `UDiabloSaveGame::ApplyToGameInstance(GI)` → close menu → `OpenLevel("Lvl_Diablo")` → hero restores from GameInstance in `BeginPlay`.
-- `TObjectPtr<UItemDefinition>` and `TObjectPtr<USpellDefinition>` serialize as asset paths via UE's `FObjectAndNameAsStringProxyArchive` — data assets at fixed paths resolve correctly on load.
-
-### Tristram NPCs + IInteractable (M15)
-
-- `IInteractable` ([Interactable.h](Source/Diablo/Interactable.h)) — UInterface with `Interact(AActor* Interactor)`. Implemented by `ADungeonStairs` and `ADiabloNPC`. Controller uses `Implements<UInteractable>()` check and `Cast<IInteractable>()` to call.
-- `ADiabloNPC : AActor, IInteractable` ([DiabloNPC.h](Source/Diablo/DiabloNPC.h)) — static NPC with `NPCName` (FText) and `DialogText` (FText). Cube mesh blocking `ECC_Visibility`. `Interact()` calls `ADiabloPlayerController::ShowDialog()`.
-- `UDiabloDialogWidget : UUserWidget` ([DiabloDialogWidget.h](Source/Diablo/DiabloDialogWidget.h)) (Abstract) — C++ widget tree: dark overlay anchored bottom-center, NPC name (gold) + dialog text (white, auto-wrap) + Close button. `SetDialog(Name, Text)` populates. `BP_DiabloDialog` is the thin BP subclass.
-- `ADiabloPlayerController` refactored: `TargetStairs` replaced by `TargetInteractable` (`TObjectPtr<AActor>`) — both stairs and NPCs use the same click→walk→interact flow via `IInteractable`. `ShowDialog()` / `CloseDialog()` manage the dialog widget. Clicking anywhere while dialog is open closes it.
-- 6 NPCs placed in `Lvl_Diablo` by `GenerateDefaultMap`: Griswold, Adria, Pepin, Cain, Wirt, Ogden — each with `ENPCType` and optional `ShopData`.
-- `ADungeonStairs` now implements `IInteractable`; `Interact()` delegates to existing `OnInteract()`.
-
-### Shop UI (M16)
-
-- `ENPCType` enum ([DiabloNPC.h](Source/Diablo/DiabloNPC.h)) — `None` (dialog only), `Merchant` (opens shop), `Healer` (instant full heal), `Identifier` (placeholder for M17 affixes).
-- `UNPCShopData : UPrimaryDataAsset` ([NPCShopData.h](Source/Diablo/NPCShopData.h)) — `TArray<TObjectPtr<UItemDefinition>> StockItems`. Data assets `SD_Griswold` (weapons/armor), `SD_Adria` (potions) under `Content/NPCs/ShopData/`.
-- `UDiabloShopPanel : UUserWidget` ([DiabloShopPanel.h](Source/Diablo/DiabloShopPanel.h)) (Abstract) — two-panel trade window. Left column: NPC stock (buy at `GoldValue`). Right column: player items (sell at `GoldValue/4`). Click item rows to buy/sell. `NativeOnMouseButtonDown` hit-tests rows via `GetTickSpaceGeometry()`. `RefreshShop()` rebuilds dynamic item rows. Subscribes to `FOnInventoryChanged`.
-- `ADiabloNPC::Interact()` switches on `NPCType`: Merchant → `PC->OpenShop(this)`, Healer → `Hero->Heal(MaxHP)` + dialog, Identifier → "nothing to identify" dialog, None → regular dialog.
-- `ADiabloPlayerController` owns the shop: `ShopPanelClass` UPROPERTY (set via `SetupHUD` → `BP_DiabloShopPanel`). `OpenShop(NPC)` inits and shows panel. `CloseShop()` hides panel. Clicking outside or ESC menu closes shop.
-- `SetupShopData` creates `UNPCShopData` assets referencing existing `UItemDefinition` assets. Button in DiabloTools panel.
-
-### Item Affixes — Magic Items (M17)
-
-- `EAffixType` enum ([ItemInstance.h](Source/Diablo/ItemInstance.h)) — `BonusStr, BonusMag, BonusDex, BonusVit, BonusDamage, BonusArmor, BonusHP, BonusMana, BonusToHit`.
-- `FItemAffix` struct ([ItemInstance.h](Source/Diablo/ItemInstance.h)) — AffixName (FName), Type (EAffixType), Value (rolled float), bIsPrefix, GoldValueBonus. Stored in `FItemInstance::Affixes`.
-- `FItemInstance::bIdentified` — default `true` so existing normal items work. Magic items drop with `bIdentified = false`.
-- `FAffixDefinition` struct + `UAffixTable : UPrimaryDataAsset` ([AffixTable.h](Source/Diablo/AffixTable.h)) — each entry has AffixName, Type, MinValue, MaxValue, QualityLevel (qlvl gate), GoldValueBonus. Two data assets: `AT_Prefixes` and `AT_Suffixes` under `/Game/Items/Affixes/`.
-- `FAffixGenerator` ([AffixGenerator.h](Source/Diablo/AffixGenerator.h)) — static utility struct. `TryMakeMagic(Item, MonsterLevel, MagicChance=0.25)` rolls magic chance, picks 0–1 prefix + 0–1 suffix (at least 1 if magic) from qlvl-appropriate pool, sets `bIdentified = false`. `GetDisplayName(Item)` builds "Prefix BaseName of Suffix" (or plain base name if unidentified/normal). `GetTotalGoldValue(Item)` = base GoldValue + sum of affix GoldValueBonuses.
-- Tables loaded via `LoadObject` with static `TWeakObjectPtr` cache in `GetPrefixTable()`/`GetSuffixTable()`.
-- `ADiabloEnemy::SpawnDrops()` calls `FAffixGenerator::TryMakeMagic(Item, MonsterLevel)` after creating `FItemInstance`, before `InitFromItem`.
-- `RecomputeDerivedStats()` reads `Equipped.Affixes` in an inner loop — BonusStr/Mag/Dex/Vit add to stat accumulators, BonusDamage adds to EquipMinDamage+EquipMaxDamage, BonusArmor adds to ArmorFromEquipment, BonusHP/BonusMana add flat to MaxHP/MaxMana after the base formula, BonusToHit adds to `ToHitFromEquipment`.
-- `UInventoryComponent::IdentifyAll()` — iterates grid + equipped items, charges 100g per unidentified item, sets `bIdentified = true`, broadcasts `OnInventoryChanged`.
-- Cain (`ENPCType::Identifier`) calls `IdentifyAll()`, shows count or "nothing to identify" dialog. Also calls `RecomputeDerivedStats` + `OnStatsChanged` after identification.
-- **UI:** Magic items shown in blue `(0.3, 0.3, 1.0)` in inventory grid, equipment slots, hover text, and shop sell list. Hover shows affix stat lines if identified, "[Unidentified]" if not. Sell price uses `FAffixGenerator::GetTotalGoldValue() / 4`.
-- `UItemDefinition::QualityLevel` — qlvl field for future per-item gating (currently monster level is used).
-- `SetupAffixes` creates `AT_Prefixes` (10 entries) and `AT_Suffixes` (10 entries) via DiabloEditor toolbar button.
-- Affixes apply when equipped even if unidentified (D1 behavior) — stats work, names/bonuses just hidden in UI.
-- No polymorphic dispatch — `EAffixType` enum + switch, consistent with M9's `EItemCategory` approach.
-
-### Procedural Cathedral Dungeon (M18)
-
-- `EDungeonTileType` enum ([DungeonTile.h](Source/Diablo/DungeonTile.h)) defines `Empty`, `Floor`, and `Wall`.
-- `ADungeonTile : AActor` ([DungeonTile.h](Source/Diablo/DungeonTile.h)) is a cube-backed runtime tile actor with collision and nav relevance. The default Cathedral palette uses it for both floor and wall entries.
-- `UTilePalette : UPrimaryDataAsset` ([TilePalette.h](Source/Diablo/TilePalette.h)) owns `TileSize` plus `FTilePaletteEntry` rows mapping tile type to `TSubclassOf<AActor>`, scale, and location offset. `TP_Cathedral` lives under `/Game/Dungeons/`.
-- `ADiabloDungeonGenerator : AActor` ([DiabloDungeonGenerator.h](Source/Diablo/DiabloDungeonGenerator.h)) builds a runtime 40x40 Cathedral layout in `BeginPlay()`: connected rooms/corridors via recursive budding, then border walls around floor cells, then spawned actors via `UTilePalette`.
-- `ADiabloGameMode::GetSeedForDungeonFloor(FName)` owns per-floor dungeon seeds. `DungeonSeed` can be set on the GameMode; otherwise a random base seed is combined with the floor name.
-- Gameplay population is part of the generator: stairs back to `Lvl_Diablo` in the start room, one healing potion, and up to `TargetEnemyCount` enemies distributed across non-start rooms.
-- `GenerateCathedralMap` now creates `Lvl_Cathedral_L1` with PlayerStart, dim light, a large NavMeshBoundsVolume, and `Runtime_Cathedral_Generator` instead of pre-placing static corridor walls/enemies/items.
-- `DefaultEngine.ini` sets Recast `RuntimeGeneration=Dynamic` so runtime-spawned floor/wall tiles can feed click-to-move navigation.
-
-### Belt + Hotkeys + Scroll Casting (M20)
-
-- `EItemUseEffect` enum on `UItemDefinition` ([ItemDefinition.h](Source/Diablo/ItemDefinition.h)) — `None`, `RestoreHP`, `RestoreMana`, `RestoreBoth`, `CastSpell`. Data fields: `ManaRestoreAmount`, `ScrollSpell` (`TObjectPtr<USpellDefinition>`). All consumable use-effects are dispatched via this enum, not polymorphic interfaces.
-- **Belt** — 8-slot sub-inventory on `UInventoryComponent`, potions/scrolls only (`IsBeltCompatible` checks `EItemCategory::Potion` or `Scroll`). API: `TryAddToBelt`, `SetBeltItem`, `UseBeltSlot`, `RemoveBeltSlot`, `GetBeltItem`, `MoveGridToBelt`. Stacking supported within belt slots.
-- **Hotkeys 1–8** — `IA_Belt1..8` mapped to number keys. `ADiabloPlayerController` has `TArray<TObjectPtr<UInputAction>> BeltActions` wired via `SetupController`. Wrapper functions `OnBelt0..7` delegate to `OnUseBeltSlot(int32)`.
-- **Use dispatch** — `UseBeltSlot` and `UseItem` both switch on `UItemDefinition::UseEffect`: `RestoreHP` → `Hero->Heal()`, `RestoreMana` → `Hero->RestoreMana()`, `RestoreBoth` → both, `CastSpell` → `Hero->CastSpellFromScroll(ScrollSpell)`. Scroll casting uses no mana, fires in the hero's facing direction, and consumes the scroll.
-- `ADiabloHero::RestoreMana(float)` — mirrors `Heal()` for mana. `CastSpellFromScroll(USpellDefinition*)` — fires the spell without mana cost or cooldown.
-- **Belt in HUD** — `UDiabloHUDWidget` shows 8 small slots above the XP bar, centered. Subscribes to `FOnInventoryChanged` for updates. Each slot shows the item icon or a number placeholder.
-- **Belt in Inventory Panel** — `UDiabloInventoryPanel` has a belt row below the grid. Right-click a belt-compatible item in grid → moves to belt. Right-click a belt slot → moves back to grid.
-- **Persistence** — Belt items saved/loaded via `UDiabloGameInstance::SavedBeltItems` and `UDiabloSaveGame::SavedBeltItems`. `RestoreState` accepts belt items. Level transitions and save/load preserve belt state.
-- **New items** — Mana Potion (`RestoreMana`, 50 mana), Rejuvenation Potion (`RestoreBoth`, 35 HP + 35 mana), Scroll of Firebolt (`CastSpell`, `SD_Firebolt`), Scroll of Healing (`CastSpell`, `SD_Healing`). Healing Potion updated with `UseEffect = RestoreHP`.
+- **Targeted hit combat** — click enemy → walk into range → montage → apply damage directly. No physics traces.
+- **D1 To-Hit formula:** `50 + Dex/2 + CharLevel - MonsterAC + (CharLevel - MonsterLevel)`, clamped 5–95%.
+- **Warrior stat formulae:** `MaxHP = 70 + (Vit-25)*2 + (Level-1)*2`, `MaxMana = 10 + (Mag-10)*1 + (Level-1)*1`. Starting: Str 30, Mag 10, Dex 20, Vit 25. Caps: Str 250, Mag 50, Dex 60, Vit 100.
+- **XP table:** quartic curve `Table[L] = Table[L-1] + 2000*L^3/4`, uses `int64`. Level cap 50, +5 stat points per level.
+- **No polymorphic dispatch** — item categories, equip effects, affix types, use effects are all enum + switch.
+- **Affixes apply when equipped even if unidentified** (D1 behavior).
+- **`EItemUseEffect`** drives all consumable use: `RestoreHP`, `RestoreMana`, `RestoreBoth`, `CastSpell`.
+- **Belt** — potions/scrolls only (`IsBeltCompatible`). Scroll casting fires in hero's facing direction, no mana cost.
+- **`IInteractable`** UInterface — shared click→walk→interact for stairs and NPCs.
+- **Widget BPs** must be created via `UWidgetBlueprintFactory` (not `FKismetEditorUtilities::CreateBlueprint`).
+- **`RebuildWidget()`** for widget tree setup — `NativeConstruct()` is too late for the Slate layer.
+- **`DefaultEngine.ini`** sets `RuntimeGeneration=Dynamic` for runtime navmesh from dungeon tiles.
 
 ### Input
 
@@ -251,21 +120,7 @@ IntelliSense errors like `cannot open source file "X.h"` are usually false posit
 
 **Setup** (create BP if needed + configure CDO defaults — one button per blueprint):
 
-| Method | Creates | Configures |
-|---|---|---|
-| `SetupHero` | `BP_DiabloHero` | Skeletal mesh, anim class, attack montage, death montage, LevelUpSound, KnownSpells, ActiveSpell |
-| `SetupController` | `BP_DiabloPlayerController` | ClickAction, CastAction, CharPanelAction, InventoryAction, SpellbookAction, DefaultMappingContext |
-| `SetupGameMode` | `BP_DiabloGameMode` | DefaultPawnClass, PlayerControllerClass |
-| `SetupEnemy` | `BP_DiabloEnemy` | Skeletal mesh, anim class, attack montage, death montage, drop table |
-| `SetupPotion` | `BP_HealingPotion` | Plane mesh with sprite material (upright, facing isometric camera) |
-| `SetupHUD` | `BP_DiabloHUD` + `BP_DiabloCharPanel` + `BP_DiabloInventoryPanel` + `BP_DiabloSpellbookPanel` + `BP_DiabloMainMenu` + `BP_DiabloDialog` + `BP_DiabloShopPanel` (WidgetBlueprints) | Creates WBPs parented to C++ widget classes, sets `HUDWidgetClass`, `CharPanelClass`, `InventoryPanelClass`, `SpellbookPanelClass`, `MainMenuClass`, `DialogWidgetClass`, `ShopPanelClass` on `BP_DiabloPlayerController` |
-| `SetupInventory` | Starter `UItemDefinition` data assets | Creates/updates ID_Short_Sword, ID_Buckler, ID_Skull_Cap, ID_Rags, ID_Ring_of_Strength, ID_Healing_Potion, ID_Mana_Potion, ID_Rejuvenation_Potion, ID_Scroll_of_Firebolt, ID_Scroll_of_Healing under `/Game/Items/Definitions/` — sets `UseEffect` and `ScrollSpell` on consumables |
-| `SetupDropMaterial` | `M_ItemDrop` material | Unlit translucent material with `TextureSampleParameter2D` for runtime dropped item sprites |
-| `SetupSpells` | `USpellDefinition` data assets | Creates SD_Firebolt, SD_Fireball, SD_Lightning, SD_Nova, SD_Healing under `/Game/Spells/Definitions/` |
-| `SetupShopData` | `UNPCShopData` data assets | Creates SD_Griswold, SD_Adria under `/Game/NPCs/ShopData/` referencing existing item definitions |
-| `SetupAffixes` | `UAffixTable` data assets | Creates AT_Prefixes (10 entries), AT_Suffixes (10 entries) under `/Game/Items/Affixes/` |
-| `SetupDungeonPalette` | `UTilePalette` data asset | Creates TP_Cathedral under `/Game/Dungeons/` with floor/wall entries backed by `ADungeonTile` |
-| `SetupAllBlueprints` | All of the above | All of the above |
+`SetupHero`, `SetupController`, `SetupGameMode`, `SetupEnemy`, `SetupPotion`, `SetupHUD` (all 7 widget BPs), `SetupInventory` (10 item definitions with `UseEffect`/`ScrollSpell`), `SetupDropMaterial`, `SetupSpells` (5 spell definitions), `SetupShopData`, `SetupAffixes`, `SetupDungeonPalette`, `SetupAllBlueprints` (runs all). See `DiabloAssetGenerator.cpp` for per-method details.
 
 **World:**
 
@@ -302,14 +157,9 @@ All assets are generated programmatically — no manual art creation. Scripts li
 
 Animations are keyframed in Blender Python scripts — the main mesh script and per-animation standalone scripts both share `warrior_armature.py` for bone hierarchy.
 
-**Editor-only assets** that require the DiabloEditor plugin or editor interaction:
-- **BP subclasses** under `Content/Blueprints/` — every `UCLASS(Abstract)` C++ class needs a BP child to be placed
-- **Levels** under `Content/Maps/` — generated by editor tool or hand-authored
-- **Input assets** under `Content/Input/` — generated by editor tool
-- **AnimBlueprints** — manually authored in editor; parent to C++ `UDiabloAnimInstance` subclass. `ABP_Warrior` has a Locomotion state machine (Idle/Walk based on `Speed`) with a DefaultSlot node for montage overlay.
-- **AnimMontages** — `AM_Attack` created manually from `Warrior_Anim_Attack` with Melee Attack Trace and PlaySound notifies. `AM_Death` created manually from `Warrior_Anim_Death` with `bEnableAutoBlendOut = false`. Both set on hero and enemy BPs via `SetupHero`/`SetupEnemy`.
-- **Widget Blueprints** — `BP_DiabloHUD` under `Content/Blueprints/`; parents to C++ `UDiabloHUDWidget`. Widget tree built entirely in C++ — BP is a thin asset-reference shell.
-- **StateTree assets** — reserved for a future AI refactor only if enemy behavior composition outgrows the C++ state machine
+**Manually authored editor assets** (not generated by plugin):
+- **AnimBlueprints** — `ABP_Warrior` parents to `UDiabloAnimInstance`, has Locomotion state machine (Idle/Walk on `Speed`) + DefaultSlot for montage overlay. Do not attempt programmatic AnimBP generation.
+- **AnimMontages** — `AM_Attack` (Melee Attack Trace + PlaySound notifies), `AM_Death` (`bEnableAutoBlendOut = false`). Set on BPs via `SetupHero`/`SetupEnemy`.
 
 ### FBX Reimport Workflow
 

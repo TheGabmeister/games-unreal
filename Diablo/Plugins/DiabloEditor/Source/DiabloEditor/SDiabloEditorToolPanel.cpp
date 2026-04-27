@@ -203,8 +203,8 @@ void SDiabloEditorToolPanel::Construct(const FArguments& InArgs)
 			.Padding(0.f, 4.f)
 			[
 				SNew(SButton)
-				.Text(FText::FromString(TEXT("Setup Dungeon Palette")))
-				.OnClicked(this, &SDiabloEditorToolPanel::OnSetupDungeonPalette)
+				.Text(FText::FromString(TEXT("Setup Dungeon Palettes (4 Biomes)")))
+				.OnClicked(this, &SDiabloEditorToolPanel::OnSetupDungeonPalettes)
 			]
 
 			// --- World ---
@@ -232,8 +232,8 @@ void SDiabloEditorToolPanel::Construct(const FArguments& InArgs)
 			.Padding(0.f, 4.f)
 			[
 				SNew(SButton)
-				.Text(FText::FromString(TEXT("Generate Cathedral Map")))
-				.OnClicked(this, &SDiabloEditorToolPanel::OnGenerateCathedral)
+				.Text(FText::FromString(TEXT("Generate Dungeon Map")))
+				.OnClicked(this, &SDiabloEditorToolPanel::OnGenerateDungeon)
 			]
 
 			+ SVerticalBox::Slot()
@@ -371,5 +371,17 @@ FReply SDiabloEditorToolPanel::OnSetupAffixes()
 FReply SDiabloEditorToolPanel::OnSetupDungeonPalette()
 {
 	FDiabloAssetGenerator::SetupDungeonPalette();
+	return FReply::Handled();
+}
+
+FReply SDiabloEditorToolPanel::OnSetupDungeonPalettes()
+{
+	FDiabloAssetGenerator::SetupAllDungeonPalettes();
+	return FReply::Handled();
+}
+
+FReply SDiabloEditorToolPanel::OnGenerateDungeon()
+{
+	FDiabloAssetGenerator::GenerateDungeonMap();
 	return FReply::Handled();
 }

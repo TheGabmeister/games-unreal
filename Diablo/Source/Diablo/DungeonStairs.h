@@ -21,6 +21,12 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stairs")
 	FName TargetLevelName;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stairs")
+	int32 TargetFloorIndex = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stairs")
+	bool bIsDownStairs = false;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Stairs")
 	TObjectPtr<UStaticMeshComponent> MeshComponent;
 };

@@ -21,6 +21,9 @@ struct FTilePaletteEntry
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Tile")
 	FVector LocationOffset = FVector::ZeroVector;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Tile")
+	TObjectPtr<UMaterialInterface> Material;
 };
 
 UCLASS(BlueprintType)

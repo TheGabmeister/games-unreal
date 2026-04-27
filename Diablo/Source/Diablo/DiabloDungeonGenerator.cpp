@@ -2,10 +2,14 @@
 
 #include "Diablo.h"
 #include "DiabloEnemy.h"
+#include "DiabloGameInstance.h"
 #include "DiabloGameMode.h"
 #include "DungeonStairs.h"
 #include "TilePalette.h"
+#include "Engine/DirectionalLight.h"
 #include "Engine/World.h"
+#include "Components/DirectionalLightComponent.h"
+#include "EngineUtils.h"
 #include "NavigationSystem.h"
 
 ADiabloDungeonGenerator::ADiabloDungeonGenerator()
@@ -27,6 +31,8 @@ void ADiabloDungeonGenerator::Generate()
 		return;
 	}
 	bGenerated = true;
+
+	ResolveFloorSettings();
 
 	int32 Seed = 0;
 	if (ADiabloGameMode* GameMode = GetWorld()->GetAuthGameMode<ADiabloGameMode>())
@@ -258,6 +264,10 @@ void ADiabloDungeonGenerator::SpawnTiles()
 			if (ADungeonTile* DungeonTile = Cast<ADungeonTile>(TileActor))
 			{
 				DungeonTile->SetTileType(TileType);
+				if (Entry && Entry->Material)
+				{
+					DungeonTile->MeshComponent->SetMaterial(0, Entry->Material);
+				}
 			}
 			SpawnedActors.Add(TileActor);
 		}
@@ -274,22 +284,40 @@ void ADiabloDungeonGenerator::SpawnGameplayActors(FRandomStream& Stream)
 	FActorSpawnParameters SpawnParams;
 	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
 
+	UClass* StairsToSpawn = StairsClass ? StairsClass.Get() : ADungeonStairs::StaticClass();
+
 	const FGridRoom& StartRoom = Rooms[0];
 	const FIntPoint StartCenter = StartRoom.Center();
-
-	UClass* UpStairsClass = StairsClass ? StairsClass.Get() : ADungeonStairs::StaticClass();
 	ADungeonStairs* UpStairs = GetWorld()->SpawnActor<ADungeonStairs>(
-		UpStairsClass, FTransform(GetTileWorldLocation(StartCenter.X, StartCenter.Y, 50.f)), SpawnParams);
+		StairsToSpawn, FTransform(GetTileWorldLocation(StartCenter.X, StartCenter.Y, 50.f)), SpawnParams);
 	if (UpStairs)
 	{
 		UpStairs->TargetLevelName = ReturnLevelName;
+		UpStairs->TargetFloorIndex = FloorIndex > 1 ? FloorIndex - 1 : 0;
 		UpStairs->SetActorScale3D(FVector(1.5f, 1.5f, 0.5f));
 		SpawnedActors.Add(UpStairs);
 	}
 
+	if (FloorIndex < MAX_FLOOR && Rooms.Num() > 1)
+	{
+		const FGridRoom& ExitRoom = Rooms[Rooms.Num() - 1];
+		const FIntPoint ExitCenter = ExitRoom.Center();
+		ADungeonStairs* DownStairs = GetWorld()->SpawnActor<ADungeonStairs>(
+			StairsToSpawn, FTransform(GetTileWorldLocation(ExitCenter.X, ExitCenter.Y, 50.f)), SpawnParams);
+		if (DownStairs)
+		{
+			DownStairs->TargetLevelName = FName("Lvl_Dungeon");
+			DownStairs->TargetFloorIndex = FloorIndex + 1;
+			DownStairs->bIsDownStairs = true;
+			DownStairs->SetActorScale3D(FVector(1.5f, 1.5f, 0.5f));
+			SpawnedActors.Add(DownStairs);
+		}
+	}
+
+	const int32 PotionRoomIdx = Rooms.Num() > 2 ? Rooms.Num() - 2 : Rooms.Num() - 1;
 	if (HealingPotionClass && Rooms.Num() > 1)
 	{
-		const FGridRoom& PotionRoom = Rooms[Rooms.Num() - 1];
+		const FGridRoom& PotionRoom = Rooms[PotionRoomIdx];
 		const FIntPoint PotionCenter = PotionRoom.Center();
 		AActor* Potion = GetWorld()->SpawnActor<AActor>(
 			HealingPotionClass, FTransform(GetTileWorldLocation(PotionCenter.X, PotionCenter.Y, 100.f)), SpawnParams);
@@ -337,9 +365,98 @@ void ADiabloDungeonGenerator::SpawnGameplayActors(FRandomStream& Stream)
 		{
 			Enemy->ConfigureArchetype(ArchetypeCycle[i % UE_ARRAY_COUNT(ArchetypeCycle)]);
 			Enemy->SummonClass = EnemyClass;
+			ApplyFloorScaling(Enemy);
 			SpawnedActors.Add(Enemy);
 		}
 	}
+}
+
+FName ADiabloDungeonGenerator::BiomeNameForFloor(int32 Floor)
+{
+	if (Floor <= 4)  return FName("Cathedral");
+	if (Floor <= 8)  return FName("Catacombs");
+	if (Floor <= 12) return FName("Caves");
+	return FName("Hell");
+}
+
+int32 ADiabloDungeonGenerator::BiomeLocalFloor(int32 Floor)
+{
+	return ((Floor - 1) % 4) + 1;
+}
+
+void ADiabloDungeonGenerator::ResolveFloorSettings()
+{
+	FloorIndex = 1;
+	if (UDiabloGameInstance* GI = Cast<UDiabloGameInstance>(GetGameInstance()))
+	{
+		FloorIndex = FMath::Clamp(GI->CurrentFloorIndex, 1, MAX_FLOOR);
+	}
+
+	const FName BiomeName = BiomeNameForFloor(FloorIndex);
+	const int32 LocalFloor = BiomeLocalFloor(FloorIndex);
+
+	DungeonFloorName = *FString::Printf(TEXT("%s_L%d"), *BiomeName.ToString(), LocalFloor);
+
+	const FString PalettePath = FString::Printf(TEXT("/Game/Dungeons/TP_%s.TP_%s"),
+		*BiomeName.ToString(), *BiomeName.ToString());
+	UTilePalette* LoadedPalette = LoadObject<UTilePalette>(nullptr, *PalettePath);
+	if (LoadedPalette)
+	{
+		TilePalette = LoadedPalette;
+	}
+	else
+	{
+		UE_LOG(LogDiablo, Warning, TEXT("Failed to load palette: %s — using default"), *PalettePath);
+	}
+
+	TargetRoomCount = FMath::Clamp(15 + (FloorIndex - 1) / 3, 15, 20);
+	TargetEnemyCount = FMath::Clamp(8 + (FloorIndex - 1), 8, 23);
+	ReturnLevelName = (FloorIndex <= 1) ? FName("Lvl_Diablo") : FName("Lvl_Dungeon");
+
+	for (TActorIterator<ADirectionalLight> It(GetWorld()); It; ++It)
+	{
+		if (UDirectionalLightComponent* LC = It->FindComponentByClass<UDirectionalLightComponent>())
+		{
+			if (FloorIndex <= 4)
+			{
+				LC->SetIntensity(2.f);
+				LC->SetLightColor(FLinearColor(1.f, 0.9f, 0.8f));
+			}
+			else if (FloorIndex <= 8)
+			{
+				LC->SetIntensity(1.5f);
+				LC->SetLightColor(FLinearColor(0.7f, 0.7f, 0.9f));
+			}
+			else if (FloorIndex <= 12)
+			{
+				LC->SetIntensity(1.2f);
+				LC->SetLightColor(FLinearColor(0.8f, 0.6f, 0.4f));
+			}
+			else
+			{
+				LC->SetIntensity(3.f);
+				LC->SetLightColor(FLinearColor(1.f, 0.3f, 0.1f));
+			}
+			break;
+		}
+	}
+
+	UE_LOG(LogDiablo, Display, TEXT("Floor %d: %s (biome: %s, rooms: %d, enemies: %d)"),
+		FloorIndex, *DungeonFloorName.ToString(), *BiomeName.ToString(),
+		TargetRoomCount, TargetEnemyCount);
+}
+
+void ADiabloDungeonGenerator::ApplyFloorScaling(ADiabloEnemy* Enemy) const
+{
+	if (!Enemy) return;
+
+	const float Mult = 1.f + (FloorIndex - 1) * 0.2f;
+	Enemy->Stats.MaxHP = FMath::RoundToFloat(Enemy->Stats.MaxHP * Mult);
+	Enemy->Stats.HP = Enemy->Stats.MaxHP;
+	Enemy->MonsterLevel = FloorIndex;
+	Enemy->MonsterAC = 5.f + (FloorIndex - 1) * 3.f;
+	Enemy->XPReward = FMath::RoundToInt64(static_cast<double>(Enemy->XPReward) * Mult);
+	Enemy->ProjectileDamage *= Mult;
 }
 
 void ADiabloDungeonGenerator::RefreshNavigation()

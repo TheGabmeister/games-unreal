@@ -29,9 +29,12 @@ struct FDiabloAssetGenerator
 	static void SetupShopData();
 	static void SetupAffixes();
 	static void SetupDungeonPalette();
+	static void SetupAllDungeonPalettes();
+	static void GenerateDungeonMap();
 	static void SetupAllBlueprints();
 
 private:
+	static UMaterial* CreateBiomeMaterial(const FString& PackagePath, const FString& AssetName, const FLinearColor& Color);
 	static void SpawnFloorPlane(UWorld* World);
 	static void SpawnNavMeshVolume(UWorld* World);
 	static bool CreateBlueprintFromClass(UClass* ParentClass, const FString& AssetPath, const FString& AssetName);

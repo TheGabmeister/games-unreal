@@ -283,17 +283,45 @@ Belt = dedicated 8-slot sub-inventory on `UInventoryComponent`, potions/scrolls 
 
 **Teaches:** Hotkey input, per-slot action dispatch, enum-driven use effects.
 
-### M21+ — Content, Polish, Boss
-- Full 16-level dungeon progression (Catacombs/Caves/Hell biome palettes via M18's palette system)
-- Unique monsters (base monster + 2–3 affix buffs)
-- Bosses: Butcher (L2 scripted room-reveal with voice stinger), Skeleton King (L3 summoner), Diablo (L16)
-- Shrines — interactable prop with random buff/curse table
-- Town Portal spell (bidirectional portal actor, persistent across levels)
-- Durability + repair (Griswold)
-- Remaining spells: Chain Lightning, Apocalypse, Teleport, Town Portal, Stone Curse, Mana Shield
-- Audio integration: Uelmen-inspired ambient pass, monster stingers, per-weapon-class SFX
-- Balance pass + XP curve tuning
-- Classes 2 and 3: Rogue (bows) and Sorcerer (higher mana cap)
+### M21 — Dungeon Progression (16 Floors)
+Full 16-level dungeon with 4 biome palettes via M18's `UTilePalette` system: Cathedral (floors 1–4), Catacombs (floors 5–8), Caves (floors 9–12), Hell (floors 13–16). Each biome has distinct floor/wall tile actors and lighting. Floor-to-floor stairs chain `Lvl_Cathedral_L1` through `Lvl_Hell_L4`. Enemy stats (HP, damage, XP reward) and spawn counts scale per floor. `ADiabloDungeonGenerator` reads floor index to select palette and difficulty.
+
+**Teaches:** Biome theming via data assets, difficulty scaling, multi-level progression.
+
+### M22 — Town Portal + Durability
+Town Portal spell — spawns a bidirectional `APortalActor` linking the current dungeon floor to Tristram. Portal persists in `UDiabloGameInstance` across `OpenLevel` transitions; entering either end teleports to the other. Only one portal active at a time. Durability system — equipped items lose 1 durability on hit taken (armor) or hit dealt (weapon). Items at 0 durability provide no stats. Griswold repair dialog: pays gold to restore all equipped items to max durability. Durability displayed in inventory hover text and equipment slots.
+
+**Teaches:** Bidirectional actor persistence across levels, item degradation loop, NPC service economy.
+
+### M23 — Remaining Spells
+New spells: Chain Lightning (projectile that bounces to nearby enemies), Apocalypse (screen-wide AoE), Teleport (instant reposition to cursor), Stone Curse (single-target freeze for N seconds), Mana Shield (buff absorbing damage from mana pool). Each spell is a `USpellDefinition` data asset dispatched through the existing `CastSpell` system. Buff/debuff state tracked on `ADiabloHero` (Mana Shield) and `ADiabloEnemy` (Stone Curse). New projectile subclasses where needed.
+
+**Teaches:** Buff/debuff state management, bouncing projectile logic, instant-cast targeting.
+
+### M24 — Unique Monsters + Bosses
+Unique monsters — a named variant of a base enemy with 2–3 random affix buffs (e.g., extra fast, fire resistant, lightning enchanted). Gold-colored name in UI. Spawned once per floor by the dungeon generator. Bosses: **Butcher** (floor 2, scripted room-reveal with locked door and voice stinger, high melee damage), **Skeleton King** (floor 3, summoner archetype with crown, summons skeletons on cooldown), **Diablo** (floor 16, multi-phase with fire attacks). Each boss has a unique skeletal mesh, attack montages, and drop table.
+
+**Teaches:** Named enemy variants with runtime buffs, scripted encounters, boss phase logic.
+
+### M25 — Shrines
+`AShrine : AActor, IInteractable` — interactable prop placed by the dungeon generator (1–2 per floor). On interact, rolls from a `UShrineTable` data asset: stat boosts (temporary +10 Str for N seconds or permanent +1 Str), mana/HP refill, or curse traps (lose 10% gold, reduce one stat). Shrine mesh with a glow VFX that extinguishes after use (one-time per shrine instance). Shrine effects displayed via floating text or dialog.
+
+**Teaches:** Random reward/risk tables, temporary buff timers, one-shot interactable state.
+
+### M26 — Audio Pass
+Ambient music per biome (town, Cathedral, Catacombs, Caves, Hell) — looping background tracks generated via Python audio scripts or sourced as placeholder WAVs. Monster stingers: aggro bark on `FindTarget`, death sound on kill. Per-weapon-class attack SFX (sword slash, blunt impact, bow twang). UI sounds: button hover, inventory open/close, gold pickup, level-up fanfare (already exists). All audio via `USoundWave` UPROPERTYs and `UGameplayStatics::PlaySound2D`/`PlaySoundAtLocation`.
+
+**Teaches:** Spatial audio, ambient music management, SFX variety per action type.
+
+### M27 — Rogue + Sorcerer
+Two new playable classes with distinct starting stats and class caps. **Rogue** — high Dex, bow-based ranged auto-attack (click enemy → fire arrow projectile from range, no walk-into-melee). Bow weapons use `EItemCategory::Bow`, arrow projectile reuses `ASpellProjectile` base. **Sorcerer** — high Mag, higher mana cap formula, +1 spell level to all spells, lower HP formula. Class selection at game start via a simple menu widget before spawning. `EDiabloClass` enum on hero, class-specific stat cap tables, per-class starting equipment.
+
+**Teaches:** Class-specific combat mechanics, ranged auto-attack loop, character creation flow.
+
+### M28 — Balance Pass
+XP curve tuning — adjust `GetXPTable()` quartic coefficients so leveling pace matches a full 16-floor playthrough. Enemy HP/damage/XP-reward scaling per floor. Spell damage and mana cost balancing across all spells. Drop rate and gold economy tuning (shop prices, repair costs, potion availability). Affix value ranges adjusted per quality level. Play-test driven — no new systems, just number tweaks informed by full runs.
+
+**Teaches:** Holistic game balance, data-driven tuning without code changes, play-test methodology.
 
 ---
 

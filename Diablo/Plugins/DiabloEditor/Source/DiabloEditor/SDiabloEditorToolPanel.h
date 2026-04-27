@@ -15,6 +15,7 @@ private:
 	FReply OnGenerateAll();
 	FReply OnGenerateMap();
 	FReply OnGenerateCathedral();
+	FReply OnGenerateDungeon();
 	FReply OnGenerateInput();
 	FReply OnImportWarrior();
 	FReply OnImportAttackSFX();
@@ -33,4 +34,5 @@ private:
 	FReply OnSetupShopData();
 	FReply OnSetupAffixes();
 	FReply OnSetupDungeonPalette();
+	FReply OnSetupDungeonPalettes();
 };

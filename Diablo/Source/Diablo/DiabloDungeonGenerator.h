@@ -78,6 +78,14 @@ private:
 	FVector GetTileWorldLocation(int32 X, int32 Y, float Z = 0.f) const;
 	float GetTileSize() const;
 
+	void ResolveFloorSettings();
+	void ApplyFloorScaling(ADiabloEnemy* Enemy) const;
+	static FName BiomeNameForFloor(int32 Floor);
+	static int32 BiomeLocalFloor(int32 Floor);
+
+	int32 FloorIndex = 1;
+	static constexpr int32 MAX_FLOOR = 16;
+
 	TArray<EDungeonTileType> Grid;
 	TArray<FGridRoom> Rooms;
 	TArray<TObjectPtr<AActor>> SpawnedActors;
