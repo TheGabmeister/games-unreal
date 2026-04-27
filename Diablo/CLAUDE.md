@@ -53,7 +53,7 @@ All C++ classes are `Abstract` with thin BP subclasses (`BP_` prefix) under `Con
 - `ADiabloPlayerController` → `BP_DiabloPlayerController` — click-to-move/attack/interact, owns all UI widgets, belt hotkeys 1–8
 - `ADiabloEnemy : ACharacter` → `BP_DiabloEnemy` — AI via `ADiabloAIController` (tick-based state machine), archetypes, drop tables, XP rewards
 - `ADiabloAIController` — `EAIState` (Idle/Chase/Flee/Attack/Dead), `EDiabloEnemyArchetype` for behavior tuning
-- `ASpellProjectile` (Abstract) → `AFirebolt`, `AFireball`, `ALightningBolt` — `UProjectileMovementComponent`-based
+- `ASpellProjectile` (Abstract) → `AFirebolt`, `AFireball`, `ALightningBolt`, `AChainLightning` — `UProjectileMovementComponent`-based. `AChainLightning` overrides overlap behavior by rebinding the delegate in `BeginPlay` (unbinds base `OnOverlap`, binds own `OnChainOverlap`) — do not use `virtual` on delegate-bound `UFUNCTION`s, it causes module load failures at runtime
 - `APortalActor` — `IInteractable`, bidirectional town↔dungeon teleport. `bReturnsToDungeon` determines direction
 - `ADiabloDungeonGenerator` — runtime 40×40 procedural layout via `UTilePalette`, spawns enemies/items/stairs. Single `Lvl_Dungeon` map reused for all 16 floors — floor index on GameInstance drives biome, palette, difficulty, and stair targets
 
@@ -62,7 +62,7 @@ All C++ classes are `Abstract` with thin BP subclasses (`BP_` prefix) under `Con
 - `FDiabloStats` — HP/MaxHP/Mana/MaxMana/Str/Mag/Dex/Vit (shared by hero and enemies)
 - `UItemDefinition : UPrimaryDataAsset` — item template (stats, category, equip slot, `EItemUseEffect`, `ScrollSpell`)
 - `FItemInstance` — runtime item: `UItemDefinition*` + `TArray<FItemAffix>` + durability + stack count + `bIdentified`
-- `USpellDefinition : UPrimaryDataAsset` — spell template (mana cost, cooldown, damage, `ESpellEffect` enum, projectile class). `ESpellEffect`: Projectile, Heal, AoE, TownPortal, Teleport, Debuff, Buff
+- `USpellDefinition : UPrimaryDataAsset` — spell template (mana cost, cooldown, damage, `ESpellEffect` enum, projectile class, `AoERadius`, `Duration`, `MaxBounces`). `ESpellEffect`: Projectile, Heal, AoE, TownPortal, Teleport (instant reposition to cursor), Debuff (Stone Curse — freezes enemy via `bStoneCursed` + `StoneCurseEndTime` on `ADiabloEnemy`, AI controller skips all ticking while frozen), Buff (Mana Shield — toggle `bManaShieldActive` on hero, `TakeDamage` absorbs from mana 1:1 before HP)
 - `FAffixGenerator` — static utility, rolls magic items via `UAffixTable` data assets (`AT_Prefixes`/`AT_Suffixes`)
 - `UInventoryComponent` — 10×4 grid + 7 equip slots + 8 belt slots + gold. Broadcasts `FOnInventoryChanged`
 - `UDiabloGameInstance` — persists hero/inventory/spell state across `OpenLevel` transitions. Also stores `CurrentFloorIndex` (0=town, 1–16=dungeon) and Town Portal state (`bPortalActive`, `PortalFloorIndex`, `PortalDungeonLocation`, `PortalDungeonSeed`)
@@ -97,6 +97,7 @@ All C++ classes are `Abstract` with thin BP subclasses (`BP_` prefix) under `Con
 - **Widget BPs** must be created via `UWidgetBlueprintFactory` (not `FKismetEditorUtilities::CreateBlueprint`).
 - **`RebuildWidget()`** for widget tree setup — `NativeConstruct()` is too late for the Slate layer.
 - **`DefaultEngine.ini`** sets `RuntimeGeneration=Dynamic` for runtime navmesh from dungeon tiles.
+- **Never make delegate-bound `UFUNCTION`s `virtual`** — UE dynamic delegates (`AddDynamic`) use reflection name lookup, not C++ vtables. Adding `virtual` to a delegate-bound UFUNCTION causes module load failures at runtime. To override overlap/delegate behavior in a subclass, rebind the delegate in `BeginPlay`: `RemoveDynamic` the base function, `AddDynamic` a new UFUNCTION with a different name (see `AChainLightning::OnChainOverlap` pattern).
 
 ### Input
 
@@ -124,7 +125,7 @@ All C++ classes are `Abstract` with thin BP subclasses (`BP_` prefix) under `Con
 
 **Setup** (create BP if needed + configure CDO defaults — one button per blueprint):
 
-`SetupHero`, `SetupController`, `SetupGameMode`, `SetupEnemy`, `SetupPotion`, `SetupHUD` (all 7 widget BPs), `SetupInventory` (10 item definitions with `UseEffect`/`ScrollSpell`), `SetupDropMaterial`, `SetupSpells` (6 spell definitions including Town Portal), `SetupShopData`, `SetupAffixes`, `SetupAllDungeonPalettes` (4 biome palettes + 8 materials), `SetupAllBlueprints` (runs all). See `DiabloAssetGenerator.cpp` for per-method details.
+`SetupHero`, `SetupController`, `SetupGameMode`, `SetupEnemy`, `SetupPotion` (creates both `BP_HealingPotion` and `BP_ManaPotion`), `SetupHUD` (all 7 widget BPs), `SetupInventory` (10 item definitions with `UseEffect`/`ScrollSpell`), `SetupDropMaterial`, `SetupSpells` (11 spell definitions: Firebolt, Fireball, Lightning, Chain Lightning, Nova, Apocalypse, Healing, Town Portal, Teleport, Stone Curse, Mana Shield), `SetupShopData`, `SetupAffixes`, `SetupAllDungeonPalettes` (4 biome palettes + 8 materials), `SetupAllBlueprints` (runs all). See `DiabloAssetGenerator.cpp` for per-method details.
 
 **World:**
 
@@ -132,6 +133,7 @@ All C++ classes are `Abstract` with thin BP subclasses (`BP_` prefix) under `Con
 |---|---|
 | `GenerateDefaultMap` | Creates `Lvl_Diablo` with PlayerStart, DirectionalLight, floor plane, NavMeshBoundsVolume, test enemy, healing potion, stairs to dungeon floor 1, 6 Tristram NPCs (Griswold with `bCanRepair`, Adria, Pepin, Cain, Wirt, Ogden) — **always recreates** |
 | `GenerateDungeonMap` | Creates `Lvl_Dungeon` — single reusable map with dim lighting, NavMeshBoundsVolume, and `ADiabloDungeonGenerator`. The generator reads `CurrentFloorIndex` from GameInstance at runtime to select biome palette, difficulty, and stair targets — **always recreates** |
+| `GenerateDebugCombatMap` | Creates `Lvl_DebugCombat` — flat arena with all 6 enemy archetypes, 5 healing potions, 5 mana potions, navmesh. For testing combat and spells — **always recreates** |
 | `GenerateInputAssets` | Creates/updates IA_Click/Cast/CharPanel/Inventory/Spellbook/Menu/Belt1..8/Move/Look and IMC_Diablo — **updates in place** |
 
 **Do not attempt programmatic AnimBP generation.** State machine graph construction via K2 nodes is too fragile (wrong pin names, function reference ordering, MinimalAPI exports). AnimBPs are the one asset type authored manually in the editor.
