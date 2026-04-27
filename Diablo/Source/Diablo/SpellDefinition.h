@@ -6,6 +6,18 @@
 
 class ASpellProjectile;
 
+UENUM(BlueprintType)
+enum class ESpellEffect : uint8
+{
+	Projectile,
+	Heal,
+	AoE,
+	TownPortal,
+	Teleport,
+	Debuff,
+	Buff
+};
+
 UCLASS(BlueprintType)
 class DIABLO_API USpellDefinition : public UPrimaryDataAsset
 {
@@ -28,13 +40,10 @@ public:
 	TSubclassOf<ASpellProjectile> ProjectileClass;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Spell")
-	bool bIsProjectile = true;
+	ESpellEffect Effect = ESpellEffect::Projectile;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Spell")
 	float HealAmount = 0.f;
-
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Spell")
-	bool bIsTownPortal = false;
 
 	virtual FPrimaryAssetId GetPrimaryAssetId() const override
 	{
