@@ -162,14 +162,12 @@ The existing codebase has three prototype variants (Combat, Platforming, Side-Sc
 - **Weapon skill progression** — Poor → Gangster → Hitman; snap tier transitions; per-weapon point tracking
 - **Dual-wielding** — Sawn-Off, Micro SMG, Tec-9, Pistol at Hitman tier (disables lock-on)
 - **Headshot system** — binary instant-kill flag (`SUFFERS_CRITICAL_HITS`) on NPCs, not a damage multiplier
-- **Drive-by shooting** — driver (SMGs, left/right window), passenger (wider arc), motorcycle (one-handed)
 
 ### UE5 Approach
 
 - Weapon inventory as component (`USAWeaponComponent`) managing 13 slots
 - Hit detection: sphere traces for melee (existing pattern), line traces for firearms
 - Lock-on via overlap sphere + dot-product cone filter
-- Drive-by as an aiming mode on the weapon component that constrains firing arc based on seat
 
 **Damage System:**
 
@@ -359,6 +357,7 @@ When setting up each AnimBP in the editor:
 - **Enter/exit** — player ↔ vehicle transition (animation + possession swap)
 - **Vehicle skills** — Driving, Cycling, Bike Skill (0–1000 each)
 - **Nitrous oxide** — 2x/5x/10x tanks, acceleration boost, auto-refill, UI indicator
+- **Drive-by shooting** — driver (SMGs, left/right window), passenger (wider arc), motorcycle (one-handed)
 
 ### UE5 Approach
 
@@ -367,6 +366,7 @@ When setting up each AnimBP in the editor:
 - Bicycle as a separate `ACharacter`-based pawn (not Chaos Vehicle — pedaling is animation-driven, not engine-driven)
 - Damage model as a component (`USAVehicleDamageComponent`) tracking HP and triggering VFX/SFX per stage
 - Enter/exit via `APawn::PossessedBy` swap — player controller possesses vehicle pawn, character hidden/attached
+- Drive-by as an aiming mode on the weapon component that constrains firing arc based on seat
 
 ### Animations Needed
 
