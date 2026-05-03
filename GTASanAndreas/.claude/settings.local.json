@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Select-Object Name, Mode)",
+      "WebSearch",
+      "Bash(xargs grep *)",
+      "Bash(\"C:/Users/Admin/AppData/Local/Python/pythoncore-3.14-64/python.exe\" Tools/generate_unit_sheets.py)",
+      "Bash(bash Tools/export_sprites.sh)",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(Sort-Object)",
+      "Bash(Select-Object -First 20)",
+      "Bash(xargs basename *)"
+    ]
+  }
+}
