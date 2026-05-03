@@ -11,10 +11,10 @@ Engine: UE 5.7 | Module: `GTASA` | Module deps: Engine, AIModule, EnhancedInput,
 ## Canonical Documents
 
 - **SPEC.md** — game behavior data (what the original GTA:SA does). Source of truth for mechanics, values, and data file references.
-- **Notion: Implementation Plan** — UE5 implementation details per feature (how we build it). 18 feature sections with deliverables, UE5 approach, and animation lists.
-- **Notion: Execution Phases & Architecture** — 10 phased milestones with test checklists, dependency graph, and all architectural decisions.
+- **IMPL.md** — UE5 implementation details per feature (how we build it). 18 feature sections with deliverables, UE5 approach, and animation lists.
+- **PHASES.md** — 10 phased milestones with test checklists, dependency graph, and all architectural decisions.
 
-When researching a system, check SPEC.md first for game data, then Notion for implementation approach. Game behavior details belong in SPEC.md; UE5 implementation details belong in Notion.
+When researching a system, check SPEC.md first for game data, then IMPL.md for implementation approach. Game behavior details belong in SPEC.md; UE5 implementation details belong in IMPL.md.
 
 ## Build & Iteration
 
