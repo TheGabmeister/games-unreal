@@ -83,28 +83,81 @@ Jump state at CPed offset `+0x46D`: 32 = landed, 34 = airborne, 36 = landing
 
 ### Fighting Styles
 
-| Style | Gym Location | Unlock Requirement | Signature Move | Kill Power |
-|-------|-------------|-------------------|----------------|------------|
-| Default | — | Starting style | Basic 3-hit punch/kick | Low |
-| Boxing | Ganton Gym, LS | 35% Muscle + defeat trainer | Left uppercut → right hook | Medium |
-| Kung Fu | Cobra Martial Arts, SF | 35% Muscle + defeat trainer | Running flying kick | Medium |
-| Muay Thai | Below the Belt, LV | 35% Muscle + defeat trainer | Knee → elbow combo | **High** (final elbow = 1-hit kill on NPCs) |
+| Style | ID | Gym Location | Unlock Requirement | Anim Group | Kill Power |
+|-------|----|--------------|--------------------|------------|------------|
+| Default | 4 | — | Starting style | Base fight anims | Low |
+| Boxing | 5 | Ganton Gym, LS | 35% Muscle + defeat trainer | FIGHT_B | Medium |
+| Kung Fu | 6 | Cobra Martial Arts, SF | 35% Muscle + defeat trainer | FIGHT_C | Medium |
+| Muay Thai | 7 | Below the Belt, LV | 35% Muscle + defeat trainer | FIGHT_D | **High** |
 
 - Only one style active at a time; learning a new one replaces the previous permanently
-- Each style provides: 3–4 hit standard combo, running attack, ground attack (stomp on downed enemy)
-- Combo input: repeated attack button presses; timing window between hits
+- Cannot recover a previous style once replaced
+- All 3 trainer defeats required for 100% completion
+
+### Per-Style Combo Chains
+
+| Style | Combo | Running Attack | Ground Attack |
+|-------|-------|----------------|---------------|
+| Default | 2-hit: punch → kick (kick knocks down) | Same as standing punch | Same as standing punch |
+| Boxing | Left uppercut → right hook | Rush punch | Downward punch to prone enemy |
+| Kung Fu | Rapid punches/kicks → roundhouse/spinning kick | Flying kick (most visually impressive) | Stomp |
+| Muay Thai | 4-hit: knees + punches → elbow strike (1-hit kill on normal NPCs) | Short jab rush | Hardcore stomp |
+
+**Muay Thai elbow:** deals extremely high damage (~500) that exceeds normal NPC health pools. Armored/high-health NPCs (story targets, FBI, military, gym trainers) survive with very low health remaining. Not literally infinite damage.
+
+### Combo Mechanics
+
+- Timing is **time-based, not frame-based** — driven by a `Chain` float (seconds) per attack move in `melee.dat`
+- **Timed presses advance** through the combo chain; **button mashing resets to the first move**
+- Each move in a chain has its own damage value (different hits deal different amounts)
+- No visual combo counter — the system is entirely internal
+- Data source: `data/melee.dat` defines per-combo entries with fields: Hit, Chain (follow-on time), Radius, HitLevel, Damage
+
+### Running Attacks
+
+- Triggered by: **lock on to target + moving toward them + attack**
+- Sprint is NOT required — jogging while locked on is sufficient
+- Each style has a unique running attack animation (the `_M` / moving attack animation)
+
+### Ground Attacks
+
+- Target must be in a knockdown/prone animation state
+- Same input as normal attack while locked on to downed enemy — game detects target is down and plays ground-specific animation
+- Works on any knocked-down NPC
 
 ### Blocking
 
 - Hold lock-on button without pressing attack to block
-- Reduces incoming melee damage (not eliminated)
-- Cannot block indefinitely; sustained combo breaks through
+- **No stamina cost** — blocking is free to maintain
+- Reduces incoming melee damage (exact multiplier not publicly documented)
+- Guard breaking under sustained pressure is an **NPC AI behavior transition**, not a discrete hit-count threshold — NPCs drop guard after sustained hits
+- NPCs block more when their health is low
 - Available with all styles including default
+
+### Gym Trainer Fights
+
+- Requires 35% Muscle minimum
+- **Real combat encounter** against a trainer NPC with boosted health (not scripted)
+- On-screen prompts teach new moves during the fight
+- If CJ loses: hospital respawn (normal death penalty)
+- If CJ **forfeits mid-fight** (leaves gym): **loses all carried weapons** (significant penalty)
+- LV kickboxing trainer is hardest — max health and muscle recommended
+- On completion: unarmed moveset permanently replaced
+- CPed fields: `m_nFightingStyle` (eFightingStyle enum), `m_nAllowedAttackMoves`, `m_nAttackTimer`
+
+### Hit Reactions
+
+- GTA:SA does NOT have ragdoll physics (introduced in GTA IV) — hit reactions use canned animations
+- 3 hit reaction animations per set (low/mid/high), determined by `HitLevel` field in `melee.dat`
+- Hit reactions are tied to the **defender's** animation set, not the attacker's style
+- All enemies use the same stagger/stumble/fall animations regardless of what style hit them
+- The kickboxing elbow causes a unique knockdown/death animation due to extreme damage
 
 ### Melee Damage Scaling
 
-- Muscle stat (0–1000) directly multiplies melee damage output
+- Muscle stat (0–1000) acts as damage multiplier on all melee attacks
 - Higher muscle = more damage per hit; applies to all styles and melee weapons
+- Max muscle + kickboxing can destroy a car in ~25 punches
 - Visual model changes at 50% Muscle (walk animation shifts)
 - 100% Muscle: slight sex appeal penalty
 

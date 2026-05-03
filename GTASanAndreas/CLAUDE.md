@@ -4,13 +4,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**GTASA** is an Unreal Engine 5.7 C++ project structured as three independent gameplay variant prototypes — Combat, Platforming, and Side-Scrolling — all living in a single module (`GTASA`) under `Source/GTASA/`. Each variant has its own Character, GameMode, PlayerController, and gameplay objects. Shared base classes (`GTASACharacter`, `GTASAGameMode`, `GTASAPlayerController`) live at the module root.
+**GTASA** is an Unreal Engine 5.7 C++ recreation of GTA: San Andreas gameplay mechanics. The codebase is transitioning from three learning-exercise prototypes (Combat, Platforming, Side-Scrolling) to a single unified GTA:SA gameplay layer. The three `Variant_*` folders under `Source/GTASA/` are being retired.
 
-Engine: UE 5.7 | Module deps: Engine, AIModule, UMG | Plugins: StateTree, GameplayStateTree, ModelingToolsEditorMode
+Engine: UE 5.7 | Module: `GTASA` | Module deps: Engine, AIModule, EnhancedInput, UMG, Slate
+
+## Canonical Documents
+
+- **SPEC.md** — game behavior data (what the original GTA:SA does). Source of truth for mechanics, values, and data file references.
+- **Notion: Implementation Plan** — UE5 implementation details per feature (how we build it). 18 feature sections with deliverables, UE5 approach, and animation lists.
+- **Notion: Execution Phases & Architecture** — 10 phased milestones with test checklists, dependency graph, and all architectural decisions.
+
+When researching a system, check SPEC.md first for game data, then Notion for implementation approach. Game behavior details belong in SPEC.md; UE5 implementation details belong in Notion.
 
 ## Build & Iteration
 
-There are no build scripts. Compile through the Unreal Editor (Play-in-Editor) or via Unreal Build Tool from the command line:
+No build scripts. Compile through the Unreal Editor (Play-in-Editor) or via Unreal Build Tool:
 
 ```
 # Regenerate Visual Studio solution
@@ -26,50 +34,27 @@ Default map: `/Game/ThirdPerson/Lvl_ThirdPerson`
 
 ## Architecture
 
-### Variant Structure
+### Code Philosophy
 
-Each variant follows the same layout:
+- **C++ first, thin Blueprint layer.** All gameplay logic in C++. Blueprints only for: asset references (meshes, montages, input actions via BP defaults), `UPROPERTY(EditDefaultsOnly)` parameter tweaking, UMG widget layout, AnimBP graphs, and level design. No gameplay logic in Blueprint event graphs.
+- **Component-based player.** `SAPlayerCharacter` composed of: `USAMovementComponent`, `USAWeaponComponent`, `USAStatsComponent`, `USAInteractionComponent`.
+- **Data-driven.** Weapon stats, vehicle handling, NPC behavior, zone population all driven by `UDataAsset` subclasses mapping 1:1 to original game data files (weapon.dat, handling.cfg, pedstats.dat, melee.dat).
+- **Plain C++ state machines for AI.** Each NPC archetype has its own `AAIController` subclass with a state enum + switch-based `Tick` logic. No StateTree, no Behavior Trees.
+- **No GAS.** Damage is `AActor::TakeDamage` with `UDamageType` subclasses. Stats are flat floats on `USAStatsComponent`.
+- **Enhanced Input** with dual KB+M and gamepad support via single Input Mapping Context per action set.
 
-```
-Variant_<Name>/
-  <Name>Character.h/.cpp          — ACharacter subclass with variant-specific movement
-  <Name>GameMode.h/.cpp
-  <Name>PlayerController.h/.cpp
-  AI/                             — AIController, NPC/Enemy, StateTree utilities, EQS contexts
-  Animation/                      — AnimNotify subclasses (montage callbacks)
-  Gameplay/                       — AActor gameplay objects (volumes, pickups, platforms)
-  Interfaces/                     — UInterface definitions
-  UI/                             — UUserWidget subclasses
-```
+### Damage System
 
-Content mirrors this under `Content/Variant_<Name>/`.
+All damage flows through `AActor::TakeDamage`. Five damage types: `Bullet`, `Melee`, `Explosion`, `Fire` (DOT), `Fall`. Characters have `Health` + `Armor` as floats on the class (not a component). Vehicles use `USAVehicleDamageComponent` (1000-scale health). Breakable world props use `USABreakableComponent` (binary destroy, no health tracking). Armor absorbs bullet/explosion but NOT fall damage.
 
-### Input
+### Collision
 
-Uses **Enhanced Input** exclusively. Input Actions and Mapping Contexts live in `Content/Input/` (base) and `Content/Variant_*/Input/`. Input contexts are assigned and activated in each variant's PlayerController. Mobile touch controls are handled in `GTASAPlayerController` via UMG.
+Two custom trace channels only: `SA_Weapon` (melee + firearm hit detection) and `SA_Interaction` (short-range interaction). No custom object channels — built-in `Pawn`, `Vehicle`, `WorldStatic`, `WorldDynamic` cover all cases.
 
-### Combat Variant
+### Legacy Code (Being Retired)
 
-- Interface-based damage model: `ICombatAttacker` (DoAttackTrace / CheckCombo / CheckChargedAttack) and `ICombatDamageable` (ApplyDamage / HandleDeath / ApplyHealing / NotifyDanger).
-- Attack timing driven by AnimNotifies on montages: `AnimNotify_DoAttackTrace`, `AnimNotify_CheckCombo`, `AnimNotify_CheckChargedAttack`.
-- Melee hit detection via sphere traces in `CombatCharacter`.
-- AI uses `StateTreeAIComponent` on `CombatAIController`; EQS contexts for player and danger locations.
-- Respawn: `CombatCheckpointVolume` calls `SetRespawnTransform()` on the PlayerController; `CombatPlayerController` respawns on death.
-
-### Platforming Variant
-
-- Coyote time: 0.16 s grace period after leaving ground.
-- Wall jump: forward sphere trace detects walls; applies 800 cm/s horizontal + 900 cm/s vertical impulse. 0.1 s input lockout after wall jump.
-- Dash: montage-based; `AnimNotify_EndDash` clears dash state.
-- State queries: `HasDoubleJumped()`, `HasWallJumped()` exposed for Blueprint/AnimBP.
-
-### Side-Scrolling Variant
-
-- Movement constrained to 2D plane; custom `SideScrollingCameraManager`.
-- Soft platforms (`SideScrollingSoftPlatform`): one-way collision — drop through by holding down.
-- NPC interaction via `ISideScrollingInteractable`; 3 s cooldown after interaction.
-- `SideScrollingGameMode` spawns the HUD widget and tracks pickup count.
+The `Variant_Combat/`, `Variant_Platforming/`, and `Variant_SideScrolling/` folders contain prototype code from earlier learning exercises. Reusable patterns: AnimNotify-based attack traces, sphere-trace melee hit detection, montage-driven abilities. The variant-specific logic (interfaces like `ICombatAttacker`/`ICombatDamageable`, StateTree AI, EQS contexts) is NOT carried forward.
 
 ### Renderer / Platform
 
-Lumen + ray-tracing enabled, Substrate shading model, static lighting disabled. Shader model SM6 (DX12/Vulkan/Metal). Desktop maximum-performance target. No mobile rendering path despite touch input support.
+Lumen + ray-tracing enabled, Substrate shading model, static lighting disabled. Shader model SM6 (DX12/Vulkan/Metal). Desktop maximum-performance target.

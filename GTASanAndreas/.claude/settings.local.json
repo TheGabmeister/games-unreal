@@ -10,7 +10,14 @@
       "Bash(Sort-Object)",
       "Bash(Select-Object -First 20)",
       "Bash(xargs basename *)",
-      "WebFetch"
+      "WebFetch",
+      "Bash(Get-ChildItem -Path \"C:\\\\dev\\\\games-unreal\\\\GTASanAndreas\\\\Source\" -Recurse -Filter \"*.h\" -File)",
+      "mcp__notion__notion-create-pages",
+      "mcp__notion__notion-update-page",
+      "mcp__notion__notion-fetch",
+      "Bash(git checkout *)",
+      "Bash(gh api *)",
+      "Bash(gh search *)"
     ]
   }
 }
