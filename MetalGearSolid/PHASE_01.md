@@ -12,20 +12,6 @@ This document defines the C++ implementation contract for Phase 1. It is still h
 - Establish Enhanced Input bindings.
 - Establish pause and game mode flow.
 
-## Phase 1 Definition Of Done
-
-Phase 1 is complete when pressing Play in the prototype map starts a playable session where:
-
-- The project uses the intended MGS game mode, player controller, and player character.
-- The player spawns at a valid player start.
-- The player moves on the horizontal plane with keyboard and controller input.
-- The camera presents the room from the defined Phase 1 stealth camera angle.
-- The player collides with walls and simple props.
-- The player can face one test interactable and trigger it with the interact input.
-- An interaction prompt state is exposed from C++ and validated through debug output.
-- Pause toggles gameplay on and off.
-- The prototype can be validated from a single graybox map.
-
 ## Required Asset Names
 
 Use these names for Phase 1 assets so setup and validation are predictable:
@@ -126,13 +112,6 @@ Possession mismatch:
 - Movement and interaction routing must no-op safely when the possessed pawn is invalid or the wrong type.
 - A wrong pawn type must log once during setup or first failed routing, not every frame.
 
-Pause while paused:
-
-- Pause input must work both when gameplay is running and when the game is paused.
-- `IA_Pause` must execute while paused so it can resume the game.
-- Paused gameplay must stop movement and interaction activation.
-- Pause must not destroy or reset the current interaction target.
-
 Interaction detection:
 
 - Phase 1 interaction must use a short forward sphere trace from the player, not an overlap-only system.
@@ -146,25 +125,6 @@ Prompt fallback:
 
 - Phase 1 does not require a UMG prompt widget. Prompt state is exposed through C++ and validated through logging/debug display.
 - A missing prompt widget must not block interaction validation.
-
-Camera stability:
-
-- Camera collision must be disabled by default for Phase 1 to avoid unstable framing in narrow graybox spaces.
-- Camera distance, height, and pitch must remain editor-tunable.
-- Free-orbit camera behavior is disabled.
-
-Map and game mode defaults:
-
-- The Phase 1 prototype map must explicitly use `BP_MGSGameMode`.
-- `BP_MGSGameMode` must use `BP_MGSPlayerController` and `BP_MGSCharacter`.
-- The map must not rely on a manually placed possessed pawn for normal validation.
-- A manually placed possessed pawn is not used for normal Phase 1 validation.
-
-Prompt and pause UI:
-
-- Prompt UI is not built in Phase 1.
-- Pause UI is built as a visible placeholder widget.
-- Missing pause UI class must not prevent pause state from functioning, but it fails the full Phase 1 validation checklist.
 
 ## Player Character
 
@@ -180,14 +140,6 @@ Phase 1 responsibilities:
 - Do not bind jump input for Phase 1. Existing jump helper functions can remain for template compatibility, but Phase 1 does not call them.
 - Provide an entry point for interact input.
 - Own the interaction trace, current interactable reference, and prompt state directly.
-
-Phase 1 success criteria:
-
-- The player can spawn reliably.
-- The player can move in the test map.
-- The player can traverse the open area, narrow passage, L-shaped wall, and obstacle layout without camera or collision failure.
-- Collision with world geometry is predictable.
-- The player can trigger one nearby interactable.
 
 Required exposed tuning categories:
 
@@ -219,15 +171,9 @@ Phase 1 responsibilities:
 
 - Provide a basic top-down / third-person stealth camera mode.
 - Keep the camera readable for room-scale navigation.
-- Avoid free-orbit camera behavior.
 - Expose enough camera tuning to adjust height, distance, pitch, and lag in the editor.
 - Remove free-orbit camera behavior from the default Phase 1 camera path.
 - Keep camera collision disabled by default for stable Phase 1 framing.
-
-Phase 1 success criteria:
-
-- The player remains visible while traversing the open area, narrow passage, L-shaped wall, and obstacle layout.
-- The camera shows the player, nearby walls, and the test interactable at the same time when the player is near the interactable.
 
 Baseline camera target:
 
@@ -262,11 +208,6 @@ Phase 1 responsibilities:
 - Rotate the character to face movement direction.
 - Keep all Phase 1 movement in a single normal locomotion state.
 
-Phase 1 success criteria:
-
-- Keyboard, mouse, and controller movement routes are clear.
-- Movement has one obvious source of truth.
-
 Required input behavior:
 
 - `Move` accepts a 2D input vector.
@@ -295,19 +236,6 @@ Phase 1 responsibilities:
 - Confirm the player blocks against walls, floors, and simple props.
 - Keep collision behavior conventional for Unreal Character movement.
 
-Phase 1 success criteria:
-
-- The player cannot pass through graybox walls.
-- Movement along walls behaves predictably.
-- Collision setup supports Phase 1 movement and interaction validation.
-
-Required collision checks:
-
-- Walk directly into a wall.
-- Slide along a wall while moving diagonally.
-- Walk around a corner.
-- Approach an interactable without physically blocking the interaction test.
-
 ## Interaction Prompts
 
 Primary C++ owners:
@@ -323,11 +251,6 @@ Phase 1 responsibilities:
 - Support simple test interactables in the graybox map.
 - Keep prompt text generic and prototype-only.
 - Support one active interactable at a time.
-
-Phase 1 success criteria:
-
-- The player can approach a test object and receive a prompt state.
-- Pressing the interact input logs `Interactable activated` and toggles the test interactable activated state.
 
 Required interaction behavior:
 
@@ -378,11 +301,6 @@ Phase 1 responsibilities:
 - Include enough layout variation to test turning, wall collision, and camera readability.
 - Avoid production Shadow Moses layout work in this phase.
 
-Phase 1 success criteria:
-
-- Pressing Play starts in the test map with the prototype player.
-- The test map can validate every Phase 1 feature.
-
 Required map contents:
 
 - One player start.
@@ -409,12 +327,6 @@ Phase 1 responsibilities:
 - Support keyboard/mouse and controller at a basic level.
 - Own pause input in the controller.
 - Route movement and interaction to the possessed `AMGSCharacter`.
-
-Phase 1 success criteria:
-
-- Move input works.
-- Interact input reaches the interaction system.
-- Pause input reaches the pause flow.
 
 Required input actions:
 
@@ -453,12 +365,6 @@ Phase 1 responsibilities:
 - Toggle paused and unpaused gameplay.
 - Switch input mode appropriately between gameplay and UI.
 - Show or hide a minimal pause overlay.
-
-Phase 1 success criteria:
-
-- Pause input stops gameplay.
-- Pause input or menu action resumes gameplay.
-- Player input does not leak unexpectedly while paused.
 
 Required pause behavior:
 
@@ -514,49 +420,11 @@ Phase 1 responsibilities:
 - Own basic prototype startup assumptions.
 - Ensure the prototype map does not depend on manually placing a possessed pawn.
 
-Phase 1 success criteria:
-
-- The correct player pawn and controller are used when the test map starts.
-- Startup behavior is predictable.
-- Phase 1 systems can be tested without manual setup every play session.
-
 Required default classes:
 
 - Default pawn: `BP_MGSCharacter`
 - Player controller: `BP_MGSPlayerController`
 - Game mode: `BP_MGSGameMode`
-
-## Recommended C++ Types
-
-- `AMGSCharacter` for player pawn behavior.
-- `AMGSPlayerController` for input, pause, and player-owned UI flow.
-- `AMGSGameMode` for default classes and prototype game startup.
-- `AMGSInteractableActor` for simple interactable world objects.
-
-## C++ Ownership Rule
-
-Phase 1 must be implemented with C++ as the behavioral source of truth.
-
-C++ owns:
-
-- Player movement rules.
-- Camera behavior.
-- Input routing.
-- Interaction detection.
-- Interaction activation.
-- Prompt state.
-- Pause state.
-- Game mode startup flow.
-- Validation logging.
-
-Blueprints own:
-
-- Tunable numeric defaults.
-- Meshes, materials, and simple visual placeholders.
-- Input action and mapping context asset assignment.
-- Widget class assignment.
-- Map placement.
-- Test-map-only presentation details.
 
 ## Logging And Debugging
 
@@ -571,19 +439,6 @@ Required debug display:
 - Current interaction target name.
 - Whether pause is active.
 
-## Phase 1 Validation Checklist
-
-- Project builds successfully.
-- Test map opens without errors.
-- Play-in-editor spawns the correct player character.
-- Player movement works.
-- Camera follows the player clearly.
-- Player blocks against graybox collision.
-- Interact prompt state appears for a test object.
-- Interact input triggers the test object.
-- Pause toggles on and off.
-- Game mode uses the intended pawn and controller.
-
 ## Implementation Order
 
 1. Confirm project builds before edits.
@@ -594,7 +449,7 @@ Required debug display:
 6. Add pause flow.
 7. Configure game mode defaults.
 8. Create `L_Phase01_CorePrototype` and configure it as the graybox validation map.
-9. Run the Phase 1 validation checklist.
+9. Run the testing checklist.
 
 ## Out Of Scope For Phase 1
 
@@ -610,3 +465,57 @@ Required debug display:
 - Final animation work
 - Final UI art
 - Production map layout
+
+## Testing Checklist
+
+- Project builds successfully.
+- `L_Phase01_CorePrototype` opens without errors.
+- `L_Phase01_CorePrototype` uses `BP_MGSGameMode`.
+- `BP_MGSGameMode` uses `BP_MGSPlayerController`.
+- `BP_MGSGameMode` uses `BP_MGSCharacter`.
+- Play-in-editor spawns the player at a valid player start.
+- The map does not require a manually placed possessed pawn.
+- `AMGSCharacter`, `AMGSPlayerController`, and `AMGSGameMode` are concrete C++ classes.
+- Missing input mapping context or input action references log clear `LogMGS` warnings or errors without crashing.
+- Possessing a pawn that is not `AMGSCharacter` does not crash and logs once.
+- Keyboard `WASD` movement works.
+- Controller left-stick movement works.
+- Movement is camera-relative.
+- Analog movement magnitude affects movement speed.
+- The character rotates to face movement direction.
+- Jump input is not bound in `IMC_Phase01`.
+- Player-controlled camera look is not bound in `IMC_Phase01`.
+- Camera follows the player through the character camera boom.
+- Camera collision is disabled.
+- Camera lag is disabled.
+- The player remains visible in the open area, narrow passage, L-shaped wall, and obstacle layout.
+- The camera shows the player, nearby walls, and the test interactable when the player is near the interactable.
+- The player cannot pass through graybox walls.
+- The player slides along a wall while moving diagonally.
+- The player can walk around a corner.
+- The player can approach the interactable without collision blocking the interaction test.
+- The forward sphere trace detects the test interactable.
+- Only one active interactable is tracked at a time.
+- Disabled interactables do not show prompts and do not activate.
+- Destroyed or invalid interaction targets are cleared safely.
+- Repeated interact presses on a valid target are allowed.
+- Pressing `E` activates the interactable on keyboard.
+- Pressing gamepad face button bottom activates the interactable on controller.
+- Interaction activation logs `Interactable activated`.
+- Interaction activation toggles the test interactable activated state.
+- Prompt state is visible in debug output.
+- Current interaction target name is visible in debug output.
+- Interaction activation is ignored while paused.
+- Pressing `Esc` pauses the game.
+- Pressing `Esc` again resumes the game.
+- Pressing start/menu pauses and resumes the game on controller.
+- `IA_Pause` works while paused.
+- Gameplay movement stops while paused.
+- Interaction activation is blocked while paused.
+- Pause does not destroy or reset the current interaction target.
+- Mouse cursor is visible while paused.
+- `WBP_Phase01Pause` appears while paused.
+- `WBP_Phase01Pause` hides while gameplay is running.
+- `WBP_Phase01Pause` contains only a visible `PAUSED` label.
+- Missing pause widget class does not crash and logs a clear warning.
+- Pause state is visible in debug output.
