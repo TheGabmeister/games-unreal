@@ -20,7 +20,13 @@
       "WebFetch",
       "Skill(update-config)",
       "Skill(update-config:*)",
-      "Read(//c/Users/Admin/.claude/**)"
+      "Read(//c/Users/Admin/.claude/**)",
+      "Bash(curl -s \"https://raw.githubusercontent.com/OpenMW/openmw/master/apps/openmw/mwmechanics/aicombataction.cpp\")",
+      "Bash(findstr /i \"flee\\\\|Flee\\\\|fAIFlee\\\\|rateFlee\\\\|vanillaRateFlee\\\\|FleeHealth\")",
+      "PowerShell(\\(Invoke-WebRequest -Uri \"https://raw.githubusercontent.com/OpenMW/openmw/master/apps/openmw/mwmechanics/aicombataction.cpp\" -UseBasicParsing\\).Content -split \"`n\" | Select-String -Pattern \"flee|fAIFlee|rateFlee|FleeHealth\" -CaseSensitive:$false)",
+      "PowerShell($content = \\(Invoke-WebRequest -Uri \"https://raw.githubusercontent.com/OpenMW/openmw/master/apps/openmw/mwmechanics/aicombataction.cpp\" -UseBasicParsing\\).Content; $lines = $content -split \"`n\"; for \\($i = 0; $i -lt $lines.Count; $i++\\) { if \\($lines[$i] -match \"vanillaRateFlee|makeFleeDecision\"\\) { $start = [Math]::Max\\(0, $i - 2\\); $end = [Math]::Min\\($lines.Count - 1, $i + 25\\); for \\($j = $start; $j -le $end; $j++\\) { Write-Output \\(\"{0}: {1}\" -f \\($j+1\\), $lines[$j]\\) }; Write-Output \"---\" } })",
+      "Bash(curl -s \"https://raw.githubusercontent.com/OpenMW/openmw/master/apps/openmw/mwmechanics/mechanicsmanagerimp.cpp\")",
+      "Bash(curl -s \"https://raw.githubusercontent.com/OpenMW/openmw/master/apps/openmw/mwmechanics/actors.cpp\")"
     ],
     "additionalDirectories": [
       "c:\\dev\\games-godot\\chrono-trigger\\.claude"

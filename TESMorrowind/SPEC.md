@@ -33,7 +33,7 @@ Eight primary attributes, each ranging 0–100 (base). Starting values determine
 
 ### 1.3 Skills (27 Total)
 
-Each skill belongs to one governing attribute and one of three specializations (Combat, Magic, Stealth). Nine skills per specialization.
+Each skill belongs to one governing attribute and one of three specializations (Combat, Magic, Stealth). Nine skills per specialization. All skills cap at 100 (base); Fortify effects can exceed this.
 
 **Combat Specialization:**
 
@@ -93,7 +93,7 @@ Each skill belongs to one governing attribute and one of three specializations (
 
 ### 1.4 Leveling
 
-A level-up triggers after 10 increases across any combination of Major and Minor skills. Miscellaneous skill increases do NOT count. The player must then rest (§11.5) to receive the level-up.
+A level-up triggers after 10 increases across any combination of Major and Minor skills. Miscellaneous skill increases do NOT count. The player must then rest (§11.4) to receive the level-up.
 
 **Attribute Multiplier Table:**
 
@@ -299,6 +299,41 @@ Four options during dialogue:
 
 All persuasion checks apply the Fatigue Term and factor in both player and NPC stats.
 
+### 1.13 Disease
+
+**Common Diseases:** Contracted from creature attacks (e.g., rat bites, Kwama stings). Each disease applies a persistent Drain effect on one or more attributes/skills. Cure via Cure Common Disease spell/potion, or by praying at an Imperial Cult or Tribunal Temple shrine.
+
+**Blight Diseases:** More severe. Contracted from Blight Storms or ash creature attacks (Corprus creatures, Ash Zombies, etc.). Drain effects are stronger. Cure via Cure Blight Disease spell/potion, or shrine prayer. Blight Storms cease after completing the main quest.
+
+**Corprus Disease:** Unique story disease (see §5.1). Cannot be cured normally — the only cure is Divayth Fyr's potion, which removes negative effects while granting permanent immunity to all diseases.
+
+**Social Penalty:** Diseased characters suffer a −5 disposition penalty with all NPCs. Some NPCs will comment on the player's illness.
+
+### 1.14 Vampirism
+
+Contracted by taking damage from a vampire's melee attack (Porphyric Hemophilia disease). After 3 days without curing, the player transforms into a vampire.
+
+**Three Clans** (one per Great House territory):
+- **Aundae** (Vvardenfell northeast) — magic-focused; Fortify Willpower, Fortify Intelligence
+- **Berne** (Vvardenfell southeast) — stealth-focused; Fortify Agility, Fortify Sneak
+- **Quarra** (Vvardenfell northwest) — combat-focused; Fortify Strength, Fortify Hand-to-Hand
+
+**Vampire Abilities (all clans):** +20 to STR, WIL, SPD. Vampire Touch (Absorb Health 15 pts on Touch), Vampire Aura (1 pt Calm Humanoid), Resist Normal Weapons 50%, Resist Paralysis 100%, Immune to Disease, Night Eye. Magicka bonus varies by clan.
+
+**Drawbacks:** Sun damage (fire damage while outdoors between 6am–6pm), −1 disposition penalty per vampire clan rank (effectively −10 at max). Most NPCs refuse service. Factions expel the player.
+
+**Cure:** Requires a lengthy quest involving Molag Bal's shrine.
+
+### 1.15 Weapon & Armor Condition
+
+Weapons and armor degrade with use. Condition ranges from 0% to 100%.
+
+**Weapon Condition:** Damage dealt is scaled by weapon condition — a weapon at 50% condition deals 50% of its normal damage. At 0%, the weapon deals no damage.
+
+**Armor Condition:** Armor rating is scaled by condition — armor at 50% provides 50% of its calculated AR.
+
+**Repair (Armorer Skill):** The player uses Repair Hammers (for weapons/armor) and Repair Prongs (for armor only, in practice both use hammers). Each repair attempt restores a portion of condition based on Armorer skill and hammer quality. Failure can reduce quality. Higher-quality hammers (Apprentice → Journeyman → Master → Grandmaster) restore more condition per attempt. NPCs offer repair services for gold (follows the barter formula).
+
 ---
 
 ## 2. Controls & Input
@@ -364,10 +399,9 @@ All persuasion checks apply the Fatigue Term and factor in both player and NPC s
 
 ### 2.3 Context-Sensitive Controls
 
-- **Combat:** Hold LMB to charge; movement direction at attack start determines Chop / Slash / Thrust.
+- **Combat:** Hold LMB to charge attack power; movement direction determines attack type (see §1.6).
 - **Magic Ready:** When magic is readied (R), LMB casts instead of swinging a weapon.
-- **Weapon Drawn:** Having a weapon drawn reduces NPC disposition by a fixed amount.
-- **"Always Use Best Attack":** Option in Prefs overrides directional attacks, always using the weapon's highest-damage type.
+- **Weapon Drawn:** Having a weapon drawn reduces NPC disposition by −5.
 
 ---
 
@@ -616,6 +650,8 @@ Set in **Mournhold**, capital of mainland Morrowind.
 - Enter the **Clockwork City** (Sotha Sil's mechanical realm).
 - Final boss: **Almalexia** (goes mad, attacks the player). Defeating her yields **Hopesfire** (twin blade, shock damage).
 
+**QoL Additions:** Journal can now be sorted by quest name with active/completed filtering. Map annotations (custom text markers). Hireable followers: mercenaries (equip with weapons/armor, paid in gold) and pack rats (carry items).
+
 ### 5.4 Expansion: Bloodmoon
 
 Set on **Solstheim**, frozen island northwest of Vvardenfell.
@@ -650,6 +686,8 @@ Set on **Solstheim**, frozen island northwest of Vvardenfell.
 | Amulet / Necklace | Jewelry | |
 | Left Ring | Jewelry | |
 | Right Ring | Jewelry | |
+
+**Race Restrictions:** Argonians and Khajiit cannot equip standard boots (due to foot/claw shape) or closed-face helms. They can wear open helms and shoes (clothing-slot footwear).
 
 ### 6.2 Weapon Types
 
@@ -688,30 +726,161 @@ Seven Daedric Prince quests, each yielding a unique artifact:
 
 ## 7. Enemies & Opponents
 
-### 7.1 Creatures by Category
+### 7.1 AI Settings (Fight / Flee / Alarm / Hello)
+
+Every NPC and creature has four AI values (0–100) governing behavior.
+
+**Fight (Aggression):** Determines when the actor initiates combat. The engine continuously calculates an effective Fight value; combat triggers when it reaches ≥ 100.
+
+```
+effectiveFight = baseFight + distanceBias + dispositionBias [+ iWerewolfFightMod]
+
+distanceBias    = 20 − 0.005 × distance     (at 0 units: +20; at 4000+ units: 0 or negative)
+dispositionBias = (50 − disposition) × 0.2   (disposition 0: +10; disposition 100: −10)
+iWerewolfFightMod = 100                      (NPCs always attack known werewolves)
+```
+
+Creatures have no disposition, so their Fight value + distance bias is the primary trigger.
+
+| Fight Value | Typical Behavior |
+|-------------|-----------------|
+| 100 | Always attacks immediately |
+| 90 | Attacks when player approaches (~2000 units) |
+| 70 | Attacks only at close range with low disposition |
+| 30 | Standard peaceful NPC — attacks only on provocation/crime |
+| 0 | Only attacks if attacked first |
+
+**Flee (Flight):**
+```
+fleeRating = (1.0 − healthPercent) × 7.0 + fleeValue × 0.3
+```
+Flee only triggers when fleeRating ≥ 100 AND fleeRating > the NPC's best offensive action rating. Under default game settings, health loss alone almost never reaches the threshold — a Flee value near 100 (via Intimidation or scripting) is needed. Fleeing NPCs run in the opposite direction for 1 second, then pathfind to an escape point up to 3,000 units away. There is no surrender or yield mechanic.
+
+**Alarm (Crime Response):** Controls how NPCs react to witnessed crimes within the alarm radius (2,000 units). NPCs with Alarm ≥ 100 immediately report crimes (generating bounty). Lower values contribute proportionally to the fight response. Crime severity values (iAlarm GMSTs): Murder 90, Assault 50, Pickpocket 20, Trespassing 5, Stealing 1. For bounty amounts and guard behavior, see §11.5.
+
+**Hello (Greeting Distance):** How far away an NPC delivers voiced greetings. Cosmetic only — does not affect combat.
+
+**Typical AI Profiles:**
+
+| NPC Type | Fight | Flee | Alarm | Hello |
+|----------|-------|------|-------|-------|
+| Guard | 30 | 0 | 100 | 30–50 |
+| Merchant / Civilian | 30 | 0 | 100 | 30 |
+| Hostile bandit | 90 | 20–30 | 0 | 0 |
+| Aggressive creature | 90 | 0–30 | 0 | 0 |
+| Passive creature | 30 | 50 | 0 | 0 |
+
+### 7.2 AI Packages
+
+Five package types govern non-combat behavior:
+
+- **Wander** — NPC selects random points on the cell's path grid within a specified radius. Eight idle animation slots (looking around, scratching head, shifting armor, yawning, examining fingers, bowing, reaching for weapon) each have a percentage chance of playing between movements.
+- **Travel** — Walk to a specific world coordinate via pathfinding.
+- **Follow** — Follow a target actor. Followers join the target in combat and follow through load doors if close enough.
+- **Escort** — Lead a target to a destination. Escorting NPCs defend the target if attacked.
+- **Activate** — Walk to and activate a specific object. Rarely used.
+
+### 7.3 Combat AI
+
+**Action Selection:** The AI uses a rating system each combat tick, evaluating potions → enchanted items → weapons → spells. The highest-rated option wins.
+
+| Action Type | Rating Multiplier |
+|-------------|------------------|
+| Ranged spells (On Target) | 5.0× |
+| Ranged weapons (bow/crossbow) | 5.0× |
+| Touch-range spells | 3.0× |
+| Melee weapons | 2.0× |
+
+This creates a strong preference for ranged combat. In practice, the vanilla AI has quirks: summoners repeatedly cast bound equipment, archers close to melee range when threatened, and mages sometimes loop the same self-buff.
+
+**Spell Selection:** Each spell is rated by `rateEffects × (successChance / 100)`. Spells the target already has active are rejected. Priority order:
+- Cure Paralysis/Poison: emergency priority (~1001 rating)
+- Restore Health (self): 4.0 base, scaled by damage taken
+- Summoning: 3.0 base, blocked if summons already active
+- Bound weapons/armor: 2.0 base
+- Offensive effects: scaled by target's estimated resistance
+- AI never uses: Soul Trap, teleportation, Charm/Frenzy/Calm, Detect, Lock/Unlock, Telekinesis, Invisibility, Levitate, Fortify Attributes
+
+**Pursuit:** No leash/tether distance. Once combat starts, enemies pursue indefinitely until one side dies, the enemy flees, or the player uses Calm magic. Combat states cycle through Pursue (pathfind toward target) → Follow (within follow range) → Attack (within strike range + line of sight).
+
+**Potion Use:** NPCs can use potions in combat. Vanilla Morrowind allows NPCs to consume their entire supply near-instantly (Morrowind Code Patch limits to once per 5–6 seconds).
+
+**Attack Timing:** Base delay 0.1s + random 0–0.9s between attacks. Line of sight updates every 0.5s.
+
+### 7.4 Creatures by Category
 
 Full bestiary with stats in [docs/morrowind/bestiary.md](docs/morrowind/bestiary.md).
 
 **Beasts (Wildlife):**
-Rats, Nix-Hounds, Guars, Alits, Cliff Racers, Shalks, Kagoutis, Bull Netch, Betty Netch. Cliff Racers are the most common overworld nuisance — aggressive, flying, and found in nearly every region.
+Rats, Nix-Hounds, Guars, Alits, Cliff Racers, Shalks, Kagoutis, Bull Netch, Betty Netch, Slaughterfish.
 
-**Kwama (Egg Mines):** Foragers (scouts, aggressive), Workers (docile), Warriors (colony defenders), Queens (immobile, non-combatant).
+**Kwama (Egg Mines):** Foragers, Workers, Warriors, Queens. Colony behavior detailed in §7.5.
 
-**Undead:** Skeletons, Bonewalkers (Drain Attribute curses), Greater Bonewalkers, Bonelords, Ancestor Ghosts (immune to normal weapons), Dwarven Spectres (immune to normal weapons).
+**Undead:** Skeletons, Bonewalkers, Greater Bonewalkers (see §7.5), Bonelords, Ancestor Ghosts (immune to normal weapons), Dwarven Spectres (immune to normal weapons).
 
-**Dwemer Constructs:** Centurion Spiders, Centurion Spheres, Steam Centurions. Machines — soul value 0 (cannot be soul trapped).
+**Dwemer Constructs:** Centurion Spiders, Centurion Spheres (see §7.5), Steam Centurions. Machines — soul value 0.
 
-**Daedra:** Scamps, Clannfear, Hunger (destroys equipment), Daedroth, Ogrim, Dremora (immune to normal weapons), Dremora Lords, Winged Twilight, Golden Saints (soul value 400 — key for Constant Effect enchanting), Flame/Frost/Storm Atronachs.
+**Daedra:** Most immune to normal weapons. Scamps, Clannfear, Hunger (see §7.5), Daedroth, Ogrim (60% Daedra Heart drop), Dremora/Dremora Lords (Reflect + Fire Storm), Winged Twilight (flying, spells), Golden Saints (soul value 400, spawns with Daedric equipment), Flame/Frost/Storm Atronachs (elemental immunity to their own element, weak to opposite).
 
-**Ash Creatures (Sixth House):** Ash Slaves, Ash Zombies, Ash Ghouls (spellcasters), Ascended Sleepers (soul value 400, extremely dangerous), Ash Vampires (unique named Dagoth bosses).
+**Ash Creatures (Sixth House):** Ash Slaves, Ash Zombies, Ash Ghouls (spells: Ash Woe Blight, Earwig, Reflect, Spark, First Barrier), Ascended Sleepers (soul value 400; Paralysis, Fire/Frost Storm, Shockball — powerful ranged casters), Ash Vampires (see §7.6).
 
 **Corpus Creatures:** Lame Corprus (slow, weak), Corprus Stalkers (fast, aggressive).
 
-**Bloodmoon additions:** Wolves, Bears, Spriggans, Berserkers, Draugr, Rieklings, Grahl, Werewolves.
+**Bloodmoon additions:** Wolves, Bears, Spriggans (regenerate), Berserkers, Draugr, Rieklings, Grahl, Werewolves.
 
-**Tribunal additions:** Fabricants (mechanical), Goblins, Liches.
+**Tribunal additions:** Fabricants (mechanical, Clockwork City), Goblins (multiple variants, organized army), Liches.
 
-### 7.2 Leveled Lists vs Fixed Encounters
+### 7.5 Creature-Specific Behaviors
+
+**Cliff Racers:** Fight 90. Flying — distance calculation ignores Z-axis. Extremely wide detection range; no leash distance (pursue indefinitely). Purely melee, no spells. Infamous for swarming: wide aggro range causes chain-detection of additional cliff racers as the player fights the first.
+
+**Kwama Colony Pattern:** Workers passive (Fight ~30, will not attack unless provoked). Foragers aggressive scouts. Warriors defend the colony (Fight ~90, Kwama Poison). Queens immobile in the deepest chamber, defended by Warriors.
+
+**Netch:** Bull Netch generally passive (moderate Fight ~70), defends if attacked. Betty Netch more easily provoked, especially in herds. Both flying creatures.
+
+**Greater Bonewalkers:** The most feared non-boss enemy. Casts **Damage Strength** (permanent, not drain) — reduces Strength to 0, which sets carry capacity to 0, immobilizing the player under their own equipment weight. Requires Restore Strength spell/potion to recover.
+
+**Centurion Spheres:** Patrol Dwemer ruins in compressed sphere form. Unfold into sword-and-shield humanoid when detecting intruders.
+
+**Hunger:** Casts Disintegrate Armor on hit, destroying the player's equipment over time. Prioritize killing quickly.
+
+### 7.6 Boss Mechanics
+
+**Dagoth Ur (Main Quest Final Boss) — Two Phases:**
+
+*Phase 1 — Facility Cavern:* Dagoth Ur is initially non-hostile. Extended dialogue sequence before combat. Health is scripted to reset to 1,000 every frame — effectively invincible. Has unlimited Magicka. Unique abilities: Dagoth Ur Fire/Frost/Shock (elemental shield + damage aura). Must "kill" him (reduce HP to 0) to advance the script and access Phase 2.
+
+*Phase 2 — Akulakhan Chamber:* Dagoth Ur remains invincible (health still resets). Player must ignore him and reach the Heart of Lorkhan. Strike the Heart once with Sunder, then 5 times with Keening. Dagoth Ur's resistances cycle with each Keening strike (Fire → Frost → Shock → Shield → all removed). After Heart destruction: Health drops to 200, Magicka set to 0. He becomes mortal and killable. Cannot be permanently killed before Heart destruction.
+
+**Ash Vampires (Seven Brothers):**
+Seven unique named bosses in separate citadels, each carrying a unique artifact:
+
+| Name | Location | Artifact |
+|------|----------|----------|
+| Dagoth Uthol | Kogoruhn | Amulet of Heartfire |
+| Dagoth Endus | Endusal | Belt of Heartfire |
+| Dagoth Tureynul | Tureynulal | Amulet of Heartrime |
+| Dagoth Odros | Odrosal (guards Keening) | Amulet of Heartheal |
+| Dagoth Vemyn | Vemynal (guards Sunder) | Amulet of Heartthrum |
+| Dagoth Araynys | Mamaea | Soul Ring |
+| Dagoth Gilvoth | Dagoth Ur Lower Facility | Blood Ring |
+
+Each Ash Vampire killed weakens Dagoth Ur: −5 to Speed/Strength/Willpower, −50 Health/Fatigue, −250 Magicka. Only Dagoth Vemyn (guards Sunder) is a required kill.
+
+**Almalexia (Tribunal Final Boss):**
+Health 3,000, Magicka 1,500, Fatigue 1,500. Wields Hopesfire (unique sword, shock enchantment). Signature spell: Almalexia's Wrath — 40-foot radius Absorb Health 40 pts + Fire Damage 100 pts + Weakness to Fire 75% for 5s. High magic resistance, impressive speed. No distinct phases — single continuous fight. Soul value 1,500 (largest in the game alongside Vivec). Drops Hopesfire on death.
+
+**Hircine (Bloodmoon Final Boss) — Three Aspects (player chooses one):**
+
+| Aspect | Form | Key Stats | Strategy |
+|--------|------|-----------|----------|
+| **Strength** | Bear | Extremely high melee damage, Speed 20 (very slow) | Kite and use ranged attacks |
+| **Speed** | Wolf | SPD 100, AGI 140, LCK 140; continuous Health/Fatigue regen | Very hard to hit; sustained damage needed |
+| **Guile** | Humanoid | Wields Spear of the Hunter; casts Hunter's Venom (Paralyze + Burden); jumps out of range when hit | High magic resistance; evasive |
+
+All three aspects resist normal weapons and most magic.
+
+### 7.7 Leveled Lists vs Fixed Encounters
 
 Morrowind uses leveled creature lists but does NOT scale individual creatures. Each list specifies different creatures at level thresholds. A level-1 player may face rats in a dungeon while a level-15 player faces Daedra in the same dungeon — entirely different creatures, not scaled versions.
 
@@ -799,7 +968,16 @@ All three use the same rank names: Hireling → Retainer → Oathman → Lawman 
 
 **East Empire Company (Bloodmoon):** Joined through the Raven Rock colony questline.
 
-### 9.2 Disposition Formula
+### 9.2 Great House Strongholds
+
+After reaching rank 4 (Kinsman) in a Great House, the player can construct a personal stronghold through a multi-phase building quest:
+- **House Hlaalu:** Rethan Manor (near Balmora)
+- **House Redoran:** Indarys Manor (near Ald'ruhn)
+- **House Telvanni:** Tel Uvirith (tower in the Molag Amur region)
+
+Each stronghold is built in 3 phases, requiring gold and completion of quests for the House. The final stronghold includes guards, merchants, and storage.
+
+### 9.3 Disposition Formula
 
 ```
 Disposition = NPC Base Disposition
@@ -866,29 +1044,27 @@ Right Mouse Button toggles Menu Mode, displaying four simultaneous resizable/rep
 
 **Generic vs Unique Dialogue:** Most dialogue is generic — shared across NPCs, filtered by conditions. Unique dialogue is limited to quest-specific NPCs and key characters. All NPCs draw from a single dialogue database.
 
+**Voice Acting:** Dialogue text is not voiced. Only greetings, combat barks, and ambient lines have voice acting.
+
 ---
 
 ## 11. Engine & Presentation Systems
 
-### 11.1 Dialogue System
-
-See §10.4. Keyword-based hyperlink system. No voice acting for dialogue (only greetings, combat barks, and some ambient lines are voiced).
-
-### 11.2 Save System
+### 11.1 Save System
 
 - **Manual Save:** Unlimited slots from the pause menu. No restrictions during combat.
 - **Quicksave:** F5. Single quicksave slot (F9 to load).
 - **Autosave:** Toggleable; triggers on rest only. Single autosave slot.
 - No autosave on travel. Saving available at any time outside dialogue/menus.
 
-### 11.3 Camera
+### 11.2 Camera
 
 - **First-person:** Default. Player sees hands/weapon.
 - **Third-person:** Tab toggle. Behind-and-above camera.
 - **Vanity camera:** Hold Tab in third-person + move mouse to orbit. Mouse wheel zooms.
 - No camera change during dialogue (text window overlay, not cinematic).
 
-### 11.4 Difficulty
+### 11.3 Difficulty
 
 Continuous slider from −100 (easiest) to +100 (hardest), default 0.
 
@@ -900,13 +1076,12 @@ Continuous slider from −100 (easiest) to +100 (hardest), default 0.
 
 Affects physical weapon damage only. Does NOT affect spell damage, AI, enemy stats, or loot. Can be changed at any time.
 
-### 11.5 Rest / Wait
+### 11.4 Rest / Wait
 
 **Rest (Sleep):**
 - Key: T. Select hours (1–24) or "Rest Until Healed."
-- Restores Health, Magicka, and Fatigue to full. Recharges enchanted items.
-- Triggers level-up if 10 Major/Minor skill increases accumulated.
-- Atronach birthsign: does NOT regenerate Magicka from rest.
+- Restores Health, Magicka, and Fatigue to full. Recharges enchanted items. Exception: Atronach birthsign does not regenerate Magicka (see §4.2).
+- Triggers level-up if eligible (see §1.4).
 - Wilderness/dungeons: allowed if no enemies nearby; risk of creature ambush.
 - Towns: only in a bed the player owns, rents (inn), or has permission to use (guild halls for members).
 - "You cannot rest here, enemies are nearby" if hostiles detected.
@@ -916,7 +1091,7 @@ Affects physical weapon damage only. Does NOT affect spell damage, AI, enemy sta
 - Passes time, recovers Fatigue, recharges enchanted items.
 - Does NOT restore Health or Magicka. Does NOT trigger level-up.
 
-### 11.6 Crime System
+### 11.5 Crime System
 
 **Bounty Amounts:**
 
@@ -944,7 +1119,7 @@ Crimes must be witnessed to generate bounty. Self-defense is not a crime.
 
 **Morag Tong Writs:** Members who kill an authorized target can present an Honorable Writ of Execution to any guard to clear the bounty.
 
-### 11.7 Werewolf System (Bloodmoon)
+### 11.6 Werewolf System (Bloodmoon)
 
 Contract Sanies Lupinus from a werewolf attack; transforms after 3 days.
 
@@ -971,6 +1146,8 @@ Reverts at dawn; all equipment unequipped.
 - **Difficulty slider damage formula:** The exact exponential function mapping the slider range to damage multipliers is not universally agreed upon. The values at extremes (~6× and ~0.17×) are approximate.
 - **Breath meter duration:** Reported as ~20 seconds but the exact relationship to Endurance (if any) needs verification.
 - **Some race attribute values** were cross-referenced from multiple secondary sources rather than directly from UESP (which was unavailable for direct fetch). Minor discrepancies possible for Imperial, Khajiit, Nord, Orc, and Redguard gender splits.
+- **Ash Vampire weakening mechanic:** Each kill is documented as weakening Dagoth Ur (−5 attributes, −50 Health/Fatigue, −250 Magicka), but vanilla implementation may be buggy. Needs verification against OpenMW or Morrowind Patch Project.
+- **Flee formula practical threshold:** Under default GMST values (fAIFleeHealthMult=7.0, fAIFleeFleeMult=0.3), the vanilla formula rarely reaches the 100 threshold through health loss alone. Some sources suggest this is intentional (enemies fight to the death); others suggest a GMST tuning error.
 
 ---
 
@@ -989,8 +1166,10 @@ Reverts at dawn; all equipment unequipped.
 
 ### Technical
 - OpenMW source code and documentation (openmw.readthedocs.io) — verified formulas
+- OpenMW source: mechanicsmanagerimp.cpp (Fight/disposition/crime), aicombat.cpp (combat state machine), aicombataction.cpp (action rating/flee), spellpriority.cpp (spell selection AI), defaultgmsts.cpp (all GMST defaults)
 - TES3 Construction Set documentation (tes3cs.pages.dev)
 - Tamriel Rebuilt dialogue/quest documentation
+- MWSE documentation (mwse.github.io) — AI package structures
 
 ### Companion Docs
 - [docs/morrowind/classes.md](docs/morrowind/classes.md) — Full predefined class table (21 classes)
