@@ -27,6 +27,13 @@ Use `SPEC.md` as the gameplay design reference. When implementing stealth, alert
 - Avoid hard references to assets in C++ unless there is an established local pattern or a strong reason.
 - Do not make broad refactors while implementing a small gameplay request.
 
+- **Unreal Engine C++ Best Practices and Patterns**
+- **KISS** — simplest thing that works
+- **YAGNI** — don't build for hypothetical needs
+- **DRY** — remove real duplication, not shape-similar code
+- **Locality of change** — adding a new entity or feature should touch as few files as possible
+
+
 ## Unreal-Specific Notes
 
 - The module currently depends on `Core`, `CoreUObject`, `Engine`, `InputCore`, `EnhancedInput`, `AIModule`, `StateTreeModule`, `GameplayStateTreeModule`, `UMG`, and `Slate`.
