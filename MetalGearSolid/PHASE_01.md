@@ -22,7 +22,7 @@ Phase 1 is complete when pressing Play in the prototype map starts a playable se
 - The camera presents the room from the defined Phase 1 stealth camera angle.
 - The player collides with walls and simple props.
 - The player can face one test interactable and trigger it with the interact input.
-- An interaction prompt state is exposed from C++ and can be consumed by UI or Blueprint defaults.
+- An interaction prompt state is exposed from C++ and validated through debug output.
 - Pause toggles gameplay on and off.
 - The prototype can be validated from a single graybox map.
 
@@ -46,8 +46,6 @@ Use these names for Phase 1 C++ types:
 - Player controller: `AMGSPlayerController`
 - Game mode: `AMGSGameMode`
 - Interactable actor: `AMGSInteractableActor`
-- Interaction component: `UMGSInteractionComponent`
-- Pause widget base: `UMGSPauseWidget`
 
 ## Phase 1 Design Decisions
 
@@ -61,6 +59,8 @@ Use these names for Phase 1 C++ types:
 - Implement gameplay behavior in C++ by default.
 - Keep Blueprints as a thin layer for adjusting parameters, assigning assets, assigning input references, and placing configured actors in maps.
 - Blueprint graphs must not own Phase 1 gameplay rules.
+- Do not add abstractions beyond the ones required by Phase 1.
+- Do not add hooks, components, interfaces, base classes, or extension points for unimplemented systems.
 
 ## Existing Starting Point
 
@@ -85,8 +85,6 @@ Existing types to keep and evolve:
 New C++ types expected for Phase 1:
 
 - `AMGSInteractableActor`
-- `UMGSInteractionComponent`
-- `UMGSPauseWidget` as the C++ base for the minimal pause overlay
 
 Asset or Blueprint types expected for Phase 1:
 
@@ -96,7 +94,7 @@ Asset or Blueprint types expected for Phase 1:
 - Prototype map for Phase 1 validation
 - Enhanced Input mapping context
 - Enhanced Input actions for move, interact, and pause
-- Minimal pause widget Blueprint derived from `UMGSPauseWidget`
+- Minimal pause widget Blueprint derived from `UUserWidget`
 
 Blueprint layer policy:
 
@@ -119,7 +117,7 @@ Input asset failure:
 
 - Missing input mapping contexts or input actions must log a clear `LogMGS` warning or error.
 - Missing move input must not crash the game.
-- Missing interact input must leave interaction callable from C++ test hooks.
+- Missing interact input must not crash the game.
 - Missing pause input must log clearly because it blocks Phase 1 validation.
 
 Possession mismatch:
@@ -178,10 +176,10 @@ Phase 1 responsibilities:
 - Own the capsule collision and basic movement component settings.
 - Own the camera boom and follow camera components.
 - Expose prototype tuning values for movement speed, acceleration, braking, rotation behavior, camera distance, camera height, camera pitch, and camera lag.
-- Provide callable movement functions that can be driven by player input or simple test hooks.
+- Provide movement functions driven by player input.
 - Do not bind jump input for Phase 1. Existing jump helper functions can remain for template compatibility, but Phase 1 does not call them.
 - Provide an entry point for interact input.
-- Own the interaction component.
+- Own the interaction trace, current interactable reference, and prompt state directly.
 
 Phase 1 success criteria:
 
@@ -221,7 +219,7 @@ Phase 1 responsibilities:
 
 - Provide a basic top-down / third-person stealth camera mode.
 - Keep the camera readable for room-scale navigation.
-- Avoid camera behavior that fights fixed-angle or radar-like stealth gameplay later.
+- Avoid free-orbit camera behavior.
 - Expose enough camera tuning to adjust height, distance, pitch, and lag in the editor.
 - Remove free-orbit camera behavior from the default Phase 1 camera path.
 - Keep camera collision disabled by default for stable Phase 1 framing.
@@ -230,7 +228,6 @@ Phase 1 success criteria:
 
 - The player remains visible while traversing the open area, narrow passage, L-shaped wall, and obstacle layout.
 - The camera shows the player, nearby walls, and the test interactable at the same time when the player is near the interactable.
-- The camera setup can evolve into contextual stealth cameras in later phases.
 
 Baseline camera target:
 
@@ -262,7 +259,6 @@ Phase 1 responsibilities:
 - Convert Enhanced Input movement values into world movement.
 - Convert movement relative to the current camera yaw.
 - Configure baseline movement speed and rotation behavior.
-- Keep movement simple enough to expand into walk, run, crouch, crawl, and wall actions in Phase 2.
 - Rotate the character to face movement direction.
 - Keep all Phase 1 movement in a single normal locomotion state.
 
@@ -270,7 +266,6 @@ Phase 1 success criteria:
 
 - Keyboard, mouse, and controller movement routes are clear.
 - Movement has one obvious source of truth.
-- Later movement states can be added by extending the character movement command path instead of replacing it.
 
 Required input behavior:
 
@@ -299,13 +294,12 @@ Phase 1 responsibilities:
 - Use the character capsule as the main player collision shape.
 - Confirm the player blocks against walls, floors, and simple props.
 - Keep collision behavior conventional for Unreal Character movement.
-- Leave room for future custom trace channels for sight, sound, interaction, and cover.
 
 Phase 1 success criteria:
 
 - The player cannot pass through graybox walls.
 - Movement along walls behaves predictably.
-- Collision setup is suitable for later cover, line-of-sight, and interaction traces.
+- Collision setup supports Phase 1 movement and interaction validation.
 
 Required collision checks:
 
@@ -318,25 +312,22 @@ Required collision checks:
 
 Primary C++ owners:
 
-- `UMGSInteractionComponent`
+- `AMGSCharacter`
 - `AMGSInteractableActor`
-- `AMGSCharacter` as the component owner
 
 Phase 1 responsibilities:
 
 - Define the player-facing concept of an interact action.
 - Define a basic way to detect nearby interactable objects.
-- Define a basic prompt state that UI can read.
+- Define a basic prompt state that debug output can read.
 - Support simple test interactables in the graybox map.
 - Keep prompt text generic and prototype-only.
 - Support one active interactable at a time.
-- Avoid building doors, pickups, terminals, or codec behavior yet.
 
 Phase 1 success criteria:
 
 - The player can approach a test object and receive a prompt state.
 - Pressing the interact input logs `Interactable activated` and toggles the test interactable activated state.
-- The system is general enough to become doors, elevators, pickups, and codec/save points later.
 
 Required interaction behavior:
 
@@ -352,9 +343,9 @@ Required interaction contract:
 - Interactable has enabled / disabled state.
 - Interactable exposes prompt text.
 - Interactable exposes an activation event.
-- Interaction component owns detection and current-target selection.
-- Interaction trace range is an editor-tunable value on `UMGSInteractionComponent`.
-- Interaction trace radius is an editor-tunable value on `UMGSInteractionComponent`.
+- `AMGSCharacter` owns detection and current-target selection.
+- Interaction trace range is an editor-tunable value on `AMGSCharacter`.
+- Interaction trace radius is an editor-tunable value on `AMGSCharacter`.
 - Interaction detection runs from the player's view/camera-facing forward direction.
 - Interaction detection ignores the owning character.
 - Interaction activation is ignored while the game is paused.
@@ -415,7 +406,6 @@ Phase 1 responsibilities:
 
 - Register the default input mapping context for the local player.
 - Route input actions to the character or controller cleanly.
-- Keep input names aligned with future gameplay actions from `SPEC.md`.
 - Support keyboard/mouse and controller at a basic level.
 - Own pause input in the controller.
 - Route movement and interaction to the possessed `AMGSCharacter`.
@@ -456,17 +446,13 @@ Primary C++ owner: `AMGSPlayerController`
 
 Supporting UI work:
 
-- `UMGSPauseWidget` C++ base
-- Minimal UMG widget Blueprint derived from `UMGSPauseWidget`
+- Minimal UMG widget Blueprint derived from `UUserWidget`
 
 Phase 1 responsibilities:
 
 - Toggle paused and unpaused gameplay.
 - Switch input mode appropriately between gameplay and UI.
 - Show or hide a minimal pause overlay.
-- Preserve clean handoff to future pause menu and codec systems.
-- Keep pause independent from codec; codec is a later system.
-- Avoid save/load/options menus in Phase 1.
 
 Phase 1 success criteria:
 
@@ -496,7 +482,6 @@ Pause widget ownership:
 Pause widget contents:
 
 - A visible paused-state label, such as `PAUSED`.
-- A resume command exposed to the controller.
 - No additional visible menu entries.
 
 Pause widget out of scope:
@@ -513,8 +498,8 @@ Pause widget behavior:
 
 - The widget is created during `AMGSPlayerController::BeginPlay`.
 - The widget is not recreated every pause toggle.
-- The widget must not own the authoritative paused state.
-- The widget exposes a resume request, and the controller performs the actual resume.
+- The widget must not own behavior.
+- Resume is handled only by pressing `IA_Pause` again.
 - Missing widget class must not crash; the controller still pauses and logs that no widget class is assigned.
 - If the widget is missing, Phase 1 validation uses a log or debug display to confirm pause state, but full validation remains failed until `WBP_Phase01Pause` is assigned.
 
@@ -527,7 +512,6 @@ Phase 1 responsibilities:
 - Define the default player pawn class.
 - Define the default player controller class.
 - Own basic prototype startup assumptions.
-- Keep future hooks available for mission start, respawn, Game Over, and area transitions.
 - Ensure the prototype map does not depend on manually placing a possessed pawn.
 
 Phase 1 success criteria:
@@ -542,22 +526,12 @@ Required default classes:
 - Player controller: `BP_MGSPlayerController`
 - Game mode: `BP_MGSGameMode`
 
-Future game flow hooks to preserve as extension points, not implement in Phase 1:
-
-- Mission start
-- Area transition
-- Checkpoint restore
-- Player death
-- Game Over
-
 ## Recommended C++ Types
 
 - `AMGSCharacter` for player pawn behavior.
 - `AMGSPlayerController` for input, pause, and player-owned UI flow.
 - `AMGSGameMode` for default classes and prototype game startup.
 - `AMGSInteractableActor` for simple interactable world objects.
-- `UMGSInteractionComponent` for player interaction detection and prompt state.
-- `UMGSPauseWidget` for the minimal pause overlay C++ base.
 
 ## C++ Ownership Rule
 
@@ -596,7 +570,6 @@ Required debug display:
 
 - Current interaction target name.
 - Whether pause is active.
-- Camera mode name.
 
 ## Phase 1 Validation Checklist
 
