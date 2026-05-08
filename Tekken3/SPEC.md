@@ -44,11 +44,14 @@ Every attack has a hit level that determines how it interacts with blocking:
 
 ### 1.4 Health and Damage
 
-- **Health per round**: 140 HP (VS/2P modes)
+- **Health per round**: 110 HP (Arcade/1P mode, default), 140 HP (VS/2P mode). The arcade operator manual confirms these as separate defaults. All damage within a round is permanent — there is no recoverable/gray health (introduced in Tekken Tag Tournament)
 - **No chip damage** on normal blocked attacks — blocking is free
-- **No damage scaling in juggles** — every hit in an aerial combo deals full listed damage, enabling extremely high-damage combos
-- **Counter Hit (CH)**: Landing an attack during the opponent's startup/active frames. Deals ~1.2x damage; some moves gain launch or stun properties only on CH
-- **Clean Hit**: Certain moves deal +50% damage when connecting at very close range. Stacks multiplicatively with CH (up to ~1.8x)
+- **No damage scaling in juggles** — every hit in an aerial combo deals full listed damage, enabling extremely high-damage combos. Juggle length is limited organically by gravity (opponent falls faster with each successive hit), not by a scaling formula. Formal percentage-based scaling was introduced in Tekken Tag Tournament (2000)
+- **Counter Hit (CH)**: Landing an attack during the opponent's startup/active frames. Tekken 3 uses a **two-tier** counter hit system:
+  - **Minor Counter**: ~1.25x damage (hitting during non-attack recovery)
+  - **Major Counter**: 1.5x damage (hitting during the opponent's attack startup/active frames)
+  - Some moves gain launch or stun properties only on CH
+- **Clean Hit**: Certain character-specific moves deal +50% damage when connecting at very close range. Stacks multiplicatively with CH
 
 ### 1.5 Ki Charge / Supercharger
 
@@ -137,7 +140,7 @@ Tekken 3 has **no super meter**, **no Rage system** (introduced in Tekken 6), an
 | L1/L2/R1/R2 | Unassigned (configurable) |
 | Start | Pause |
 
-Buttons are fully remappable via Options > Controller Configuration.
+Buttons are fully remappable via Options > Controller Configuration. Tekken 3 supports the **DualShock controller** — analog sticks can be used for movement as an alternative to the D-pad, and vibration/rumble is supported.
 
 ---
 
@@ -169,6 +172,19 @@ Sidesteps evade linear attacks but are beaten by tracking/homing moves and attac
 **Wave Dash**: Looped crouch dashes — f, N, d, d/f, f, N, d, d/f... Creates rapid forward advancement while maintaining access to crouch dash mixups (mid launchers and low sweeps). Requires a character with a Mishima-style crouch dash.
 
 **Korean Backdash Cancel (KBD)**: b, b, d/b, N, b, d/b, N, b... Creates rapid backward movement while maintaining the ability to block between dashes. Universal technique, though harder with characters that have back-sway moves.
+
+### 3.4 Running
+
+Hold f,f,F (tap forward twice, then hold forward) to run. After covering ~3–4 character lengths of distance, the character enters a full sprint. While running, universal options include:
+
+| Action | Input | Notes |
+|--------|-------|-------|
+| Running tackle | Contact opponent while sprinting | Most characters; Dr. Bosconovitch cannot run; Gon performs a shoulder tackle |
+| Sliding low | 4 while running | Low hit, knockdown |
+| Running cross chop | 1+2 while running | Mid |
+| Character-specific WR moves | Varies | Some characters have unique While Running attacks |
+
+After a tackle connects, the attacker mounts the opponent and can throw follow-up punches (1 or 2). The defender can reverse the mount position. Tackle can be broken on reaction.
 
 ---
 
@@ -217,7 +233,9 @@ Characters with reversals:
 
 ### 4.4 Low Parry
 
-Input: d/f timed to an incoming low or special-mid attack. Deflects the attack and grants ~26 frames of advantage — enough for a strong punish or juggle starter. In Tekken 3, low parry availability is character-dependent (it became fully universal starting in Tekken Tag Tournament).
+Deflects an incoming low or special-mid attack and grants ~26 frames of advantage — enough for a strong punish or juggle starter. In Tekken 3, low parry is **character-specific** — only certain characters have it, and inputs vary (commonly d+1+3 or d+2+4; King uses d+1+4 or d+2+3). The universal d/f low parry for all characters was introduced in Tekken Tag Tournament.
+
+Characters with low parry in Tekken 3: Bryan, Dr. Bosconovitch, Hwoarang, Julia, King, Forest Law, Lei, Nina, Yoshimitsu, Xiaoyu.
 
 ### 4.5 Juggle / Combo System
 
@@ -257,7 +275,25 @@ When knocked down, the defender has recovery options:
 
 Some moves can hit grounded opponents (OTG / ground hits), creating okizeme pressure.
 
-### 4.8 Frame Data Conventions
+### 4.8 Unblockable Attacks
+
+Every character has at least one unblockable attack (except Gon, whose status is unclear). These moves cannot be guarded — the only counterplay is to sidestep, outrange, or interrupt during their long startup. Typical damage: 70–90. They glow or flash to signal their unblockable property. Examples: Paul's Burning Fist (d+1+2), Yoshimitsu's Sword Spin (u+1+2), Gun Jack's Gigaton Punch (hold b, then f+1).
+
+### 4.9 10-Hit Combos
+
+Pre-scripted strings of (approximately) 10 sequential attacks, each requiring a correctly timed button press. Nearly every character has 1–4 variations; Gon lacks a standard 10-hit combo.
+
+Key properties:
+- **Not true combos** — each hit is a separate attack with its own hit level. The opponent can block, duck, sidestep, or interrupt at any transition point
+- **Mix hit levels** — strings weave highs, mids, and lows throughout the sequence, making full blocks difficult for unprepared opponents
+- **High damage if uncontested** — a full 10-hit string deals roughly 100–120 damage (near-fatal against 140 HP), but against experienced players they are easily interrupted and punished
+- **Practice Mode support** — pausing and selecting "Display" shows the 10-hit command list on screen with audio chimes for correct timing; pressing Select has the CPU demonstrate the combo
+
+### 4.10 Back-Turned (BT) State
+
+All characters can enter a back-turned state — facing away from the opponent. BT occurs via certain moves, sidestep transitions, or being hit by attacks that cause turning. While back-turned, characters have access to BT-specific attacks but cannot block. Ling Xiaoyu's Rain Dance (§5.2) is a dedicated BT stance with unique forward mobility; Lei Wulong has BT transitions from various animal stances. For most characters, BT is a momentary vulnerability to recover from quickly.
+
+### 4.11 Frame Data Conventions
 
 The game runs at **60 FPS**. All frame data is measured in 60ths of a second.
 
@@ -306,7 +342,7 @@ Detailed per-move frame data for Tekken 3 specifically is scarce — most commun
 | **Heihachi Mishima** | Mishima-Style Fighting Karate | Japan | Beat Arcade 7x |
 | **Ogre** | Composite (absorbed techniques) | N/A (Ancient entity) | Beat Arcade 8x |
 | **True Ogre** | Composite + monstrous abilities | N/A (Ogre transformed) | Beat Arcade 9x |
-| **Tiger Jackson** | Capoeira (identical to Eddy) | N/A (Eddy alt) | Beat Arcade 16x, then select Eddy + press Start |
+| **Tiger Jackson** | Capoeira (identical to Eddy) | N/A (Eddy alt) | Beat Arcade with all other characters, then select Eddy + press Start |
 | **Panda** | Kuma Shinken (identical to Kuma) | N/A (Kuma alt) | Highlight Kuma, press Circle |
 | **Dr. Bosconovitch** | Panic Fighting (borrowed moves) | Russia | Complete Tekken Force 4x, defeat him |
 | **Gon** | Original (unique moveset) | N/A (Licensed manga guest) | Defeat Gon in Tekken Ball, or enter "GON" as Survival high score initials |
@@ -442,7 +478,7 @@ Unorthodox trickster with self-damage mechanics, healing, and teleportation.
 | Sword Spin | u+1+2 | Unblockable helicopter |
 | Bad Breath | d+1+2 | Poison cloud |
 
-**Unique mechanics**: Only character with a weapon (sword). Can heal via Meditation. Suicide attacks damage both fighters. Teleportation from Sit stance.
+**Unique mechanics**: Only character with a weapon (sword). Can heal via Meditation (but loses health if idle in Meditation too long). Harakiri costs Yoshimitsu ~50 HP in self-damage. Suicide attacks damage both fighters. Teleportation from Sit stance.
 
 #### Lei Wulong
 The most stance-rich character with 5 animal forms plus drunken and lying positions.
@@ -450,7 +486,7 @@ The most stance-rich character with 5 animal forms plus drunken and lying positi
 | Animal Stance | Access | Role |
 |---------------|--------|------|
 | Snake | Via Rush Punches | Low profile, hopping attacks |
-| Dragon | Via Rush Punches / transitions | Includes health-restoring throw |
+| Dragon | Via Rush Punches / transitions | Strikes and throws |
 | Tiger | Via SSL from Snake | Overhead stuns |
 | Panther | Via SSR from Snake | Low attacks |
 | Crane | Via SSR from Snake | Combos and punches |
@@ -519,7 +555,7 @@ Extremely slow robot with devastating single-hit damage and strong throws.
 | Pancake Press | d+1+2 (vs grounded) | Ground slam |
 
 #### Mokujin
-2,000-year-old wooden training dummy that copies a random character's complete moveset each round. The assigned style is indicated by Mokujin's stance at round start.
+2,000-year-old wooden training dummy that copies a random character's complete moveset each round. The assignment is truly random (not weighted) and changes every round, though the same style can repeat by chance. The assigned style is identified by Mokujin's idle stance at round start. Mokujin **cannot** mimic: Ogre, True Ogre, Gon, Dr. Bosconovitch, or Anna Williams. His wooden body proportions differ from the mimicked character, which can affect some combo consistency.
 
 #### Anna Williams
 Similar to Nina with Aikido emphasis. In the arcade version she was a Nina palette swap; the PS1 version gives her unique attacks, voice, and ending.
@@ -544,7 +580,23 @@ Joke/gimmick character who falls down after most moves. Borrows attacks from Lei
 #### Gon (PS1 Exclusive)
 Licensed guest character from Masashi Tanaka's manga. Tiny dinosaur with an extremely small hitbox — most high and many mid attacks whiff entirely. Has fire breath and fart attacks. Cannot be thrown normally due to size. Will never return in future Tekken games due to licensing.
 
-### 5.3 Competitive Tier List (Community Consensus)
+### 5.3 Costumes
+
+Each character has **2 standard costumes**, selected at the character select screen by pressing a punch button (1 or 2) for costume 1 or a kick button (3 or 4) for costume 2.
+
+Several characters have a **third costume** selected by pressing Start, unlocked after meeting play-count thresholds:
+
+| Character | Third Costume | Unlock Condition |
+|-----------|--------------|-----------------|
+| Jin Kazama | School Uniform | Play as Jin 50+ times |
+| Ling Xiaoyu | School Uniform | Play as Xiaoyu 50+ times |
+| Forest Law | Yellow Tracksuit | Complete Arcade with both Law and Paul |
+| Gun Jack | Jack-2 appearance | Select Gun Jack 10+ times |
+| Anna Williams | Striped Suit | Play as Anna 25+ times |
+
+When Jin and Xiaoyu fight each other in their school uniforms, the **Mishima Polytechnical School** stage triggers automatically.
+
+### 5.4 Competitive Tier List (Community Consensus)
 
 Tekken 3 predates formalized FGC tier lists. The following is a best-effort reconstruction from archived community rankings. Placement varies by region (Korean and Japanese metas differed).
 
@@ -556,7 +608,7 @@ Tekken 3 predates formalized FGC tier lists. The following is a best-effort reco
 | **C** | Ogre, Gun Jack, Kuma/Panda, Anna Williams, Mokujin |
 | **Non-competitive** | Dr. Bosconovitch, Gon, True Ogre (often banned) |
 
-### 5.4 Character Lineage
+### 5.5 Character Lineage
 
 Tekken 3 is set 19 years after Tekken 2. Only 6 characters returned directly; most were replaced by younger successors.
 
@@ -618,7 +670,7 @@ All stages are **infinite arenas** — no walls, no floor breaks, no ring-outs. 
 
 ### 7.1 Arcade Mode
 
-Standard single-player tournament (§6.2). Completing with each character unlocks their FMV ending and progresses toward new character unlocks.
+Standard single-player tournament (§6.2). Completing with each character unlocks their FMV ending and progresses toward new character unlocks. **Unlimited continues** on PS1 — pressing Start during the 9-to-0 countdown resumes at the same stage. The player can optionally change characters on continue (configurable in Options).
 
 ### 7.2 VS Mode
 
@@ -643,6 +695,7 @@ Free training with no time limit or health depletion. Features:
 - Set opponent recovery behavior: crouch, guard, roll, or ukemi on knockdown
 - Second controller can control the training dummy
 - Move list display
+- 10-hit combo display with timing chimes (via Pause > Display); pressing Select has the CPU demonstrate the combo
 
 ### 7.7 Tekken Force Mode
 
@@ -664,12 +717,14 @@ Side-scrolling beat-em-up minigame. Available from the start (no unlock required
 | Crow | 15 | +2 seconds |
 | Falcon | 20 | +2 seconds |
 | Hawk | 25–40 | +4–8 seconds |
-| Owl | 30–40 | +6–8 seconds |
+| Owl | 25–40 | +4–8 seconds |
 
 - Player starts with **130 HP**
 - **Chicken** items restore 50 HP each (dropped by enemies with 40 HP or scattered in stages)
 - A global timer runs throughout — defeating enemies adds time; running out of time ends the game
 - Stages 1–3 boss identity depends on the selected character; Stage 4 is always Heihachi
+
+**Scoring**: Move damage x 10 = points (e.g., 10-damage move = 100 points). Throw damage x 200 = points. Stage completion bonus: 5,000 x stage number. Health bonus: remaining HP x 100 (max 13,000 at full 130 HP).
 
 **Completion rewards**:
 
@@ -708,6 +763,32 @@ Volleyball-like minigame on Beach Island. Unlocked after beating Arcade Mode wit
 View character FMV endings, CG movies, and listen to the soundtrack. Progressively populated as characters complete Arcade Mode. After all endings are obtained, two additional options unlock:
 - **MUSIC**: BGM player with "Arrange" and "Arcade" toggle
 - **DISC**: Insert Tekken 1 or Tekken 2 disc to view those games' cinematics and music
+
+### 7.10 Difficulty and AI Behavior
+
+Difficulty settings affect **AI behavior only**, not damage values or health bars. On Medium difficulty (PS1 default), AI progressively improves across Arcade Mode stages:
+
+| Stages | AI Behavior |
+|--------|-------------|
+| 1–3 | Rarely blocks. Does not react to strings/10-hit combos. Does not break throws. Passive. Usually stands or rolls backward when knocked down |
+| 4–5 | Blocks more frequently. Blocks lows and ducks highs in strings. Ducks or retreats from throws |
+| 6–7 | Blocks consistently. More aggressive. Interrupts unblockable attacks |
+| 8–10 | Highly aggressive. Input-reads the player. Dodges throws, blocks complex strings, punishes aggressively |
+
+Higher difficulty settings compress this progression — AI starts harder earlier and the final stages become punishing. No score system exists in Arcade Mode on PS1; completion times are tracked in Time Attack, opponent counts in Survival.
+
+### 7.11 Arcade Operator Settings
+
+The arcade cabinet has additional operator-configurable settings beyond what the PS1 offers:
+
+| Setting | Default | Options |
+|---------|---------|---------|
+| Life Bar (1P) | 110 | Adjustable -2 to +2 relative to default |
+| Life Bar (VS) | 140 | Adjustable -2 to +2 relative to default |
+| Guard Damage | OFF | ON/OFF (chip damage on block when ON) |
+| Neutral Guard | OFF | ON/OFF (auto-guard when joystick is neutral) |
+| Continue Cost | 1 coin | 1–9 coins; Free Play option |
+| Character Change on Continue | YES | YES/OFF |
 
 ---
 
@@ -751,15 +832,19 @@ Memory Card save on PS1. Saves:
 - Tekken Force progress (keys)
 - Options settings
 
-### 9.2 Camera Behavior
+### 9.2 Audio System
+
+Each stage has **unique BGM** tied to its associated character. Stage BGM changes arrangement between rounds (Round 1 plays one version, Round 2 another). The PS1 version uses a re-arranged soundtrack by default; the original arcade soundtrack is available via the "Arcade" toggle in Theater Mode's MUSIC player after all endings are unlocked. Composers: Nobuyoshi Sano, Keiichi Okabe, Hiroyuki Kawada, Minamo Takahashi, Yu Miyake.
+
+### 9.3 Camera Behavior
 
 Fixed cinematic camera that tracks both fighters. Camera pans and zooms to maintain both characters in frame. No player camera control during fights. Replays use dynamic camera angles.
 
-### 9.3 FMV Endings
+### 9.4 FMV Endings
 
 Every character has a unique pre-rendered CG ending played upon completing Arcade Mode. Notable exceptions: Tiger Jackson has his own ending despite sharing Eddy's moveset; Dr. Bosconovitch shares an ending with Yoshimitsu; True Ogre shares with Ogre.
 
-### 9.4 Victory Animations
+### 9.5 Victory Animations
 
 Each character has 2+ victory poses after winning. Some are triggered by holding specific buttons during the victory replay:
 - Anna has alternate butt-shaking pose (hold Circle)
@@ -784,21 +869,17 @@ Each character has 2+ victory poses after winning. Some are triggered by holding
 
 ## 11. Open Questions / Unverified
 
-1. **Exact HP in Arcade mode single-player**: Multiple sources confirm 140 HP for VS mode. The arcade single-player value may differ but no source explicitly confirms a different number.
+1. **Throw break window**: The ~20-frame window comes from Tekken 7/8 research. Tekken 3's exact window is not publicly documented. Earlier games may have had a shorter window (~12 frames based on TTT2-era expansion notes), but this is unconfirmed for T3 specifically.
 
-2. **Juggle scaling**: Consensus is no negative scaling (full damage per hit), but some community members debate whether hidden scaling exists. Formal scaling was definitively introduced in Tekken 6/TTT2.
+2. **Per-move frame data**: Detailed Tekken 3 frame data is scarce online. Most community resources cover Tekken 5 onward. General conventions (i10 jabs, i15 launchers) appear consistent but per-character data would require decompilation.
 
-3. **Counter hit multiplier**: The exact multiplier in Tekken 3 is not precisely documented. 1.2x is the standard from later games; the Ki Charge 1.4–1.5x applies only to that powered state.
+3. **Clean hit multiplier**: The +50% figure comes from wiki sources and is consistent with verified Tekken 2 data (e.g., Jack's Megaton Blast: normal 45 → clean 67), but exact testing specific to every T3 move is limited.
 
-4. **Throw break window**: The ~20-frame window comes from Tekken 7/8 research. Tekken 3's exact window is not publicly documented but the mechanic functions identically.
+4. **Tekken Ball unlock trigger**: Sources cite different conditions — completing Arcade with all 10 default characters, unlocking True Ogre, or reaching 550 total matches. These may not be mutually exclusive.
 
-5. **Low parry universality**: Sources conflict on whether d/f low parry was universal in Tekken 3 or character-specific. Evidence leans toward character-specific, becoming universal in TTT.
+5. **Yoshimitsu Meditation healing rate**: The exact HP recovered per tick in Tekken 3 is not publicly documented. Community sources cite +5 HP per bounce but this may be approximate.
 
-6. **Per-move frame data**: Detailed Tekken 3 frame data is scarce online. Most community resources cover Tekken 5 onward. General conventions (i10 jabs, i15 launchers) appear consistent.
-
-7. **Clean hit multiplier**: The +50% figure comes from wiki sources but exact testing data specific to Tekken 3 is limited.
-
-8. **Tekken Ball unlock trigger**: Sources cite different conditions — completing Arcade with all 10 default characters, unlocking True Ogre, or reaching 550 total matches. These may not be mutually exclusive.
+6. **Input buffer window**: Tekken 8 uses an 8-frame button buffer window. Tekken 3's exact buffer size has not been publicly measured.
 
 ---
 
@@ -822,3 +903,7 @@ Each character has 2+ victory poses after winning. Some are triggered by holding
 - [IAMTEKKEN — Understanding Damage Scaling](https://iamtekken.wordpress.com/2009/12/25/understanding-damage-scaling/) — scaling mechanics history
 - [1UP Infinite — History of Movement in Tekken](https://1upinfinite.org/tekken-movement-feature/) — sidestep, KBD origins
 - [LearnTekken Basic Techniques](https://ampersanders.github.io/LearnTekken/basic_tech.html) — universal mechanics
+
+### Primary / Operator
+- [Tekken 3 Arcade Operation Manual (Archive.org)](https://archive.org/stream/arcademanual_Tekken_3/) — confirmed HP values (110/140), operator settings, difficulty defaults
+- [Tekken 3 Speedrun Guide (Speedrun.com)](https://www.speedrun.com/tekken3/guides/) — AI behavior progression per stage

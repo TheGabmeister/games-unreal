@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl *http://localhost:3000/*)",
+      "Bash(\"C:\\Program Files\\Blender Foundation\\Blender 5.1\\blender.exe\" *)",
+      "Bash(\"C:/Program Files/Blender Foundation/Blender 5.1/blender.exe\" *)",
+      "Bash('C:\\\\Program Files\\\\Blender Foundation\\\\Blender 5.1\\\\blender.exe' *)",
+      "Bash(blender --background *)",
+      "Bash(\"C:\\Program Files\\Epic Games\\UE_5.7\\Engine\\Binaries\\Win64\\UnrealEditor-Cmd.exe\" *)",
+      "Bash(MSYS_NO_PATHCONV=1 \"C:\\\\Program Files\\\\Epic Games\\\\UE_5.7\\\\Engine\\\\Binaries\\\\Win64\\\\UnrealEditor-Cmd.exe\" *)",
+      "Bash(\"D:\\fluidsynth-v2.5.4-win10-x64-cpp11\\bin\\fluidsynth.exe\" *)",
+      "Bash(\"D:\\ffmpeg-8.1-essentials_build\\bin\\ffmpeg.exe\" *)",
+      "Bash(\"C:\\Program Files\\Inkscape\\bin\\inkscape.exe\" *)",
+      "Bash(rm -rf *)",
+      "Bash(taskkill /f /im UnrealEditor.exe)",
+      "mcp__blender__get_scene_info",
+      "mcp__blender__execute_python",
+      "WebSearch",
+      "WebFetch",
+      "Read(//c/Users/Admin/.claude/**)",
+      "Bash(curl -s *)",
+      "Bash(curl -sL *)"
+    ]
+  }
+}
