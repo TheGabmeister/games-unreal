@@ -1,0 +1,11 @@
+/.claude
+/.git
+/.vscode
+/Content
+/Intermediate
+/Saved
+/Plugins/AssetGen/Content
+/Plugins/AssetGen/Intermediate
+/Plugins/AssetGen/Rig
+/Plugins/AssetGen/Scripts
+/Plugins/CommonLoadingScreen/Intermediate

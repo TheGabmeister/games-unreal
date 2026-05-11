@@ -76,6 +76,8 @@ DerivedDataCache/*
 # Code editor files
 .vsconfig
 .idea
+.vscode
+*.code-workspace
 
 # Third-party files
-Plugins
+Plugins/CommonLoadingScreen
