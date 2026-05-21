@@ -76,6 +76,4 @@ DerivedDataCache/*
 # Code editor files
 .vsconfig
 .idea
-
-# Third-party files
-Plugins
+*.code-workspace

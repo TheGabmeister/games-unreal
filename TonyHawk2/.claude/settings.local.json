@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Path \"c:\\\\dev\\\\games-unreal\\\\TonyHawk2\" -Force)",
+      "Bash(Select-Object Name, FullName)",
+      "PowerShell(Get-Command soft-ue-cli -ErrorAction SilentlyContinue)",
+      "PowerShell($LASTEXITCODE)"
+    ]
+  }
+}
