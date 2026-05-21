@@ -21,6 +21,10 @@
 		{
 			"Name": "SoftUEBridge",
 			"Enabled": true
+		},
+		{
+			"Name": "PythonScriptPlugin",
+			"Enabled": true
 		}
 	]
 }

@@ -252,6 +252,5 @@ Steps 1 and 8 can be built in parallel. Steps 7 and 2 can overlap. Steps 5 and 6
 - No manual / combo chaining (Phase 4)
 - No scoring (Phase 5)
 - No Special Meter (Phase 6)
-- No audio/SFX (deferred — focus on feel and physics first)
 - No UI beyond the capsule color feedback
 - No stat system — all values hardcoded (Phase 7)
