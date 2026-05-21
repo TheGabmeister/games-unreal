@@ -49,9 +49,8 @@ Target configs: `Source/TonyHawk2.Target.cs` (Game) and `Source/TonyHawk2Editor.
 
 ## Editor Plugins
 
-- **SoftUEBridge** — CLI-driven editor automation via `soft-ue-cli` (pip package). Connects on port 8080. Use for asset creation, actor spawning, property setting, screenshots. FBX import crashes the bridge unless deferred via `unreal.register_slate_post_tick_callback`. GameMode blueprint compilation also crashes — use C++ `ConstructorHelpers` instead.
-- **McpAutomationBridge** — MCP server built into the plugin (Native MCP Transport on port 3000). Configured in `.mcp.json`. No external dependencies needed.
-- **PythonScriptPlugin** — enables `run-python-script` via SoftUEBridge for operations the CLI doesn't cover natively.
+- **SoftUEBridge** — CLI-driven editor automation via `soft-ue-cli` (pip package). Connects on port 8080. Use for asset creation, actor spawning, property setting, screenshots, PIE control. Stateless HTTP — survives editor restarts without reconnection issues. Use PowerShell (not Bash) to avoid Git Bash mangling `/Game/` paths. FBX import crashes the bridge unless deferred via `unreal.register_slate_post_tick_callback`. GameMode blueprint compilation also crashes — use C++ `ConstructorHelpers` instead.
+- **PythonScriptPlugin** — enables `run-python-script --script` via SoftUEBridge for operations the CLI doesn't cover natively. Note: Enhanced Input modifiers (Swizzle, Negate) created via Python don't serialize to disk — they must be authored in the editor UI.
 
 ## Content Layout
 
@@ -80,5 +79,5 @@ When implementing a phase, cross-reference both documents: PHASES.md for what to
 - Enhanced Input is the input system — do not use legacy input. Input Mapping Contexts and Input Actions are editor-authored assets assigned in Blueprint, not constructed at runtime via NewObject.
 - Rendering: DX12/SM6, ray tracing enabled, Substrate materials, Virtual Shadow Maps. Target hardware is desktop maximum.
 - AnimBPs are manually authored in the editor — do not attempt to construct Animation Blueprint graphs programmatically.
-- Live Coding is disabled for this project (`Config/DefaultEditorPerProjectUserSettings.ini`). Use full rebuilds via UBT.
+- Live Coding: use full rebuilds via UBT with editor closed. Live Coding can be enabled in Editor Preferences for iterative work.
 - Default GameMode (`TH2GameMode`) and default map (`L_DebugPark`) are set in `Config/DefaultEngine.ini`.
