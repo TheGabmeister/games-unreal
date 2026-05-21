@@ -244,6 +244,68 @@ Steps 1 and 8 can be built in parallel. Steps 7 and 2 can overlap. Steps 5 and 6
 
 ---
 
+## Phase 1 Test Plan
+
+Manual play-tests in L_DebugPark. Each test verifies a specific mechanic from the steps above.
+
+### Ground Movement (Steps 1–2)
+- [x] Capsule spawns at the player start, camera attached and following
+- [ ] Forward input accelerates the pawn; capsule turns green during push
+- [ ] Releasing input → pawn coasts with gradual speed decay; capsule returns to grey
+- [ ] Steering left/right at low speed produces tight turns; at high speed, turns are wider
+- [ ] Backward input brakes to a stop (not reversing)
+- [ ] Pawn aligns to ground slope on flat banks (pitch follows surface normal)
+- [ ] Speed does not exceed MaxSpeed (1200) on flat ground
+
+### Ollie & Charge (Step 3)
+- [ ] Holding X enters crouch state; capsule turns yellow
+- [ ] Releasing X after a short hold → low ollie; after full hold (~0.5s) → max height ollie
+- [ ] Capsule turns blue on launch (airborne state)
+- [ ] Crouching while moving maintains speed but prevents push acceleration
+
+### Air Physics & Landing (Step 4)
+- [ ] Ollie on flat ground → parabolic arc, horizontal velocity preserved
+- [ ] Near apex of arc, hangtime modifier creates a visible float
+- [ ] Landing on flat ground → capsule flashes white, brief recovery, then back to grey
+- [ ] Big Drop: ollie off a high kicker, press X before landing → clean land
+- [ ] Big Drop: ollie off a high kicker, do NOT press X → bail (capsule turns red, resets after ~1.5s)
+- [ ] Bail resets pawn upright at bail location facing original direction
+
+### Advanced Launches (Step 5)
+- [ ] Up + X simultaneously → Nollie launch (distinct from normal ollie)
+- [ ] Up then X within ~8 frames → No Comply
+- [ ] Up, Up, X within ~16 frames → Boneless (higher than normal ollie, ~1.2x)
+- [ ] Each variant has a visually distinct flash or capsule effect
+
+### Switch Stance (Step 6)
+- [ ] R2 toggles switch stance; capsule shows a visible indicator (orange band)
+- [ ] Toggling again returns to regular stance (indicator disappears)
+- [ ] Bail resets stance to regular
+
+### Chase Camera (Step 7)
+- [ ] Camera follows behind and above the skater with smooth lag
+- [ ] Camera rotation follows pawn yaw with interpolation (no instant snap)
+- [ ] Camera does not clip through boundary walls (spring arm collision)
+- [ ] Launching off vert → camera pulls back and tilts down; returns to normal on landing
+
+### Debug Skatepark & Collision (Steps 8–9)
+- [ ] L_DebugPark loads as default map with ground, quarterpipes, halfpipe, kickers, banks, walls
+- [ ] Riding up a quarterpipe → pawn aligns to ramp surface, speed converts horizontal→vertical
+- [ ] Reaching the top of a ramp with enough speed → launches into air at ramp exit angle
+- [ ] Landing back on a ramp surface → velocity redirects along the ramp downward
+- [ ] Vert halfpipe: skater launches straight up off vert, lands back on vert cleanly
+- [ ] Wall collision at low speed → slide along wall, capsule flashes orange
+- [ ] Wall collision at high speed → bail
+
+### Audio (if present)
+- [ ] Wheel roll sound plays while moving on ground, stops in air
+- [ ] Ollie pop sound on launch
+- [ ] Landing thud on ground contact
+- [ ] Bail impact sound on bail
+- [ ] Wind/air sound while airborne
+
+---
+
 ## What Phase 1 Does NOT Include
 
 - No animations or rigged character (capsule placeholder)
@@ -254,3 +316,4 @@ Steps 1 and 8 can be built in parallel. Steps 7 and 2 can overlap. Steps 5 and 6
 - No Special Meter (Phase 6)
 - No UI beyond the capsule color feedback
 - No stat system — all values hardcoded (Phase 7)
+
