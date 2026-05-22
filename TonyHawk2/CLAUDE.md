@@ -49,7 +49,7 @@ Target configs: `Source/TonyHawk2.Target.cs` (Game) and `Source/TonyHawk2Editor.
 
 ## Editor Plugins
 
-- **SoftUEBridge** — CLI-driven editor automation via `soft-ue-cli` (pip package). Connects on port 8080. Use for asset creation, actor spawning, property setting, screenshots, PIE control. Stateless HTTP — survives editor restarts without reconnection issues. Use PowerShell (not Bash) to avoid Git Bash mangling `/Game/` paths. FBX import crashes the bridge unless deferred via `unreal.register_slate_post_tick_callback`. GameMode blueprint compilation also crashes — use C++ `ConstructorHelpers` instead.
+- **SoftUEBridge** — CLI-driven editor automation via `soft-ue-cli` (pip package). Connects on port 8080. Stateless HTTP — survives editor restarts without reconnection issues. Use PowerShell (not Bash) to avoid Git Bash mangling `/Game/` paths. Key commands: `spawn-actor`, `set-property`/`get-property`, `query-level`, `query-asset`, `capture-screenshot viewport`, `pie-session start/stop/pause`, `run-python-script --script "..."`, `exec-console-command`. FBX import crashes the bridge unless deferred via `unreal.register_slate_post_tick_callback`. GameMode blueprint compilation also crashes — use C++ `ConstructorHelpers` instead.
 - **PythonScriptPlugin** — enables `run-python-script --script` via SoftUEBridge for operations the CLI doesn't cover natively. Note: Enhanced Input modifiers (Swizzle, Negate) created via Python don't serialize to disk — they must be authored in the editor UI.
 
 ## Content Layout
@@ -62,7 +62,7 @@ Target configs: `Source/TonyHawk2.Target.cs` (Game) and `Source/TonyHawk2Editor.
 
 ## Asset Pipeline
 
-- **3D models**: Blender Python scripts under `Assets/Blender/` → FBX export → import into UE. Run via `blender --background --python <script>.py`.
+- **3D models**: Blender Python scripts under `Assets/Blender/` → FBX export → import into UE. Run via `blender --background --python <script>.py`. Blender uses meters — use real-world scale (e.g., a 4m ramp = `l=2.0` half-length). Call `bpy.ops.mesh.normals_make_consistent(inside=False)` before export to fix normals.
 - **Audio SFX**: Generated with ffmpeg synthesis filters (`anoisesrc`, `sine`, filters). WAV output at `Assets/Audio/SFX/`, imported as USoundWave.
 - **FBX import via bridge**: Use deferred Slate callback pattern to avoid TaskGraph recursion crash. See `Assets/Blender/import_fbx_deferred.py`.
 
